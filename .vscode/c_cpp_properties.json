@@ -1,0 +1,25 @@
+{
+    "configurations": [
+        {
+            "name": "PlatformIO",
+            "includePath": [
+                "/Users/saninn/dev/saninn/esphome-components/esphome"
+            ],
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true,
+                "path": []
+            },
+            "defines": [
+
+            ],
+            "cStandard": "gnu17",
+            "cppStandard": "gnu++23",
+            "compilerPath": "/Users/saninn/.platformio/packages/toolchain-xtensa-esp32/bin/xtensa-esp32-elf-gcc",
+            "compilerArgs": [
+                "-mlongcalls",
+                ""
+            ]
+        }
+    ],
+    "version": 4
+}

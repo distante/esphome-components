@@ -6,7 +6,9 @@ from esphome.const import CONF_ID
 DEPENDENCIES = ["uart"]
 
 sec_touch_ns = cg.esphome_ns.namespace("sec_touch")
-SECTouchComponent = sec_touch_ns.class_("SECTouchComponent", cg.Component, uart.UARTDevice)
+SECTouchComponent = sec_touch_ns.class_(
+    "SECTouchComponent", cg.Component, uart.UARTDevice
+)
 
 CONF_SEC_TOUCH_ID = "sec_touch_id"
 

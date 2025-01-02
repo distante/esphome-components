@@ -1,5 +1,6 @@
 #pragma once
 
+#include "_definitions.h"
 #include <map>
 #include <string>
 #include <cstring>
@@ -23,18 +24,18 @@ class SecTouchFan {
   SecTouchFan(int levelId, int labelId) : levelId(levelId), labelId(labelId) {}
 
   // Getters
-  int getLevelId() const { return levelId; }
-  int getLabelId() const { return labelId; }
-  const char *getFanLevelValue() const { return fanLevelValue; }
-  const char *getLabelLevelValue() const { return labelLevelValue; }
+  int get_level_id() const { return levelId; }
+  int get_label_id() const { return labelId; }
+  const char *get_fan_level_value() const { return fanLevelValue; }
+  const char *get_label_level_value() const { return labelLevelValue; }
 
   // Setters
-  void setFanLevelValue(const char *newValue) {
+  void set_fan_level_value(const char *newValue) {
     strncpy(fanLevelValue, newValue, 15);
     fanLevelValue[15] = '\0';  // Ensure null-termination
   }
 
-  void setLabelLevelValue(const char *newValue) {
+  void set_label_level_value(const char *newValue) {
     strncpy(labelLevelValue, newValue, 15);
     labelLevelValue[15] = '\0';  // Ensure null-termination
   }
@@ -54,29 +55,30 @@ class SecTouchFanManager {
   std::map<int, SecTouchFan *> labelIdMap;
 
  public:
-  // Add a fan
-  void addFan(SecTouchFan *fan) {
-    levelIdMap[fan->getLevelId()] = fan;
-    labelIdMap[fan->getLabelId()] = fan;
-    ESP_LOGD(TAG, "Added fan with level ID %d and label ID %d", fan->getLevelId(), fan->getLabelId());
+  void add_fan(SecTouchFan *fan) {
+    levelIdMap[fan->get_level_id()] = fan;
+    labelIdMap[fan->get_label_id()] = fan;
+    ESP_LOGD(TAG, "Added fan with level ID %d and label ID %d", fan->get_level_id(), fan->get_label_id());
   }
 
-  // Update fanLevelValue using levelId
-  void updateFanLevelValue(int levelId, const char *newValue) {
+  void update_fan_level_value(int levelId, const char *newValue) {
     if (levelIdMap.find(levelId) != levelIdMap.end()) {
-      levelIdMap[levelId]->setFanLevelValue(newValue);
+      levelIdMap[levelId]->set_fan_level_value(newValue);
+    } else {
+      ESP_LOGE(TAG, "Level ID %d not found.", levelId);
     }
   }
 
-  // Update labelLevelValue using labelId
-  void updateLabelLevelValue(int labelId, const char *newValue) {
+  void update_label_level_value(int labelId, const char *newValue) {
     if (labelIdMap.find(labelId) != labelIdMap.end()) {
-      labelIdMap[labelId]->setLabelLevelValue(newValue);
+      labelIdMap[labelId]->set_label_level_value(newValue);
+    } else {
+      ESP_LOGE(TAG, "Label ID %d not found.", labelId);
     }
   }
 
   // Debug: Print all fans
-  void printAllFans() const {
+  void print_all_fans() const {
     if (levelIdMap.empty()) {
       ESP_LOGD(TAG, "No fans available.");
       return;

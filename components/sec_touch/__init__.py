@@ -11,11 +11,13 @@ SECTouchComponent = sec_touch_ns.class_(
 )
 
 CONF_SEC_TOUCH_ID = "sec_touch_id"
-
+# The total of fan pairs that the SEC-Touch shows in the screen
+CONF_TOTAL_FAN_PAIRS = "total_fan_pairs"
 
 CONFIG_SCHEMA = cv.Schema(
     {
         cv.GenerateID(): cv.declare_id(SECTouchComponent),
+        cv.Required(CONF_TOTAL_FAN_PAIRS): cv.one_of(1, 2, 3, 4, 5, 6),
     }
 )
 
@@ -38,3 +40,5 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     await uart.register_uart_device(var, config)
+    total_fan_pairs = config[CONF_TOTAL_FAN_PAIRS]
+    cg.add(var.set_total_fan_pairs(total_fan_pairs))

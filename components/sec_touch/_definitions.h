@@ -13,6 +13,7 @@ namespace sec_touch {
 #define ETX 0x0A
 #define ACK 0x06
 #define TAB 0x09
+#define NEW_LINE '\n'  // 0x0A (newline in ASCII)
 
 constexpr int COMMANDID_SET = 32;
 constexpr int COMMANDID_GET = 32800;
@@ -29,7 +30,7 @@ template<typename T, size_t N> static bool contains(const std::array<T, N> &arr,
  */
 enum class TaskTargetType { LEVEL, LABEL };
 
-enum class TaskState { TO_BE_SENT, SENT_WAITING_ACK };
+enum class TaskState { TO_BE_SENT, SENT_WAITING_ACK, SENT_WAITING_DATA };
 
 struct SetDataTask {
   TaskTargetType type;

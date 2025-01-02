@@ -23,5 +23,4 @@ async def to_code(config):
     sec_component = await cg.get_variable(config[CONF_SEC_TOUCH_ID])
     if poll_button_config := config.get(CONF_POLL_BUTTON):
         b = await button.new_button(poll_button_config)
-        await cg.register_parented(b, config[CONF_SEC_TOUCH_ID])
-        cg.add(sec_component.set_Poll_button(b))
+        await cg.register_parented(b, sec_component)

@@ -65,7 +65,7 @@ class SecTouchFanManager {
     if (levelIdMap.find(levelId) != levelIdMap.end()) {
       levelIdMap[levelId]->set_fan_level_value(newValue);
     } else {
-      ESP_LOGE(TAG, "Level ID %d not found.", levelId);
+      ESP_LOGE(TAG, "Could not update. Level ID %d not found.", levelId);
     }
   }
 
@@ -73,7 +73,7 @@ class SecTouchFanManager {
     if (labelIdMap.find(labelId) != labelIdMap.end()) {
       labelIdMap[labelId]->set_label_level_value(newValue);
     } else {
-      ESP_LOGE(TAG, "Label ID %d not found.", labelId);
+      ESP_LOGE(TAG, "Could not update. Label ID %d not found.", labelId);
     }
   }
 

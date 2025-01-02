@@ -30,14 +30,14 @@ void SECTouchComponent::dump_config() {
 }
 
 void SECTouchComponent::loop() {
-  bool set_processed = this->process_set_queue();
+  // bool set_processed = this->process_set_queue();
 
-  if (set_processed) {
-    // If a set request was processed, wait for the next loop
-    return;
-  }
+  // if (set_processed) {
+  //   // If a set request was processed, wait for the next loop
+  //   return;
+  // }
 
-  this->process_get_queue();
+  // this->process_get_queue();
 }
 
 bool SECTouchComponent::process_set_queue() {
@@ -57,6 +57,7 @@ bool SECTouchComponent::process_set_queue() {
 
 bool SECTouchComponent::process_get_queue() {
   if (this->data_get_queue.size() == 0) {
+    ESP_LOGD(TAG, "No data in the get queue");
     return false;  // DANGER: REMOVE THIS
     // this->fill_get_queue_with_fans();
   }
@@ -66,73 +67,24 @@ bool SECTouchComponent::process_get_queue() {
 
   switch (task.state) {
     case TaskState::TO_BE_SENT:
-      this->data_get_queue.front().state = TaskState::SENT_WAITING_ACK;
-
-      ESP_LOGD(TAG, "sending data");
+      this->data_get_queue.front().state = TaskState::WAITING_ACK;
       this->send_get_message(task);
-      /* code */
       break;
-    case TaskState::SENT_WAITING_ACK: {
-      ESP_LOGD(TAG, "SENT_WAITING_ACK");
-
-      // Check if data is available
-      while (this->available()) {
-        uint8_t data;
-        this->read_byte(&data);
-
-        ESP_LOGD(TAG, "  [SENT_WAITING_ACK] Data received: %d", data);
-
-        int current_index = this->store_to_incoming_buffer(data);
-
-        if (current_index < 2) {  // we are waiting for STX ACK and NEW_LINE
-          continue;
-        }
-
-        if (current_index > 2) {
-          ESP_LOGE(TAG, "  [SENT_WAITING_ACK] We are outside of the expected message amounts");
-          break;
-        }
-
-        // Handle specific data (e.g., ACK)
-        if (data == NEW_LINE && incoming_message_buffer[0] == STX && incoming_message_buffer[1] == ACK) {
-          ESP_LOGD(TAG, "  [SENT_WAITING_ACK] ACK received");
-          this->data_get_queue.front().state = TaskState::SENT_WAITING_DATA;
-          this->reset_incoming_buffer();
-          break;
-        }
-      }
-
+    case TaskState::WAITING_ACK: {
+      this->wait_for_ack_of_current_get_queue_item();
       break;
     }
-    case TaskState::SENT_WAITING_DATA: {
-      ESP_LOGD(TAG, "SENT_WAITING_DATA");
-
-      // Check if data is available
-      while (this->available()) {
-        uint8_t data;
-        this->read_byte(&data);
-
-        ESP_LOGD(TAG, "  [SENT_WAITING_DATA] Data received: %d", data);
-
-        this->store_to_incoming_buffer(data);
-
-        if (data != NEW_LINE) {  // we are waiting NEW_LINE
-          continue;
-        }
-
-        ESP_LOGD(TAG, "  [SENT_WAITING_DATA] NEW_LINE received");
-      }
-
-      ESP_LOGD(TAG, "  [SENT_WAITING_DATA] Incoming message buffer for task type %d and id %d", task.type, task.id);
-
-      this->data_get_queue.pop();
-      this->reset_incoming_buffer();
-
+    case TaskState::WAITING_DATA: {
+      this->wait_for_data_of_current_get_queue_item();
+      break;
+    }
+    case TaskState::TO_BE_PROCESSED: {
+      this->process_data_for_current_get_queue_item();
       break;
     }
     default: {
-      ESP_LOGE(TAG, "Unknown task state %d" + static_cast<int>(task.state), "for task type %d and id %d", task.type,
-               task.id);
+      ESP_LOGE(TAG, "Unknown task state %d" + static_cast<int>(task.state), "for task targetType \"%s\" and id \"%d\"",
+               EnumToString::TaskTargetType(task.targetType), task.id);
 
       this->data_get_queue.pop();
       break;
@@ -163,15 +115,15 @@ void SECTouchComponent::reset_incoming_buffer() {
 void SECTouchComponent::fill_get_queue_with_fans() {
   // Create all fans and queue the initial data requests
   for (int i = 0; i < this->total_fan_pairs; i++) {
-    int levelId = FAN_LEVEL_IDS[i];
-    int labelId = FAN_LABEL_IDS[i];
+    int level_id = FAN_LEVEL_IDS[i];
+    int label_id = FAN_LABEL_IDS[i];
 
-    SecTouchFan *fan = new SecTouchFan(levelId, labelId);
+    SecTouchFan *fan = new SecTouchFan(level_id, label_id);
 
     this->fanManager.add_fan(fan);
 
-    auto levelTask = GetDataTask::create(TaskTargetType::LEVEL, levelId);
-    auto labelTask = GetDataTask::create(TaskTargetType::LABEL, labelId);
+    auto levelTask = GetDataTask::create(TaskTargetType::LEVEL, level_id);
+    auto labelTask = GetDataTask::create(TaskTargetType::LABEL, label_id);
 
     if (levelTask && labelTask) {
       this->data_get_queue.push(*levelTask);
@@ -184,7 +136,27 @@ void SECTouchComponent::fill_get_queue_with_fans() {
     }
   }
 }
+
+void SECTouchComponent::update_now(bool fill_get_queue) {
+  if (this->data_get_queue.empty() && fill_get_queue) {
+    ESP_LOGD(TAG, "Filling get queue with fans");
+    this->fill_get_queue_with_fans();
+  }
+
+  bool processed = this->process_get_queue();
+  delay(16);
+  if (processed) {
+    this->update_now(false);
+  } else {
+    if (this->available()) {
+      ESP_LOGE(TAG, "There is still data available !");
+    }
+  }
+}
+
 void SECTouchComponent::send_get_message(GetDataTask task) {
+  ESP_LOGD(TAG, "send_get_message");
+
   std::array<char, 64> message_buffer;
 
   int len = snprintf(message_buffer.data(), message_buffer.size(), "%c%d%c%d%c", STX, COMMANDID_GET, TAB, task.id, TAB);
@@ -193,17 +165,147 @@ void SECTouchComponent::send_get_message(GetDataTask task) {
 
   this->write_array(reinterpret_cast<const uint8_t *>(message_buffer.data()), len);
 }
+
 void SECTouchComponent::send_ack_message() {
   uint8_t data[] = {STX, ACK, ETX};
   this->write_array(data, sizeof(data));
   ESP_LOGD(TAG, "SendMessageAck sended");
 }
-//// FROM MANUEL's FILE
 
-// const int SECTouchComponent::FAN_LEVEL_REGISTERS[SECTouchComponent::FAN_LEVEL_COUNT] = {173, 174, 175, 176, 177,
-// 178};
+void SECTouchComponent::wait_for_ack_of_current_get_queue_item() {
+  ESP_LOGD(TAG, "wait_for_ack");
 
-// const int SECTouchComponent::FAN_LABEL_IDS[SECTouchComponent::LABEL_COUNT] = {78, 79, 80, 81, 82, 83};
+  while (this->available()) {
+    uint8_t data;
+    this->read_byte(&data);
+
+    // ESP_LOGD(TAG, "  [wait_for_ack] Byte received: %d", data);
+
+    int current_index = this->store_to_incoming_buffer(data);
+
+    if (current_index < 2) {  // we are waiting for STX ACK and ETX
+      continue;
+    }
+
+    if (current_index > 2) {
+      ESP_LOGE(TAG, "  [wait_for_ack] We are outside of the expected message amounts");
+      break;
+    }
+
+    // Handle specific data (e.g., ACK)
+    if (data == ETX && incoming_message_buffer[0] == STX && incoming_message_buffer[1] == ACK) {
+      ESP_LOGD(TAG, "  [wait_for_ack] ACK and ETX received");
+      this->data_get_queue.front().state = TaskState::WAITING_DATA;
+      this->reset_incoming_buffer();
+      break;
+    }
+  }
+}
+
+void SECTouchComponent::wait_for_data_of_current_get_queue_item() {
+  ESP_LOGD(TAG, "wait_for_data");
+
+  while (this->available()) {
+    uint8_t data;
+    this->read_byte(&data);
+
+    // ESP_LOGD(TAG, "  [wait_for_data] Byte received: %d", data);
+
+    int current_index = this->store_to_incoming_buffer(data);
+
+    if (current_index == 0) {
+      if (data != STX) {
+        ESP_LOGE(TAG, "  [wait_for_data] Expected STX, but received %d", data);
+        this->reset_incoming_buffer();
+        continue;
+      }
+    }
+
+    if (data != ETX) {  // we are waiting ETX
+      continue;
+    }
+
+    ESP_LOGD(TAG, "  [wait_for_data] ETX received, message is now complete");
+    this->send_ack_message();
+  }
+
+  this->data_get_queue.front().state = TaskState::TO_BE_PROCESSED;
+}
+
+void SECTouchComponent::parse_incoming_message(const char *buffer, std::string &extracted_id,
+                                               std::string &extracted_value) {
+  int totalTabs = 0;
+
+  for (size_t i = 1; i < incoming_message_index + 1; ++i) {
+    // ESP_LOGD("  [process_data] incoming_message_buffer", "Byte %d: 0x%02X ('%c')", i, incoming_message_buffer[i],
+    //  incoming_message_buffer[i]);
+    if (totalTabs >= 3) {
+      break;
+    }
+    if (incoming_message_buffer[i] == TAB) {
+      totalTabs++;
+      continue;
+    }
+
+    if (totalTabs == 1) {
+      extracted_id += incoming_message_buffer[i];
+    } else if (totalTabs == 2) {
+      extracted_value += incoming_message_buffer[i];
+    }
+  }
+}
+
+void SECTouchComponent::process_data_for_current_get_queue_item() {
+  auto &task = this->data_get_queue.front();
+
+  ESP_LOGD(TAG, "process_data");
+  ESP_LOGD(TAG, "  [process_data] Incoming message buffer for get task(%d) targetType %s and id %d", COMMANDID_GET,
+           EnumToString::TaskTargetType(task.targetType), task.id);
+  ESP_LOGD(TAG, "  [process_data] incoming_message_buffer %s", incoming_message_buffer);
+
+  if (static_cast<uint8_t>(incoming_message_buffer[0]) != STX) {
+    ESP_LOGE(TAG, "  [process_data] Expected STX at index 0, but received %d. Will try again",
+             incoming_message_buffer[0]);
+    this->data_get_queue.front().state = TaskState::TO_BE_SENT;
+    this->reset_incoming_buffer();
+    return;
+  }
+
+  int last_incoming_message_index =
+      incoming_message_index - 1;  // -1 because the current index is the one that should be written next
+  if (static_cast<uint8_t>(incoming_message_buffer[last_incoming_message_index]) != ETX) {
+    ESP_LOGE(TAG, "  [process_data] Expected ETX at index %d, but received  %d will try again",
+             last_incoming_message_index, incoming_message_buffer[last_incoming_message_index]);
+    this->data_get_queue.front().state = TaskState::TO_BE_SENT;
+    this->reset_incoming_buffer();
+    return;
+  }
+
+  // Here the buffer is something like this `32\t173\t10\t42696`, where 173 is the id and 10 is the value, \t is the TAB
+  std::string extracted_id = "", extracted_value = "";
+
+  this->parse_incoming_message(incoming_message_buffer, extracted_id, extracted_value);
+
+  if (extracted_id.empty() || extracted_value.empty()) {
+    ESP_LOGE(TAG, "  [process_data] Extracted ID or Value is empty. Will try again");
+    this->data_get_queue.front().state = TaskState::TO_BE_SENT;
+    this->reset_incoming_buffer();
+    return;
+  }
+
+  ESP_LOGD(TAG, "  [process_data] extracted_id: %s, extracted_value: %s", extracted_id.c_str(),
+           extracted_value.c_str());
+
+  this->fanManager.update_fan_after_task_ended(task.targetType, std::stoi(extracted_id), std::stoi(extracted_value));
+
+  ESP_LOGD(TAG, "  [process_data] Task with targetType %s and id %d processed",
+           EnumToString::TaskTargetType(task.targetType), task.id);
+  this->fanManager.print_all_fans();
+  // TODO: Validate Data, if it is not valid then put the task back in the queue
+
+  this->data_get_queue.pop();
+  this->reset_incoming_buffer();
+}
 
 }  // namespace sec_touch
 }  // namespace esphome

@@ -6,6 +6,7 @@
 #include <cstring>
 #include "esphome/core/log.h"
 
+
 namespace esphome {
 namespace sec_touch {
 
@@ -13,12 +14,32 @@ namespace sec_touch {
 #define ETX 0x0A
 #define ACK 0x06
 #define TAB 0x09
-#define NEW_LINE '\n'  // 0x0A (newline in ASCII)
 
 constexpr int COMMANDID_SET = 32;
 constexpr int COMMANDID_GET = 32800;
 constexpr std::array<int, 6> FAN_LEVEL_IDS = {173, 174, 175, 176, 177, 178};
 constexpr std::array<int, 6> FAN_LABEL_IDS = {78, 79, 80, 81, 82, 83};
+
+static std::string replace_special_characters(const char *buffer) {
+  std::string result;
+  while (*buffer != '\0') {
+    switch (*buffer) {
+      case STX:  // STX
+        result += "[STX]";
+        break;
+      case ETX:  // ETX
+        result += "[ETX]";
+        break;
+      case TAB:  // ETX
+        result += "[TAB]";
+        break;
+      default:
+        result += *buffer;  // Append regular characters as is
+    }
+    buffer++;
+  }
+  return result;
+}
 
 // Helper function to check if an ID is in the array
 template<typename T, size_t N> static bool contains(const std::array<T, N> &arr, int value) {
@@ -26,48 +47,80 @@ template<typename T, size_t N> static bool contains(const std::array<T, N> &arr,
 }
 
 /**
- * Used to couple `SetDataTask->id` with the levelId or labelId for example
+ * Used to couple `SetDataTask->id` with the level_id or label_id for example
  */
 enum class TaskTargetType { LEVEL, LABEL };
 
-enum class TaskState { TO_BE_SENT, SENT_WAITING_ACK, SENT_WAITING_DATA };
+enum class TaskState { TO_BE_SENT, WAITING_ACK, WAITING_DATA, TO_BE_PROCESSED };
+
+class EnumToString {
+ private:
+  EnumToString() = default;
+
+ public:
+  static const char *TaskTargetType(TaskTargetType v) {
+    switch (v) {
+      case TaskTargetType::LEVEL:
+        return "LEVEL";
+      case TaskTargetType::LABEL:
+        return "LABEL";
+      default:
+        return "UNKNOWN";
+    }
+  }
+
+  static const char *TaskState(TaskState v) {
+    switch (v) {
+      case TaskState::TO_BE_SENT:
+        return "TO_BE_SENT";
+      case TaskState::WAITING_ACK:
+        return "WAITING_ACK";
+      case TaskState::WAITING_DATA:
+        return "WAITING_DATA";
+      case TaskState::TO_BE_PROCESSED:
+        return "TO_BE_PROCESSED";
+      default:
+        return "UNKNOWN";
+    }
+  }
+};
 
 struct SetDataTask {
-  TaskTargetType type;
+  TaskTargetType targetType;
   int id;
   char value[16];
   TaskState state = TaskState::TO_BE_SENT;
 
-  static std::unique_ptr<SetDataTask> create(TaskTargetType type, int id, const char *value) {
-    if ((type == TaskTargetType::LEVEL && contains(FAN_LEVEL_IDS, id)) ||
-        (type == TaskTargetType::LABEL && contains(FAN_LABEL_IDS, id))) {
-      return std::unique_ptr<SetDataTask>(new SetDataTask(type, id, value));  // Valid task
+  static std::unique_ptr<SetDataTask> create(TaskTargetType targetType, int id, const char *value) {
+    if ((targetType == TaskTargetType::LEVEL && contains(FAN_LEVEL_IDS, id)) ||
+        (targetType == TaskTargetType::LABEL && contains(FAN_LABEL_IDS, id))) {
+      return std::unique_ptr<SetDataTask>(new SetDataTask(targetType, id, value));  // Valid task
     }
     return nullptr;  // Null unique_ptr if validation fails
   }
 
  private:
-  SetDataTask(TaskTargetType type, int id, const char *value) : type(type), id(id) {
+  SetDataTask(TaskTargetType targetType, int id, const char *value) : targetType(targetType), id(id) {
     std::strncpy(this->value, value, sizeof(this->value) - 1);
     this->value[sizeof(this->value) - 1] = '\0';  // Ensure null termination
   }
 };
 
 struct GetDataTask {
-  TaskTargetType type;
+  TaskTargetType targetType;
   int id;
   TaskState state = TaskState::TO_BE_SENT;
 
-  static std::unique_ptr<GetDataTask> create(TaskTargetType type, int id) {
-    if ((type == TaskTargetType::LEVEL && contains(FAN_LEVEL_IDS, id)) ||
-        (type == TaskTargetType::LABEL && contains(FAN_LABEL_IDS, id))) {
-      return std::unique_ptr<GetDataTask>(new GetDataTask(type, id));  // Valid task
+  static std::unique_ptr<GetDataTask> create(TaskTargetType targetType, int id) {
+    if ((targetType == TaskTargetType::LEVEL && contains(FAN_LEVEL_IDS, id)) ||
+        (targetType == TaskTargetType::LABEL && contains(FAN_LABEL_IDS, id))) {
+      return std::unique_ptr<GetDataTask>(new GetDataTask(targetType, id));  // Valid task
     }
     return nullptr;  // Null unique_ptr if validation fails
   }
 
  private:
-  GetDataTask(TaskTargetType type, int id) : type(type), id(id) {}
+  GetDataTask(TaskTargetType targetType, int id) : targetType(targetType), id(id) {}
 };
 
 }  // namespace sec_touch

@@ -6,7 +6,6 @@
 #include <cstring>
 #include "esphome/core/log.h"
 
-
 namespace esphome {
 namespace sec_touch {
 
@@ -104,6 +103,14 @@ struct SetDataTask {
     std::strncpy(this->value, value, sizeof(this->value) - 1);
     this->value[sizeof(this->value) - 1] = '\0';  // Ensure null termination
   }
+};
+
+struct IncomingMessage {
+  std::string returned_id = "";
+  std::string returned_value = "";
+
+  char buffer[64];
+  size_t buffer_index = -1;
 };
 
 struct GetDataTask {

@@ -25,8 +25,7 @@ class SECTouchComponent : public Component, public uart::UARTDevice {
 
  protected:
   int total_fan_pairs;
-  char incoming_message_buffer[64];
-  size_t incoming_message_index = 0;
+  IncomingMessage incoming_message;
   std::queue<SetDataTask> data_set_queue;
   std::queue<GetDataTask> data_get_queue;
   SecTouchFanManager fanManager;
@@ -34,14 +33,14 @@ class SECTouchComponent : public Component, public uart::UARTDevice {
   bool process_set_queue();
   bool process_get_queue();
   void fill_get_queue_with_fans();
-  void parse_incoming_message(const char *buffer, std::string &extracted_id, std::string &extracted_value);
 
   void send_get_message(GetDataTask task);
   /**
    * Returns the index of the last byte stored in the buffer
    */
-  int store_to_incoming_buffer(uint8_t data);
-  void reset_incoming_buffer();
+  int store_data_to_incoming_message(uint8_t data);
+  void reset_incoming_message();
+  void mark_current_get_queue_item_as_failed();
   void send_ack_message();
 
   // QUEUE HANDLING

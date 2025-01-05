@@ -5,6 +5,7 @@
 #include <string>
 #include <cstring>
 #include "esphome/core/log.h"
+#include <functional>
 
 namespace esphome {
 namespace sec_touch {
@@ -18,6 +19,13 @@ constexpr int COMMANDID_SET = 32;
 constexpr int COMMANDID_GET = 32800;
 constexpr std::array<int, 6> FAN_LEVEL_IDS = {173, 174, 175, 176, 177, 178};
 constexpr std::array<int, 6> FAN_LABEL_IDS = {78, 79, 80, 81, 82, 83};
+
+/**
+ * Callback for when a property is updated
+ * @param property_id The ID of the property that was updated for example 173 for level of the fan 1
+ * @param new_value The new value of the property obtained from the touch controller
+ */
+using UpdateCallbackListener = std::function<void(int property_id, int new_value)>;
 
 static std::string replace_special_characters(const char *buffer) {
   std::string result;

@@ -21,9 +21,12 @@ void SECTouchComponent::setup() {
 
 void SECTouchComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "SEC-Touch:");
-  ESP_LOGCONFIG(TAG, "  total_fan_pairs: %d", this->total_fan_pairs);
+  ESP_LOGCONFIG(TAG, "  total_register_fans: %d", this->recursive_update_ids.size());
 
-  this->fanManager.print_all_fans();
+  // Iterate through the map and log each property_id
+  for (const auto &pair : this->recursive_update_listeners) {
+    ESP_LOGCONFIG(TAG, "  - Fan Property ID: %d", pair.first);  // Log the property_id
+  }
 
   if (this->is_failed()) {
     ESP_LOGE(TAG, "  !!!! SETUP of SEC-Touch failed !!!!");
@@ -39,6 +42,19 @@ void SECTouchComponent::loop() {
   // }
 
   // this->process_get_queue();
+}
+
+void SECTouchComponent::notify_recursive_update_listeners(int property_id, int new_value) {
+  ESP_LOGD(TAG, "notify_recursive_update_listeners for property_id %d", property_id);
+
+  auto it = this->recursive_update_listeners.find(property_id);
+  if (it == this->recursive_update_listeners.end()) {
+    ESP_LOGE(TAG, "No listener found for property_id %d", property_id);
+    return;
+  }
+
+  UpdateCallbackListener &listener = it->second;
+  listener(property_id, new_value);  // Call the listener
 }
 
 bool SECTouchComponent::process_set_queue() {
@@ -64,11 +80,16 @@ bool SECTouchComponent::process_get_queue() {
   }
 
   ESP_LOGD(TAG, "process_get_queue of size %d", this->data_get_queue.size());
-  auto &task = this->data_get_queue.front();
+  // Access the smart pointer from the queue
+  auto &task_ptr = this->data_get_queue.front();
+
+  // Dereference the smart pointer to access the actual object
+  auto &task = *task_ptr;
+  ESP_LOGD(TAG, "Task targetType \"%s\" and id \"%d\"", EnumToString::TaskTargetType(task.targetType), task.id);
 
   switch (task.state) {
     case TaskState::TO_BE_SENT:
-      this->data_get_queue.front().state = TaskState::WAITING_ACK;
+      this->data_get_queue.front()->state = TaskState::WAITING_ACK;
       this->send_get_message(task);
       break;
     case TaskState::WAITING_ACK: {
@@ -122,28 +143,26 @@ void SECTouchComponent::mark_current_get_queue_item_as_failed() {
 }
 
 void SECTouchComponent::fill_get_queue_with_fans() {
-  // Create all fans and queue the initial data requests
-  for (int i = 0; i < this->total_fan_pairs; i++) {
-    int level_id = FAN_LEVEL_IDS[i];
-    int label_id = FAN_LABEL_IDS[i];
-
-    SecTouchFan *fan = new SecTouchFan(level_id, label_id);
-
-    this->fanManager.add_fan(fan);
-
-    auto levelTask = GetDataTask::create(TaskTargetType::LEVEL, level_id);
-    auto labelTask = GetDataTask::create(TaskTargetType::LABEL, label_id);
-
-    if (levelTask && labelTask) {
-      this->data_get_queue.push(*levelTask);
-      // DANGER: ACTIVATE THIS
-      // this->data_get_queue.push(*labelTask);
-
-    } else {
-      ESP_LOGE(TAG, "Error while adding initial Fan to the queue");
-      this->mark_failed();
-    }
+  if (this->recursive_update_ids[0] == 0) {
+    ESP_LOGE(TAG, "No fan is registered for recursive updates");
+    this->mark_failed();
+    return;
   }
+
+  for (size_t i = 0; i < this->recursive_update_ids.size(); i++) {
+    int id = this->recursive_update_ids[i];
+    if (id == 0) {
+      return;
+    }
+
+    this->data_get_queue.push(GetDataTask::create(TaskTargetType::LEVEL, id));
+  }
+}
+
+void SECTouchComponent::register_recursive_update_listener(int property_id, UpdateCallbackListener listener) {
+  ESP_LOGD(TAG, "register_recursive_update_listener for property_id %d", property_id);
+  this->recursive_update_listeners[property_id] = std ::move(listener);
+  this->recursive_update_ids.push_back(property_id);
 }
 
 void SECTouchComponent::update_now(bool fill_get_queue) {
@@ -151,10 +170,10 @@ void SECTouchComponent::update_now(bool fill_get_queue) {
     ESP_LOGD(TAG, "Data available");
   }
 
-  if (this->data_get_queue.empty() && fill_get_queue) {
-    ESP_LOGD(TAG, "Filling get queue with fans");
-    this->fill_get_queue_with_fans();
-  }
+  // if (this->data_get_queue.empty() && fill_get_queue) {
+  //   ESP_LOGD(TAG, "Filling get queue with fans");
+  //   this->fill_get_queue_with_fans();
+  // }
 
   bool processed = this->process_get_queue();
   delay(16);
@@ -207,7 +226,7 @@ void SECTouchComponent::wait_for_ack_of_current_get_queue_item() {
 
     if (data == ETX && this->incoming_message.buffer[0] == STX && this->incoming_message.buffer[1] == ACK) {
       ESP_LOGD(TAG, "  [wait_for_ack] ACK and ETX received");
-      this->data_get_queue.front().state = TaskState::WAITING_DATA;
+      this->data_get_queue.front()->state = TaskState::WAITING_DATA;
       this->reset_incoming_message();
       break;
     }
@@ -260,15 +279,15 @@ void SECTouchComponent::wait_for_data_of_current_get_queue_item() {
     this->send_ack_message();
   }
 
-  this->data_get_queue.front().state = TaskState::TO_BE_PROCESSED;
+  this->data_get_queue.front()->state = TaskState::TO_BE_PROCESSED;
 }
 
 void SECTouchComponent::process_data_for_current_get_queue_item() {
-  auto &task = this->data_get_queue.front();
+  auto &task_ptr = this->data_get_queue.front();
 
   ESP_LOGD(TAG, "process_data");
   ESP_LOGD(TAG, "  [process_data] Incoming message buffer for get task(%d) targetType %s and id %d", COMMANDID_GET,
-           EnumToString::TaskTargetType(task.targetType), task.id);
+           EnumToString::TaskTargetType(task_ptr->targetType), task_ptr->id);
 
   ESP_LOGD(TAG, "  [process_data] buffer %s", this->incoming_message.buffer);
 
@@ -310,19 +329,17 @@ void SECTouchComponent::process_data_for_current_get_queue_item() {
 
   ESP_LOGD(TAG, "  [process_data] returned_id: %d, extracted_value: %d", returned_id, returned_value);
 
-  if (this->data_get_queue.front().id != returned_id) {
+  if (this->data_get_queue.front()->id != returned_id) {
     ESP_LOGE(TAG, "  [process_data] ID mismatch. Task Failed");
     this->mark_current_get_queue_item_as_failed();
     return;
   }
 
   // SEND UPDATE!
-
-  this->fanManager.update_fan_after_task_ended(task.targetType, returned_id, returned_value);
+  this->notify_recursive_update_listeners(returned_id, returned_value);
 
   ESP_LOGD(TAG, "  [process_data] Task with targetType %s and id %d processed. New Value is %d",
-           EnumToString::TaskTargetType(task.targetType), task.id, returned_value);
-  this->fanManager.print_all_fans();
+           EnumToString::TaskTargetType(task_ptr->targetType), task_ptr->id, returned_value);
 
   this->data_get_queue.pop();
   this->reset_incoming_message();

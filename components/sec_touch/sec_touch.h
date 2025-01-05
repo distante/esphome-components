@@ -4,7 +4,7 @@
 #include "esphome/core/component.h"
 #include "esphome/core/gpio.h"
 #include "esphome/components/uart/uart.h"
-#include "_sec_touch_fan.h"
+#include "_definitions.h"
 
 #include "esphome/components/button/button.h"
 #include <typeinfo>
@@ -20,19 +20,24 @@ class SECTouchComponent : public Component, public uart::UARTDevice {
   void setup() override;
   void dump_config() override;
   void loop() override;
-  void set_total_fan_pairs(int total_fan_pairs) { this->total_fan_pairs = total_fan_pairs; }
+  /**
+   * Use this for things that need to be updated on each loop
+   */
+  void register_recursive_update_listener(int property_id, UpdateCallbackListener listener);
+
   void update_now(bool fill_get_queue);
+  void fill_get_queue_with_fans();
 
  protected:
-  int total_fan_pairs;
   IncomingMessage incoming_message;
   std::queue<SetDataTask> data_set_queue;
-  std::queue<GetDataTask> data_get_queue;
-  SecTouchFanManager fanManager;
+  std::queue<std::unique_ptr<GetDataTask>> data_get_queue;
+  std::map<int, UpdateCallbackListener> recursive_update_listeners;
+  std::vector<int> recursive_update_ids;
+  void notify_recursive_update_listeners(int property_id, int new_value);
 
   bool process_set_queue();
   bool process_get_queue();
-  void fill_get_queue_with_fans();
 
   void send_get_message(GetDataTask task);
   /**

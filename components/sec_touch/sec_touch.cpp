@@ -34,14 +34,24 @@ void SECTouchComponent::dump_config() {
 }
 
 void SECTouchComponent::loop() {
-  // bool set_processed = this->process_set_queue();
+  if (this->available() && !this->processing_queue) {
+    ESP_LOGD(TAG, "[Loop] Data available on Main Loop");
+    int current_index = -1;
+    while (this->available()) {
+      uint8_t data;
+      this->read_byte(&data);
 
-  // if (set_processed) {
-  //   // If a set request was processed, wait for the next loop
-  //   return;
-  // }
+      ESP_LOGD(TAG, "    Byte received: %d", data);
 
-  // this->process_get_queue();
+      this->store_data_to_incoming_message(data);
+    }
+
+    this->incoming_message.buffer[current_index + 1] = '\0';  // Explicit null terminator
+
+    ESP_LOGD(TAG, "    Received Data Without Request %s", this->incoming_message.buffer);
+    this->reset_incoming_message();
+    ESP_LOGD(TAG, "[Loop]------------------------------------------");
+  }
 }
 
 void SECTouchComponent::notify_recursive_update_listeners(int property_id, int new_value) {
@@ -57,31 +67,32 @@ void SECTouchComponent::notify_recursive_update_listeners(int property_id, int n
   listener(property_id, new_value);  // Call the listener
 }
 
-bool SECTouchComponent::process_set_queue() {
-  // if queue is empty return false
-  // if queue is not empty
-  // if first element is not sent
-  // send the first element
-  // wait for the ack
-  // if ack is received
-  // remove the first element
-  // return true
-  // else
-  // return false
+bool SECTouchComponent::process_get_queue() {
+  // TODO: Implement
 
   return false;
 }
 
-bool SECTouchComponent::process_get_queue() {
-  if (this->data_get_queue.size() == 0) {
-    ESP_LOGD(TAG, "No data in the get queue");
-    return false;  // DANGER: REMOVE THIS
-    // this->fill_get_queue_with_fans();
+bool SECTouchComponent::process_set_queue() {
+  // TODO: Implement
+
+  return false;
+}
+
+template<typename TaskType>
+bool SECTouchComponent::process_queue(std::queue<std::unique_ptr<TaskType>> &taskQueue,
+                                      const std::string &queueLoggingName) {
+  this->processing_queue = true;
+
+  if (taskQueue.size() == 0) {
+    ESP_LOGE(TAG, "No data in the given queue %s", queueLoggingName.c_str());
+    this->processing_queue = false;
+    return false;
   }
 
-  ESP_LOGD(TAG, "process_get_queue of size %d", this->data_get_queue.size());
+  ESP_LOGD(TAG, "process_queue \"%s\" with size %d", queueLoggingName.c_str(), taskQueue.size());
   // Access the smart pointer from the queue
-  auto &task_ptr = this->data_get_queue.front();
+  auto &task_ptr = taskQueue.front();
 
   // Dereference the smart pointer to access the actual object
   auto &task = *task_ptr;
@@ -89,7 +100,7 @@ bool SECTouchComponent::process_get_queue() {
 
   switch (task.state) {
     case TaskState::TO_BE_SENT:
-      this->data_get_queue.front()->state = TaskState::WAITING_ACK;
+      taskQueue.front()->state = TaskState::WAITING_ACK;
       this->send_get_message(task);
       break;
     case TaskState::WAITING_ACK: {
@@ -102,13 +113,15 @@ bool SECTouchComponent::process_get_queue() {
     }
     case TaskState::TO_BE_PROCESSED: {
       this->process_data_for_current_get_queue_item();
+      this->processing_queue = false;
+
       break;
     }
     default: {
       ESP_LOGE(TAG, "Unknown task state %d" + static_cast<int>(task.state), "for task targetType \"%s\" and id \"%d\"",
                EnumToString::TaskTargetType(task.targetType), task.id);
 
-      this->data_get_queue.pop();
+      taskQueue.pop();
       break;
     }
   }
@@ -136,6 +149,11 @@ void SECTouchComponent::reset_incoming_message() {
 }
 
 void SECTouchComponent::mark_current_get_queue_item_as_failed() {
+  auto &task_ptr = this->data_get_queue.front();
+  auto &task = *task_ptr;
+  ESP_LOGD(TAG, "[FAILED Task] targetType \"%s\" and id \"%d\"", EnumToString::TaskTargetType(task.targetType),
+           task.id);
+
   this->reset_incoming_message();
   this->data_get_queue.pop();
 
@@ -165,6 +183,8 @@ void SECTouchComponent::register_recursive_update_listener(int property_id, Upda
   this->recursive_update_ids.push_back(property_id);
 }
 
+void SECTouchComponent::add_set_task(std::unique_ptr<SetDataTask>) {}
+
 void SECTouchComponent::update_now(bool fill_get_queue) {
   if (this->available()) {
     ESP_LOGD(TAG, "Data available");
@@ -175,15 +195,28 @@ void SECTouchComponent::update_now(bool fill_get_queue) {
   //   this->fill_get_queue_with_fans();
   // }
 
-  bool processed = this->process_get_queue();
-  delay(16);
-  if (processed) {
+  bool processed = this->process_queue(this->data_get_queue, "data_get_queue");
+  if (processed && !this->data_get_queue.empty()) {
     this->update_now(false);
-  } else {
-    if (this->available()) {
-      ESP_LOGE(TAG, "There is still data available !");
-    }
+  } else if (this->available()) {
+    ESP_LOGE(TAG, "There is still data available !");
   }
+}
+
+void SECTouchComponent::manually_process_set_queue() {
+  // if (this->available()) {
+  //   ESP_LOGD(TAG, "Data available");
+  // }
+
+  // bool processed = this->process_get_queue();
+  // delay(16);
+  // if (processed) {
+  //   this->manually_process_set_queue();
+  // } else {
+  //   if (this->available()) {
+  //     ESP_LOGE(TAG, "There is still data available !");
+  //   }
+  // }
 }
 
 void SECTouchComponent::send_get_message(GetDataTask task) {
@@ -220,7 +253,8 @@ void SECTouchComponent::wait_for_ack_of_current_get_queue_item() {
     }
 
     if (current_index > 2) {
-      ESP_LOGE(TAG, "  [wait_for_ack] We are outside of the expected message amounts");
+      ESP_LOGE(TAG, "  [wait_for_ack] We are outside of the expected message amounts for ");
+      this->mark_current_get_queue_item_as_failed();
       break;
     }
 
@@ -274,7 +308,7 @@ void SECTouchComponent::wait_for_data_of_current_get_queue_item() {
     }
 
     this->incoming_message.buffer[current_index + 1] = '\0';  // Explicit null terminator
-    ESP_LOGD(TAG, "  [wait_for_data] ETX received, null terminator was added at %d index. Message is now complete",
+    ESP_LOGD(TAG, "  [wait_for_data] ETX received, null terminator was added at index %d. Message is now complete",
              this->incoming_message.buffer_index);
     this->send_ack_message();
   }

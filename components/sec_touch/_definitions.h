@@ -94,20 +94,21 @@ class EnumToString {
 
 struct SetDataTask {
   TaskTargetType targetType;
-  int id;
+  int property_id;
   char value[16];
   TaskState state = TaskState::TO_BE_SENT;
 
-  static std::unique_ptr<SetDataTask> create(TaskTargetType targetType, int id, const char *value) {
-    if ((targetType == TaskTargetType::LEVEL && contains(FAN_LEVEL_IDS, id)) ||
-        (targetType == TaskTargetType::LABEL && contains(FAN_LABEL_IDS, id))) {
-      return std::unique_ptr<SetDataTask>(new SetDataTask(targetType, id, value));  // Valid task
+  static std::unique_ptr<SetDataTask> create(TaskTargetType targetType, int property_id, const char *value) {
+    if ((targetType == TaskTargetType::LEVEL && contains(FAN_LEVEL_IDS, property_id)) ||
+        (targetType == TaskTargetType::LABEL && contains(FAN_LABEL_IDS, property_id))) {
+      return std::unique_ptr<SetDataTask>(new SetDataTask(targetType, property_id, value));  // Valid task
     }
     return nullptr;  // Null unique_ptr if validation fails
   }
 
  private:
-  SetDataTask(TaskTargetType targetType, int id, const char *value) : targetType(targetType), id(id) {
+  SetDataTask(TaskTargetType targetType, int property_id, const char *value)
+      : targetType(targetType), property_id(property_id) {
     std::strncpy(this->value, value, sizeof(this->value) - 1);
     this->value[sizeof(this->value) - 1] = '\0';  // Ensure null termination
   }

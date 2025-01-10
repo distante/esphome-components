@@ -12,9 +12,9 @@ namespace esphome {
 namespace sec_touch {
 
 class SECTouchComponent : public Component, public uart::UARTDevice {
-#ifdef USE_BUTTON
-  SUB_BUTTON(process_get_queue)
-#endif
+  // #ifdef USE_BUTTON // TODO: Find out what does this does
+  //   SUB_BUTTON(process_get_queue)
+  // #endif
  public:
   SECTouchComponent();
   void setup() override;
@@ -25,19 +25,33 @@ class SECTouchComponent : public Component, public uart::UARTDevice {
    */
   void register_recursive_update_listener(int property_id, UpdateCallbackListener listener);
 
-  void update_now(bool fill_get_queue);
+  void add_set_task(std::unique_ptr<SetDataTask>);
+
   void fill_get_queue_with_fans();
+  // Test
+  void update_now(bool fill_get_queue);
+  void manually_process_set_queue();
 
  protected:
   IncomingMessage incoming_message;
-  std::queue<SetDataTask> data_set_queue;
   std::queue<std::unique_ptr<GetDataTask>> data_get_queue;
+  std::queue<std::unique_ptr<SetDataTask>> data_set_queue;
   std::map<int, UpdateCallbackListener> recursive_update_listeners;
   std::vector<int> recursive_update_ids;
   void notify_recursive_update_listeners(int property_id, int new_value);
-
+  bool processing_queue = false;
+  /**
+   * @returns true if the queue was processed
+   */
   bool process_set_queue();
+
+  /**
+   * @returns true if the queue was processed
+   */
   bool process_get_queue();
+
+  template<typename TaskType>
+  bool process_queue(std::queue<std::unique_ptr<TaskType>> &taskQueue, const std::string &queueLoggingName);
 
   void send_get_message(GetDataTask task);
   /**

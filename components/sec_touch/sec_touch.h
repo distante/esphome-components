@@ -53,7 +53,7 @@ class SECTouchComponent : public Component, public uart::UARTDevice {
   template<typename TaskType>
   bool process_queue(std::queue<std::unique_ptr<TaskType>> &taskQueue, const std::string &queueLoggingName);
 
-  void send_get_message(GetDataTask task);
+  void send_get_message(GetDataTask &task);
   /**
    * Returns the index of the last byte stored in the buffer
    */
@@ -63,8 +63,7 @@ class SECTouchComponent : public Component, public uart::UARTDevice {
   void send_ack_message();
 
   // QUEUE HANDLING
-  void wait_for_ack_of_current_get_queue_item();
-  void wait_for_data_of_current_get_queue_item();
+
   void process_data_for_current_get_queue_item();
 };
 }  // namespace sec_touch

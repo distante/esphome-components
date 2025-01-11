@@ -13,10 +13,10 @@ class SecTouchFan : public Component, public fan::Fan {
   /*
 
   FAN LEVEL OF 7 means Stosslüften
-  FAN LEVEL OF 11 means Schlummer
-  FAN LEVEL OF 10 means Automatik Zeit
   FAN LEVEL OF 8 means Automatik Feuchte
   FAN LEVEL OF 9 means Automatik CO2
+  FAN LEVEL OF 10 means Automatik Zeit
+  FAN LEVEL OF 11 means Schlummer
 
 */
 

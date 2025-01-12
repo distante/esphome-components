@@ -3,7 +3,9 @@
 namespace esphome {
 namespace sec_touch {
 
-void ProcessSetButton::press_action() { this->parent_->manually_process_set_queue(); }
+void ProcessSetButton::press_action() {
+  // TODO: Implement this
+}
 
 }  // namespace sec_touch
 }  // namespace esphome

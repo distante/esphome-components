@@ -27,12 +27,11 @@ class SECTouchComponent : public Component, public uart::UARTDevice {
   void fill_get_queue_with_fans();
   // Test
   void update_now(bool fill_get_queue);
-  void manually_process_set_queue();
 
  protected:
   IncomingMessage incoming_message;
-  std::queue<std::unique_ptr<GetDataTask>> data_get_queue;
-  std::queue<std::unique_ptr<SetDataTask>> data_set_queue;
+  std::deque<std::unique_ptr<GetDataTask>> data_get_queue;
+  std::deque<std::unique_ptr<SetDataTask>> data_set_queue;
   std::map<int, UpdateCallbackListener> recursive_update_listeners;
   std::vector<int> recursive_update_ids;
   void notify_recursive_update_listeners(int property_id, int new_value);
@@ -41,12 +40,11 @@ class SECTouchComponent : public Component, public uart::UARTDevice {
   /**
    * @returns true if the queue was processed
    */
-  bool process_set_queue();
+  void process_set_queue();
 
   void handle_uart_input_for_get_queue();
 
-  template<typename SomeTask>
-  bool process_queue(std::queue<std::unique_ptr<SomeTask>> &taskQueue, const std::string &queueLoggingName);
+  bool process_get_queue();
 
   void send_get_message(GetDataTask &task);
 
@@ -56,7 +54,6 @@ class SECTouchComponent : public Component, public uart::UARTDevice {
    * Returns the index of the last byte stored in the buffer
    */
   int store_data_to_incoming_message(uint8_t data);
-  void reset_incoming_message();
   void mark_current_get_queue_item_as_failed();
   void send_ack_message();
 

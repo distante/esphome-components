@@ -151,18 +151,44 @@ class EnumToString {
 };
 
 struct IncomingMessage {
-  std::string returned_id = "-1";
-  std::string returned_value = "-1";
+ private:
+  static constexpr const char *EMPTY = "---1";
+  std::string returned_id = IncomingMessage::EMPTY;
+  std::string returned_value = IncomingMessage::EMPTY;
 
+ public:
   char buffer[64];
   size_t buffer_index = -1;
 
   void reset() {
     this->buffer_index = -1;
-    this->returned_id = "-1";
-    this->returned_value = "-1";
+    this->returned_id = IncomingMessage::EMPTY;
+    this->returned_value = IncomingMessage::EMPTY;
     memset(this->buffer, 0, sizeof(this->buffer));
   }
+
+  bool returned_id_is_empty() { return this->returned_id == IncomingMessage::EMPTY; }
+  bool returned_value_is_empty() { return this->returned_value == IncomingMessage::EMPTY; }
+
+  void add_to_returned_id(char data) {
+    if (this->returned_id_is_empty()) {
+      this->returned_id = "";
+    }
+    this->returned_id += data;
+  }
+
+  void add_to_returned_value(char data) {
+    if (this->returned_value_is_empty()) {
+      this->returned_value = "";
+    }
+    this->returned_value += data;
+  }
+
+  std::string get_returned_id() { return this->returned_id; }
+  std::string get_returned_value() { return this->returned_value; }
+
+  int get_returned_id_as_int() { return std::stoi(this->returned_id); }
+  int get_returned_value_as_int() { return std::stoi(this->returned_value); }
 
   /**
    * @returns the index of the last byte stored in the buffer

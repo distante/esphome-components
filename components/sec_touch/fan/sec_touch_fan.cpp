@@ -42,7 +42,9 @@ void SecTouchFan::control(const fan::FanCall &call) {
     this->speed = *call.get_speed();
   }
 
-  if (this->speed > 0 && this->state == 1) {
+  if (this->state == 0) {
+    this->parent->add_set_task(SetDataTask::create(TaskTargetType::LEVEL, this->level_id, std::to_string(0).c_str()));
+  } else {
     this->parent->add_set_task(
         SetDataTask::create(TaskTargetType::LEVEL, this->level_id, std::to_string(this->speed).c_str()));
   }

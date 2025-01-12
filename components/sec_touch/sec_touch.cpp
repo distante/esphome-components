@@ -14,7 +14,7 @@ void SECTouchComponent::setup() {
   ESP_LOGI(TAG, "SEC-Touch setup initializing.");
 
   this->fill_get_queue_with_fans();
-  this->reset_incoming_message();
+  this->incoming_message.reset();
 
   ESP_LOGI(TAG, " SEC-Touch setup complete.");
 }
@@ -45,7 +45,6 @@ void SECTouchComponent::loop() {
   // We have send some data and now we are waiting for the response
   uint8_t peakedData;
   this->peek_byte(&peakedData);
-
   if (peakedData == NOISE && this->incoming_message.buffer_index == -1) {
     ESP_LOGD(TAG, "  Discarding noise byte");
     this->read_byte(&peakedData);  // Discard the noise
@@ -54,7 +53,6 @@ void SECTouchComponent::loop() {
 
   if (this->current_running_task_type == TaskType::GET) {
     this->handle_uart_input_for_get_queue();
-    this->current_running_task_type = TaskType::NONE;
     return;
   }
 
@@ -68,13 +66,34 @@ void SECTouchComponent::loop() {
     ESP_LOGD(TAG, "  Received SET Response %s", this->incoming_message.buffer);
     if (this->incoming_message.buffer_index == 2 && this->incoming_message.buffer[0] == STX &&
         this->incoming_message.buffer[1] == ACK && this->incoming_message.buffer[2] == ETX) {
-      ESP_LOGD(TAG, "  SET was successful");
+      if (!this->data_set_queue.empty()) {
+        ESP_LOGI(TAG, "  SET Successful for Task targetType \"%s\" and property_id \"%d\"",
+                 EnumToString::TaskTargetType(this->data_set_queue.front()->targetType),
+                 this->data_set_queue.front()->property_id);
+      }
+
     } else {
       ESP_LOGE(TAG, "  SET was not successful");
     }
-    this->data_set_queue.pop();
-    this->reset_incoming_message();
-    this->current_running_task_type = TaskType::NONE;
+
+    // Create create a priority get update after set.
+
+    if (!this->data_set_queue.empty()) {
+      auto task = GetDataTask::create(TaskTargetType::LEVEL, this->data_set_queue.front()->property_id);
+      this->data_get_queue.push_front(std::move(task));
+      this->data_set_queue.pop_front();
+    } else {
+      ESP_LOGE(TAG, "  No task in the set queue to create a get task");
+    }
+
+    this->incoming_message.reset();
+
+    if (this->data_set_queue.empty()) {
+      this->current_running_task_type = TaskType::NONE;
+
+      ESP_LOGD(TAG, "  No more tasks in the set queue, calling get tasks");
+      this->update_now(false);
+    }
   }
 }
 
@@ -92,7 +111,7 @@ void SECTouchComponent::notify_recursive_update_listeners(int property_id, int n
 }
 
 void SECTouchComponent::handle_uart_input_for_get_queue() {
-  ESP_LOGD(TAG, "[Loop] Data available--------");
+  ESP_LOGD(TAG, "[handle_uart_input_for_get_queue]--------");
   int current_index = -1;
 
   int total_tabs = 0;
@@ -114,7 +133,7 @@ void SECTouchComponent::handle_uart_input_for_get_queue() {
         ESP_LOGW(TAG,
                  "Starting to store message but the data is not ACK in the second attempt. Discarding all data: %d",
                  data);
-        this->reset_incoming_message();
+        this->incoming_message.reset();
         return;
       }
 
@@ -123,7 +142,7 @@ void SECTouchComponent::handle_uart_input_for_get_queue() {
       continue;
     } else if (!start_of_ack_message && data == NOISE) {
       ESP_LOGE(TAG, "  received NOISE (255) inside message discarding all data: %d", data);
-      this->reset_incoming_message();
+      this->incoming_message.reset();
       return;
     }
 
@@ -134,10 +153,10 @@ void SECTouchComponent::handle_uart_input_for_get_queue() {
 
     if (inside_id) {
       ESP_LOGD(TAG, "    saving into id");
-      this->incoming_message.returned_id += data;
+      this->incoming_message.add_to_returned_id(data);
     } else if (inside_value) {
       ESP_LOGD(TAG, "    saving into value");
-      this->incoming_message.returned_value += data;
+      this->incoming_message.add_to_returned_value(data);
     } else {
       ESP_LOGD(TAG, "    saving into buffer without id or value");
     }
@@ -156,47 +175,65 @@ void SECTouchComponent::handle_uart_input_for_get_queue() {
   } else {
     this->incoming_message.buffer[current_index + 1] = '\0';  // Explicit null terminator
 
-    ESP_LOGD(TAG, "  Received Data Without Request %s", this->incoming_message.buffer);
-    int returned_id = std::stoi(this->incoming_message.returned_id);
-    int returned_value = std::stoi(this->incoming_message.returned_value);
-    ESP_LOGD(TAG, "    string incoming.returned_id: %s, incoming.extracted_value: %s",
-             this->incoming_message.returned_id.c_str(), this->incoming_message.returned_value.c_str());
-    ESP_LOGD(TAG, "  Received Data Without Request returned_id: %d, extracted_value: %d", returned_id, returned_value);
-    ESP_LOGD(TAG, "[Loop]------------------------------------------");
+    ESP_LOGD(TAG, "  Buffer %s", this->incoming_message.buffer);
+    int returned_id = this->incoming_message.get_returned_id_as_int();
+    int returned_value = this->incoming_message.get_returned_value_as_int();
+    ESP_LOGD(TAG, "  returned_id: %d, extracted_value: %d", returned_id, returned_value);
+    ESP_LOGD(TAG, "[handle_uart_input_for_get_queue]------------------------------------------");
     this->send_ack_message();
     this->process_data_for_current_get_queue_item();
 
     if (!this->data_get_queue.empty()) {
+      ESP_LOGD(TAG, "[handle_uart_input_for_get_queue] Processing next get queue item");
       this->update_now(false);
+    } else {
+      this->current_running_task_type = TaskType::NONE;
     }
   }
 }
 
-bool SECTouchComponent::process_set_queue() {
-  // TODO: Delete  manually_process_set_queue ?
-  this->manually_process_set_queue();
-  return false;
+void SECTouchComponent::process_set_queue() {
+  ESP_LOGD(TAG, "process_set_queue size %d", this->data_set_queue.size());
+
+  if (this->data_set_queue.size() == 0) {
+    ESP_LOGE(TAG, "process_set_queue No data in the given queue");
+    return;
+  }
+
+  this->current_running_task_type = TaskType::SET;
+
+  ESP_LOGD(TAG, "process_set_queue with size %d", this->data_set_queue.size());
+  // Access the smart pointer from the queue
+  auto &task_ptr = this->data_set_queue.front();
+
+  // Dereference the smart pointer to access the actual object
+  auto &task = *task_ptr;
+  ESP_LOGD(TAG, "process_set_queue Task targetType \"%s\" and property_id \"%d\"",
+           EnumToString::TaskTargetType(task.targetType), task.property_id);
+
+  this->data_set_queue.front()->state = TaskState::TO_BE_PROCESSED;
+  this->send_set_message(task);
+  return;
 }
 
-template<typename SomeTask>
-bool SECTouchComponent::process_queue(std::queue<std::unique_ptr<SomeTask>> &taskQueue,
-                                      const std::string &queueLoggingName) {
-  if (taskQueue.size() == 0) {
+bool SECTouchComponent::process_get_queue() {
+  const std::string queueLoggingName = "data-get-queue";
+  if (this->data_get_queue.size() == 0) {
     ESP_LOGE(TAG, "No data in the given queue %s", queueLoggingName.c_str());
     return false;
   }
 
   this->current_running_task_type = TaskType::GET;
-  ESP_LOGD(TAG, "process_queue \"%s\" with size %d", queueLoggingName.c_str(), taskQueue.size());
+  ESP_LOGD(TAG, "process_get_queue \"%s\" with size %d", queueLoggingName.c_str(), this->data_get_queue.size());
   // Access the smart pointer from the queue
-  auto &task_ptr = taskQueue.front();
+  auto &task_ptr = this->data_get_queue.front();
 
   // Dereference the smart pointer to access the actual object
   auto &task = *task_ptr;
   ESP_LOGD(TAG, "Task targetType \"%s\" and property_id \"%d\"", EnumToString::TaskTargetType(task.targetType),
            task.property_id);
 
-  taskQueue.front()->state = TaskState::TO_BE_PROCESSED;
+  this->data_get_queue.front()->state = TaskState::TO_BE_PROCESSED;
   this->send_get_message(task);
 
   return true;
@@ -204,21 +241,14 @@ bool SECTouchComponent::process_queue(std::queue<std::unique_ptr<SomeTask>> &tas
 
 int SECTouchComponent::store_data_to_incoming_message(uint8_t data) { return this->incoming_message.store_data(data); }
 
-void SECTouchComponent::reset_incoming_message() {
-  this->incoming_message.buffer_index = -1;
-  this->incoming_message.returned_id = "";
-  this->incoming_message.returned_value = "";
-  memset(this->incoming_message.buffer, 0, sizeof(this->incoming_message.buffer));
-}
-
 void SECTouchComponent::mark_current_get_queue_item_as_failed() {
   auto &task_ptr = this->data_get_queue.front();
   auto &task = *task_ptr;
   ESP_LOGD(TAG, "[FAILED Task] targetType \"%s\" and id \"%d\"", EnumToString::TaskTargetType(task.targetType),
            task.property_id);
 
-  this->reset_incoming_message();
-  this->data_get_queue.pop();
+  this->incoming_message.reset();
+  this->data_get_queue.pop_front();
 
   // TODO: Retry?
 }
@@ -236,7 +266,7 @@ void SECTouchComponent::fill_get_queue_with_fans() {
       return;
     }
 
-    this->data_get_queue.push(GetDataTask::create(TaskTargetType::LEVEL, id));
+    this->data_get_queue.push_back(GetDataTask::create(TaskTargetType::LEVEL, id));
   }
 }
 
@@ -248,39 +278,10 @@ void SECTouchComponent::register_recursive_update_listener(int property_id, Upda
 
 void SECTouchComponent::add_set_task(std::unique_ptr<SetDataTask> task) {
   ESP_LOGD(TAG, "add_set_task");
-  this->data_set_queue.push(std::move(task));
+  this->data_set_queue.push_back(std::move(task));
 }
 
-void SECTouchComponent::update_now(bool fill_get_queue) {
-  ESP_LOGD(TAG, "update_now");
-  if (this->available()) {
-    ESP_LOGD(TAG, "Data available");
-  }
-  this->process_queue(this->data_get_queue, "data_get_queue");
-}
-
-void SECTouchComponent::manually_process_set_queue() {
-  ESP_LOGD(TAG, "manually_process_set_queue size %d", this->data_set_queue.size());
-
-  if (this->data_set_queue.size() == 0) {
-    ESP_LOGE(TAG, "manually_process_set_queue No data in the given queue");
-    return;
-  }
-
-  this->current_running_task_type = TaskType::SET;
-
-  ESP_LOGD(TAG, "manually_process_set_queue with size %d", this->data_set_queue.size());
-  // Access the smart pointer from the queue
-  auto &task_ptr = this->data_set_queue.front();
-
-  // Dereference the smart pointer to access the actual object
-  auto &task = *task_ptr;
-  ESP_LOGD(TAG, "manually_process_set_queue Task targetType \"%s\" and property_id \"%d\"",
-           EnumToString::TaskTargetType(task.targetType), task.property_id);
-
-  this->data_set_queue.front()->state = TaskState::TO_BE_PROCESSED;
-  this->send_set_message(task);
-}
+void SECTouchComponent::update_now(bool fill_get_queue) { this->process_get_queue(); }
 
 void SECTouchComponent::send_get_message(GetDataTask &task) {
   ESP_LOGD(TAG, "send_get_message");
@@ -343,21 +344,21 @@ void SECTouchComponent::process_data_for_current_get_queue_item() {
   ESP_LOGD(TAG, "  [process_data] Buffer contains an start and end byte");
 
   ESP_LOGD(TAG, "  [process_data] incoming.returned_id: %s, incoming.extracted_value: %s",
-           this->incoming_message.returned_id.c_str(), this->incoming_message.returned_value.c_str());
+           this->incoming_message.get_returned_id().c_str(), this->incoming_message.get_returned_value().c_str());
 
-  if (this->incoming_message.returned_id.empty()) {
+  if (this->incoming_message.returned_id_is_empty()) {
     ESP_LOGE(TAG, "  [process_data]returned_id is empty. Task Failed");
     this->mark_current_get_queue_item_as_failed();
     return;
   }
-  if (this->incoming_message.returned_value.empty()) {
+  if (this->incoming_message.returned_value_is_empty()) {
     ESP_LOGE(TAG, "  [process_data returned_value is empty. Task Failed");
     this->mark_current_get_queue_item_as_failed();
     return;
   }
 
-  int returned_id = std::stoi(this->incoming_message.returned_id);
-  int returned_value = std::stoi(this->incoming_message.returned_value);
+  int returned_id = this->incoming_message.get_returned_id_as_int();
+  int returned_value = this->incoming_message.get_returned_value_as_int();
 
   ESP_LOGD(TAG, "  [process_data] returned_id: %d, extracted_value: %d", returned_id, returned_value);
 
@@ -373,8 +374,8 @@ void SECTouchComponent::process_data_for_current_get_queue_item() {
   ESP_LOGD(TAG, "  [process_data] Task with targetType %s and id %d processed. New Value is %d",
            EnumToString::TaskTargetType(task_ptr->targetType), task_ptr->property_id, returned_value);
 
-  this->data_get_queue.pop();
-  this->reset_incoming_message();
+  this->data_get_queue.pop_front();
+  this->incoming_message.reset();
 }
 
 }  // namespace sec_touch

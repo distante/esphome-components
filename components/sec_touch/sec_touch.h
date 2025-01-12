@@ -12,9 +12,6 @@ namespace esphome {
 namespace sec_touch {
 
 class SECTouchComponent : public Component, public uart::UARTDevice {
-  // #ifdef USE_BUTTON // TODO: Find out what does this does
-  //   SUB_BUTTON(process_get_queue)
-  // #endif
  public:
   SECTouchComponent();
   void setup() override;
@@ -25,7 +22,7 @@ class SECTouchComponent : public Component, public uart::UARTDevice {
    */
   void register_recursive_update_listener(int property_id, UpdateCallbackListener listener);
 
-  void add_set_task(std::unique_ptr<SetDataTask>);
+  void add_set_task(std::unique_ptr<SetDataTask> task);
 
   void fill_get_queue_with_fans();
   // Test
@@ -40,20 +37,21 @@ class SECTouchComponent : public Component, public uart::UARTDevice {
   std::vector<int> recursive_update_ids;
   void notify_recursive_update_listeners(int property_id, int new_value);
   bool processing_queue = false;
+  TaskType current_running_task_type = TaskType::NONE;
   /**
    * @returns true if the queue was processed
    */
   bool process_set_queue();
 
-  /**
-   * @returns true if the queue was processed
-   */
-  bool process_get_queue();
+  void handle_uart_input_for_get_queue();
 
-  template<typename TaskType>
-  bool process_queue(std::queue<std::unique_ptr<TaskType>> &taskQueue, const std::string &queueLoggingName);
+  template<typename SomeTask>
+  bool process_queue(std::queue<std::unique_ptr<SomeTask>> &taskQueue, const std::string &queueLoggingName);
 
   void send_get_message(GetDataTask &task);
+
+  void send_set_message(SetDataTask &task);
+
   /**
    * Returns the index of the last byte stored in the buffer
    */

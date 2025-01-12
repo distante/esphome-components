@@ -34,86 +34,47 @@ void SECTouchComponent::dump_config() {
 }
 
 void SECTouchComponent::loop() {
-  if (this->available()) {  // We had send some data and now we are waiting for the response
-    ESP_LOGD(TAG, "[Loop] Data available--------");
-    int current_index = -1;
+  if (!this->available()) {  // We are not waiting any response
+    // If no other task is running, lets run all set tasks
+    if (this->current_running_task_type == TaskType::NONE && this->data_set_queue.size() > 0) {
+      this->process_set_queue();
+    }
+    return;
+  }
 
-    int total_tabs = 0;
-    int total_etx = 0;
-    int total_stx = 0;
+  // We have send some data and now we are waiting for the response
+  uint8_t peakedData;
+  this->peek_byte(&peakedData);
 
-    bool ack_already_failed = false;
+  if (peakedData == NOISE && this->incoming_message.buffer_index == -1) {
+    ESP_LOGD(TAG, "  Discarding noise byte");
+    this->read_byte(&peakedData);  // Discard the noise
+    return;
+  }
 
+  if (this->current_running_task_type == TaskType::GET) {
+    this->handle_uart_input_for_get_queue();
+    this->current_running_task_type = TaskType::NONE;
+    return;
+  }
+
+  if (this->current_running_task_type == TaskType::SET) {
     while (this->available()) {
       uint8_t data;
       this->read_byte(&data);
-
-      ESP_LOGD(TAG, "  Byte received: %d", data);
-
-      bool start_of_ack_message = this->incoming_message.buffer_index == 0;
-
-      if (start_of_ack_message && data != ACK) {
-        if (ack_already_failed) {
-          ESP_LOGW(TAG,
-                   "Starting to store message but the data is not ACK in the second attempt. Discarding all data: %d",
-                   data);
-          this->reset_incoming_message();
-          return;
-        }
-
-        ack_already_failed = true;
-        ESP_LOGW(TAG, "Starting to store message but the data is not ACK. Discarding data: %d", data);
-        continue;
-      } else if (!start_of_ack_message && data == 255) {
-        ESP_LOGE(TAG, "  received 255 inside message discarding all data: %d", data);
-        this->reset_incoming_message();
-        return;
-      }
-
-      bool inside_id = total_etx == 1 && total_stx > 1 && total_tabs == 1;
-      bool inside_value = total_etx == 1 && total_stx > 1 && total_tabs == 2;
-
-      current_index = this->store_data_to_incoming_message(data);
-
-      if (inside_id) {
-        ESP_LOGD(TAG, "    saving into id");
-        this->incoming_message.returned_id += data;
-      } else if (inside_value) {
-        ESP_LOGD(TAG, "    saving into value");
-        this->incoming_message.returned_value += data;
-      } else {
-        ESP_LOGD(TAG, "    saving into buffer without id or value");
-      }
-
-      if (data == ETX) {
-        total_etx++;
-      } else if (data == TAB) {
-        total_tabs++;
-      } else if (data == STX) {
-        total_stx++;
-      }
+      this->store_data_to_incoming_message(data);
     }
 
-    if (this->incoming_message.buffer_index == 0) {
-      ESP_LOGW(TAG, "  No valid data was found on the UART buffer");
+    ESP_LOGD(TAG, "  Received SET Response %s", this->incoming_message.buffer);
+    if (this->incoming_message.buffer_index == 2 && this->incoming_message.buffer[0] == STX &&
+        this->incoming_message.buffer[1] == ACK && this->incoming_message.buffer[2] == ETX) {
+      ESP_LOGD(TAG, "  SET was successful");
     } else {
-      this->incoming_message.buffer[current_index + 1] = '\0';  // Explicit null terminator
-
-      ESP_LOGD(TAG, "  Received Data Without Request %s", this->incoming_message.buffer);
-      int returned_id = std::stoi(this->incoming_message.returned_id);
-      int returned_value = std::stoi(this->incoming_message.returned_value);
-      ESP_LOGD(TAG, "    string incoming.returned_id: %s, incoming.extracted_value: %s",
-               this->incoming_message.returned_id.c_str(), this->incoming_message.returned_value.c_str());
-      ESP_LOGD(TAG, "  Received Data Without Request returned_id: %d, extracted_value: %d", returned_id,
-               returned_value);
-      ESP_LOGD(TAG, "[Loop]------------------------------------------");
-      this->send_ack_message();
-      this->process_data_for_current_get_queue_item();
-
-      if (!this->data_get_queue.empty()) {
-        this->update_now(false);
-      }
+      ESP_LOGE(TAG, "  SET was not successful");
     }
+    this->data_set_queue.pop();
+    this->reset_incoming_message();
+    this->current_running_task_type = TaskType::NONE;
   }
 }
 
@@ -130,29 +91,102 @@ void SECTouchComponent::notify_recursive_update_listeners(int property_id, int n
   listener(property_id, new_value);  // Call the listener
 }
 
-bool SECTouchComponent::process_get_queue() {
-  // TODO: Implement
+void SECTouchComponent::handle_uart_input_for_get_queue() {
+  ESP_LOGD(TAG, "[Loop] Data available--------");
+  int current_index = -1;
 
-  return false;
+  int total_tabs = 0;
+  int total_etx = 0;
+  int total_stx = 0;
+
+  bool ack_already_failed = false;
+
+  while (this->available()) {
+    uint8_t data;
+    this->read_byte(&data);
+
+    ESP_LOGD(TAG, "  Byte received: %d", data);
+
+    bool start_of_ack_message = this->incoming_message.buffer_index == 0;
+
+    if (start_of_ack_message && data != ACK) {
+      if (ack_already_failed) {
+        ESP_LOGW(TAG,
+                 "Starting to store message but the data is not ACK in the second attempt. Discarding all data: %d",
+                 data);
+        this->reset_incoming_message();
+        return;
+      }
+
+      ack_already_failed = true;
+      ESP_LOGW(TAG, "Starting to store message but the data is not ACK. Discarding data: %d", data);
+      continue;
+    } else if (!start_of_ack_message && data == NOISE) {
+      ESP_LOGE(TAG, "  received NOISE (255) inside message discarding all data: %d", data);
+      this->reset_incoming_message();
+      return;
+    }
+
+    bool inside_id = total_etx == 1 && total_stx > 1 && total_tabs == 1;
+    bool inside_value = total_etx == 1 && total_stx > 1 && total_tabs == 2;
+
+    current_index = this->store_data_to_incoming_message(data);
+
+    if (inside_id) {
+      ESP_LOGD(TAG, "    saving into id");
+      this->incoming_message.returned_id += data;
+    } else if (inside_value) {
+      ESP_LOGD(TAG, "    saving into value");
+      this->incoming_message.returned_value += data;
+    } else {
+      ESP_LOGD(TAG, "    saving into buffer without id or value");
+    }
+
+    if (data == ETX) {
+      total_etx++;
+    } else if (data == TAB) {
+      total_tabs++;
+    } else if (data == STX) {
+      total_stx++;
+    }
+  }
+
+  if (this->incoming_message.buffer_index == 0) {
+    ESP_LOGW(TAG, "  No valid data was found on the UART buffer");
+  } else {
+    this->incoming_message.buffer[current_index + 1] = '\0';  // Explicit null terminator
+
+    ESP_LOGD(TAG, "  Received Data Without Request %s", this->incoming_message.buffer);
+    int returned_id = std::stoi(this->incoming_message.returned_id);
+    int returned_value = std::stoi(this->incoming_message.returned_value);
+    ESP_LOGD(TAG, "    string incoming.returned_id: %s, incoming.extracted_value: %s",
+             this->incoming_message.returned_id.c_str(), this->incoming_message.returned_value.c_str());
+    ESP_LOGD(TAG, "  Received Data Without Request returned_id: %d, extracted_value: %d", returned_id, returned_value);
+    ESP_LOGD(TAG, "[Loop]------------------------------------------");
+    this->send_ack_message();
+    this->process_data_for_current_get_queue_item();
+
+    if (!this->data_get_queue.empty()) {
+      this->update_now(false);
+    }
+  }
 }
 
 bool SECTouchComponent::process_set_queue() {
-  // TODO: Implement
-
+  // TODO: Delete  manually_process_set_queue ?
+  this->manually_process_set_queue();
   return false;
 }
 
-template<typename TaskType>
-bool SECTouchComponent::process_queue(std::queue<std::unique_ptr<TaskType>> &taskQueue,
+template<typename SomeTask>
+bool SECTouchComponent::process_queue(std::queue<std::unique_ptr<SomeTask>> &taskQueue,
                                       const std::string &queueLoggingName) {
-  this->processing_queue = true;
-
   if (taskQueue.size() == 0) {
     ESP_LOGE(TAG, "No data in the given queue %s", queueLoggingName.c_str());
-    this->processing_queue = false;
     return false;
   }
 
+  this->current_running_task_type = TaskType::GET;
   ESP_LOGD(TAG, "process_queue \"%s\" with size %d", queueLoggingName.c_str(), taskQueue.size());
   // Access the smart pointer from the queue
   auto &task_ptr = taskQueue.front();
@@ -168,17 +202,7 @@ bool SECTouchComponent::process_queue(std::queue<std::unique_ptr<TaskType>> &tas
   return true;
 }
 
-int SECTouchComponent::store_data_to_incoming_message(uint8_t data) {
-  if (this->incoming_message.buffer_index + 1 < sizeof(this->incoming_message.buffer) - 1) {
-    this->incoming_message.buffer_index++;
-    this->incoming_message.buffer[this->incoming_message.buffer_index] = data;
-
-  } else {
-    ESP_LOGW(TAG, "  Buffer overflow! Discarding extra data.");
-  }
-
-  return this->incoming_message.buffer_index;
-}
+int SECTouchComponent::store_data_to_incoming_message(uint8_t data) { return this->incoming_message.store_data(data); }
 
 void SECTouchComponent::reset_incoming_message() {
   this->incoming_message.buffer_index = -1;
@@ -222,7 +246,10 @@ void SECTouchComponent::register_recursive_update_listener(int property_id, Upda
   this->recursive_update_ids.push_back(property_id);
 }
 
-void SECTouchComponent::add_set_task(std::unique_ptr<SetDataTask>) {}
+void SECTouchComponent::add_set_task(std::unique_ptr<SetDataTask> task) {
+  ESP_LOGD(TAG, "add_set_task");
+  this->data_set_queue.push(std::move(task));
+}
 
 void SECTouchComponent::update_now(bool fill_get_queue) {
   ESP_LOGD(TAG, "update_now");
@@ -233,8 +260,26 @@ void SECTouchComponent::update_now(bool fill_get_queue) {
 }
 
 void SECTouchComponent::manually_process_set_queue() {
-  ESP_LOGD(TAG, "manually_process_set_queue");
-  // this->process_queue(this->data_set_queue, "data_get_queue");
+  ESP_LOGD(TAG, "manually_process_set_queue size %d", this->data_set_queue.size());
+
+  if (this->data_set_queue.size() == 0) {
+    ESP_LOGE(TAG, "manually_process_set_queue No data in the given queue");
+    return;
+  }
+
+  this->current_running_task_type = TaskType::SET;
+
+  ESP_LOGD(TAG, "manually_process_set_queue with size %d", this->data_set_queue.size());
+  // Access the smart pointer from the queue
+  auto &task_ptr = this->data_set_queue.front();
+
+  // Dereference the smart pointer to access the actual object
+  auto &task = *task_ptr;
+  ESP_LOGD(TAG, "manually_process_set_queue Task targetType \"%s\" and property_id \"%d\"",
+           EnumToString::TaskTargetType(task.targetType), task.property_id);
+
+  this->data_set_queue.front()->state = TaskState::TO_BE_PROCESSED;
+  this->send_set_message(task);
 }
 
 void SECTouchComponent::send_get_message(GetDataTask &task) {
@@ -247,6 +292,19 @@ void SECTouchComponent::send_get_message(GetDataTask &task) {
   unsigned short crc = GetXModemCRC(message_buffer.data(), len);
   len += snprintf(message_buffer.data() + len, message_buffer.size() - len, "%u%c", crc, ETX);
 
+  ESP_LOGD(TAG, "  buffer %s", message_buffer.data());
+  this->write_array(reinterpret_cast<const uint8_t *>(message_buffer.data()), len);
+}
+
+void SECTouchComponent::send_set_message(SetDataTask &task) {
+  std::array<char, 64> message_buffer;
+  int len = snprintf(message_buffer.data(), message_buffer.size(), "%c%d%c%d%c%s%c", STX, COMMANDID_SET, TAB,
+                     task.property_id, TAB, task.value, TAB);
+
+  unsigned short crc = GetXModemCRC(message_buffer.data(), len);
+  len += snprintf(message_buffer.data() + len, message_buffer.size() - len, "%u%c", crc, ETX);
+
+  ESP_LOGD(TAG, "  buffer %s", message_buffer.data());
   this->write_array(reinterpret_cast<const uint8_t *>(message_buffer.data()), len);
 }
 

@@ -109,7 +109,7 @@ where:
 - `42625` is the checksum.
 - 
 ### SET Response Message
-Sadly (IMHO) the SEC-TOUCH just sends an `ACK` message after receiving a SET message and it takes a couple of seconds for the SEC-TOUCH screen to update the new value, so the best we can do is to wait for the `ACK` message and then send a `GET` message to get the new value.
+Sadly (IMHO) the SEC-TOUCH just sends an `ACK` message after receiving a SET message and it takes a couple of seconds for the SEC-TOUCH screen to update the new value, so the best we can do is to wait for the `ACK` message and then send a `GET` message to do a security sync of the new value.
 
 ```log
 Byte received: 2   // STX 0x02

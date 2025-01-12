@@ -23,10 +23,8 @@ class SECTouchComponent : public Component, public uart::UARTDevice {
   void register_recursive_update_listener(int property_id, UpdateCallbackListener listener);
 
   void add_set_task(std::unique_ptr<SetDataTask> task);
-
   void fill_get_queue_with_fans();
-  // Test
-  void update_now(bool fill_get_queue);
+  bool process_get_queue();
 
  protected:
   IncomingMessage incoming_message;
@@ -43,8 +41,6 @@ class SECTouchComponent : public Component, public uart::UARTDevice {
   void process_set_queue();
 
   void handle_uart_input_for_get_queue();
-
-  bool process_get_queue();
 
   void send_get_message(GetDataTask &task);
 

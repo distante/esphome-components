@@ -92,7 +92,7 @@ void SECTouchComponent::loop() {
       this->current_running_task_type = TaskType::NONE;
 
       ESP_LOGD(TAG, "  No more tasks in the set queue, calling get tasks");
-      this->update_now(false);
+      this->process_get_queue();
     }
   }
 }
@@ -185,7 +185,7 @@ void SECTouchComponent::handle_uart_input_for_get_queue() {
 
     if (!this->data_get_queue.empty()) {
       ESP_LOGD(TAG, "[handle_uart_input_for_get_queue] Processing next get queue item");
-      this->update_now(false);
+      this->process_get_queue();
     } else {
       this->current_running_task_type = TaskType::NONE;
     }
@@ -280,8 +280,6 @@ void SECTouchComponent::add_set_task(std::unique_ptr<SetDataTask> task) {
   ESP_LOGD(TAG, "add_set_task");
   this->data_set_queue.push_back(std::move(task));
 }
-
-void SECTouchComponent::update_now(bool fill_get_queue) { this->process_get_queue(); }
 
 void SECTouchComponent::send_get_message(GetDataTask &task) {
   ESP_LOGD(TAG, "send_get_message");

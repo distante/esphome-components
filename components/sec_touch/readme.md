@@ -1,3 +1,88 @@
+# SEC-TOUCH ESPHome Component
+
+This is a component that allows you to control your SEC-TOUCH ventilation controller (Dezentrale Lüftung Zentralregler SEC-Touch) from your ESPHome device.
+
+(For now) It is limited to change the level of the fan pairs, or put them into their special modes (automatic, time, etc). There is no way to change the timing intervals for now. You need to make that in the SEC-TOUCH device itself.
+
+
+## First of all thanks to:
+
+- [Manuel-Siekmann](https://github.com/Manuel-Siekmann/) who did the heavy lifting of find out the communication protocol of the SEC-TOUCH device in his [VentilationSystem](https://github.com/Manuel-Siekmann/VentilationSystem) project.
+- [Samuel Sieb](https://github.com/ssieb) who helped me to understand some basic c++ and ESPHome concepts and responded my questions on Discord.
+
+# Configuration:
+
+Add this to `your-device.yaml` file:
+```yaml
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/distante/esphome-components
+      ref: main
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Ventilation-Controller"
+    password: "supersecretpassword"
+
+captive_portal:
+
+web_server: ## Just if you can to use the web server
+  port: 80
+  log: false
+  version: 3
+  
+uart:
+  id: sec_touch_uart
+  tx_pin: 
+    number: GPIO17 ## Replace with your TX pin
+  rx_pin:
+    number: GPIO16 ## Replace with your RX pin
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+  update_interval: 5s # 5s is the default
+
+fan: ## See the Fan order below
+  - platform: sec_touch
+    fan_number: 1
+    name: "Fan 1"
+  - platform: sec_touch
+    fan_number: 2
+    name: "Fan 2"
+  # - platform: sec_touch
+  #   fan_number: 3
+  #   name: "Fan 3"
+  # - platform: sec_touch
+  #   fan_number: 4
+  #   name: "Fan 4"
+  # - platform: sec_touch
+  #   fan_number: 5
+  #   name: "Fan 5"
+  # - platform: sec_touch
+  #   fan_number: 6
+  #   name: "Fan 6"
+```
+
+Notice that the fans numbers are ordered so:
+
+|   --   |   --   |   --   |   --   |
+|--------|--------|--------|----|
+| Pair 1 | Pair 3 | Pair 5 | ℹ️ |
+| Pair 2 | Pair 4 | Pair 6 | ⚙️  |
+
+
+## :bulb: Setting The Fan Level above 6
+Please check the [Special Fan level Values](#fan-pair-level-special-values) section to understand the special values for the fan level.
+
+# Development
+
 # Known Ids
 ## Command Ids
 ```
@@ -21,11 +106,11 @@ The Fan pairs are ordered from top to bottom, and left to right.
 
 |   --   |   --   |   --   |   --   |
 |--------|--------|--------|----|
-| Pair 1 | Pair 3 | Pair 5 | ℹ️ |
-| Pair 2 | Pair 4 | Pair 6 | ⚙️  |
+| Level 173 | Level 175 | Level 177 | ℹ️ |
+| Level 174 | Level 176 | Level 178 | ⚙️  |
 
 
-# Fan Pair Level
+# Fan Pair Level special values
 Each Fan Pair can have a level from 0 to 10. From there, just 0-6 are "real" levels, 7-10 are "special" levels.
 
 | Level    | Meaning  |
@@ -34,6 +119,7 @@ Each Fan Pair can have a level from 0 to 10. From there, just 0-6 are "real" lev
 | 8        | Automatic Humidity / Automatik Feuchte      |
 | 9        | Automatic CO2 / Automatik CO2      |
 | 10       | Sleep / Schlummer      |
+
 
 
 # UART Messages
@@ -118,7 +204,8 @@ Byte received: 10  // ETX 0x0A
 ```
 
 
-# Development
+
+
 
 ### Update submodules
 ```

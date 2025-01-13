@@ -11,12 +11,13 @@
 namespace esphome {
 namespace sec_touch {
 
-class SECTouchComponent : public Component, public uart::UARTDevice {
+class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
  public:
   SECTouchComponent();
   void setup() override;
   void dump_config() override;
   void loop() override;
+  void update() override;
   /**
    * Use this for things that need to be updated on each loop
    */

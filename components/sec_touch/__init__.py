@@ -7,7 +7,7 @@ DEPENDENCIES = ["uart"]
 
 sec_touch_ns = cg.esphome_ns.namespace("sec_touch")
 SECTouchComponent = sec_touch_ns.class_(
-    "SECTouchComponent", cg.Component, uart.UARTDevice
+    "SECTouchComponent", cg.PollingComponent, uart.UARTDevice
 )
 
 CONF_SEC_TOUCH_ID = "sec_touch_id"
@@ -21,7 +21,9 @@ CONFIG_SCHEMA = cv.Schema(
 
 
 CONFIG_SCHEMA = cv.All(
-    CONFIG_SCHEMA.extend(uart.UART_DEVICE_SCHEMA).extend(cv.COMPONENT_SCHEMA)
+    CONFIG_SCHEMA.extend(uart.UART_DEVICE_SCHEMA)
+    .extend(cv.COMPONENT_SCHEMA)
+    .extend(cv.polling_component_schema("5s")),
 )
 
 FINAL_VALIDATE_SCHEMA = uart.final_validate_device_schema(

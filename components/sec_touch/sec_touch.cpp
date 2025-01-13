@@ -7,6 +7,7 @@ namespace esphome {
 namespace sec_touch {
 
 static const char *const TAG = "sec-touch";
+static const char *const TAG_UART = "sec-touch-uart";
 
 SECTouchComponent::SECTouchComponent() {}
 
@@ -30,6 +31,14 @@ void SECTouchComponent::dump_config() {
 
   if (this->is_failed()) {
     ESP_LOGE(TAG, "  !!!! SETUP of SEC-Touch failed !!!!");
+  }
+}
+
+void SECTouchComponent::update() {
+  if (this->data_set_queue.empty() && !this->available()) {
+    ESP_LOGD(TAG, "SEC-Touch update");
+    this->fill_get_queue_with_fans();
+    this->process_get_queue();
   }
 }
 
@@ -63,17 +72,17 @@ void SECTouchComponent::loop() {
       this->store_data_to_incoming_message(data);
     }
 
-    ESP_LOGD(TAG, "  Received SET Response %s", this->incoming_message.buffer);
+    ESP_LOGD(TAG_UART, "  Received SET Response %s", this->incoming_message.buffer);
     if (this->incoming_message.buffer_index == 2 && this->incoming_message.buffer[0] == STX &&
         this->incoming_message.buffer[1] == ACK && this->incoming_message.buffer[2] == ETX) {
       if (!this->data_set_queue.empty()) {
-        ESP_LOGI(TAG, "  SET Successful for Task targetType \"%s\" and property_id \"%d\"",
+        ESP_LOGI(TAG_UART, "  SET Successful for Task targetType \"%s\" and property_id \"%d\"",
                  EnumToString::TaskTargetType(this->data_set_queue.front()->targetType),
                  this->data_set_queue.front()->property_id);
       }
 
     } else {
-      ESP_LOGE(TAG, "  SET was not successful");
+      ESP_LOGE(TAG_UART, "  SET was not successful");
     }
 
     // Create create a priority get update after set.
@@ -124,7 +133,7 @@ void SECTouchComponent::handle_uart_input_for_get_queue() {
     uint8_t data;
     this->read_byte(&data);
 
-    ESP_LOGD(TAG, "  Byte received: %d", data);
+    ESP_LOGD(TAG_UART, "  Byte received: %d", data);
 
     bool start_of_ack_message = this->incoming_message.buffer_index == 0;
 
@@ -152,13 +161,13 @@ void SECTouchComponent::handle_uart_input_for_get_queue() {
     current_index = this->store_data_to_incoming_message(data);
 
     if (inside_id) {
-      ESP_LOGD(TAG, "    saving into id");
+      ESP_LOGD(TAG_UART, "    saving into id");
       this->incoming_message.add_to_returned_id(data);
     } else if (inside_value) {
-      ESP_LOGD(TAG, "    saving into value");
+      ESP_LOGD(TAG_UART, "    saving into value");
       this->incoming_message.add_to_returned_value(data);
     } else {
-      ESP_LOGD(TAG, "    saving into buffer without id or value");
+      ESP_LOGD(TAG_UART, "    saving into buffer without id or value");
     }
 
     if (data == ETX) {
@@ -175,11 +184,11 @@ void SECTouchComponent::handle_uart_input_for_get_queue() {
   } else {
     this->incoming_message.buffer[current_index + 1] = '\0';  // Explicit null terminator
 
-    ESP_LOGD(TAG, "  Buffer %s", this->incoming_message.buffer);
+    ESP_LOGD(TAG_UART, "  Buffer %s", this->incoming_message.buffer);
     int returned_id = this->incoming_message.get_returned_id_as_int();
     int returned_value = this->incoming_message.get_returned_value_as_int();
-    ESP_LOGD(TAG, "  returned_id: %d, extracted_value: %d", returned_id, returned_value);
-    ESP_LOGD(TAG, "[handle_uart_input_for_get_queue]------------------------------------------");
+    ESP_LOGD(TAG_UART, "  returned_id: %d, extracted_value: %d", returned_id, returned_value);
+    ESP_LOGD(TAG_UART, "[handle_uart_input_for_get_queue]------------------------------------------");
     this->send_ack_message();
     this->process_data_for_current_get_queue_item();
 
@@ -282,7 +291,7 @@ void SECTouchComponent::add_set_task(std::unique_ptr<SetDataTask> task) {
 }
 
 void SECTouchComponent::send_get_message(GetDataTask &task) {
-  ESP_LOGD(TAG, "send_get_message");
+  ESP_LOGD(TAG_UART, "send_get_message");
 
   std::array<char, 64> message_buffer;
 
@@ -291,7 +300,7 @@ void SECTouchComponent::send_get_message(GetDataTask &task) {
   unsigned short crc = GetXModemCRC(message_buffer.data(), len);
   len += snprintf(message_buffer.data() + len, message_buffer.size() - len, "%u%c", crc, ETX);
 
-  ESP_LOGD(TAG, "  buffer %s", message_buffer.data());
+  ESP_LOGD(TAG_UART, "  buffer %s", message_buffer.data());
   this->write_array(reinterpret_cast<const uint8_t *>(message_buffer.data()), len);
 }
 
@@ -310,7 +319,7 @@ void SECTouchComponent::send_set_message(SetDataTask &task) {
 void SECTouchComponent::send_ack_message() {
   uint8_t data[] = {STX, ACK, ETX};
   this->write_array(data, sizeof(data));
-  ESP_LOGD(TAG, "SendMessageAck sended");
+  ESP_LOGD(TAG_UART, "SendMessageAck sended");
 }
 
 void SECTouchComponent::process_data_for_current_get_queue_item() {
@@ -338,8 +347,6 @@ void SECTouchComponent::process_data_for_current_get_queue_item() {
     this->mark_current_get_queue_item_as_failed();
     return;
   }
-
-  ESP_LOGD(TAG, "  [process_data] Buffer contains an start and end byte");
 
   ESP_LOGD(TAG, "  [process_data] incoming.returned_id: %s, incoming.extracted_value: %s",
            this->incoming_message.get_returned_id().c_str(), this->incoming_message.get_returned_value().c_str());

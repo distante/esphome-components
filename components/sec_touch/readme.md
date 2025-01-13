@@ -116,3 +116,11 @@ Byte received: 2   // STX 0x02
 Byte received: 6   // ACK 0x06
 Byte received: 10  // ETX 0x0A
 ```
+
+
+# Development
+
+### Update submodules
+```
+git submodule update --remote --merge
+```

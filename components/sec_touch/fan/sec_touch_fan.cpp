@@ -1,4 +1,3 @@
-#include "esphome/components/fan/fan.h"
 #include "sec_touch_fan.h"
 #include "../sec_touch.h"
 

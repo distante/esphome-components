@@ -10,6 +10,10 @@ SECTouchComponent = sec_touch_ns.class_(
     "SECTouchComponent", cg.PollingComponent, uart.UARTDevice
 )
 
+FAN_LEVEL_IDS = (173, 174, 175, 176, 177, 178)
+FAN_LABEL_IDS = (78, 79, 80, 81, 82, 83)
+
+
 CONF_SEC_TOUCH_ID = "sec_touch_id"
 # The total of fan pairs that the SEC-Touch shows in the screen
 

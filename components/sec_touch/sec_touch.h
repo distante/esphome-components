@@ -4,6 +4,7 @@
 #include "esphome/core/component.h"
 #include "esphome/core/gpio.h"
 #include "esphome/components/uart/uart.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 #include "_definitions.h"
 
 #include "esphome/components/button/button.h"
@@ -32,6 +33,8 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   void add_set_task(std::unique_ptr<SetDataTask> task);
   void fill_get_queue_with_fans();
   bool process_get_queue();
+  void register_text_sensor(int id, text_sensor::TextSensor *sensor);
+  esphome::optional<text_sensor::TextSensor *> get_text_sensor(int id);
 
  protected:
   IncomingMessage incoming_message;
@@ -42,6 +45,7 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   std::vector<int> recursive_update_ids;
 
   std::map<int, UpdateCallbackListener> manual_update_listeners;
+  std::map<int, text_sensor::TextSensor *> text_sensors;
   std::vector<int> manual_update_ids;
 
   void notify_recursive_update_listeners(int property_id, int new_value);

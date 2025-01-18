@@ -15,6 +15,19 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
     //   this->publish_state();
     //   return;
     // }
+    text_sensor::TextSensor *level_text_sensor = this->parent->get_text_sensor(this->level_id).value_or(nullptr);
+    if (level_text_sensor != nullptr) {
+      level_text_sensor->publish_state(std::to_string(this->level_id).c_str());
+    } else {
+      ESP_LOGV(TAG, "No text sensor found for level_id %d", this->level_id);
+    }
+
+    text_sensor::TextSensor *label_text_sensor = this->parent->get_text_sensor(this->label_id).value_or(nullptr);
+    if (label_text_sensor != nullptr) {
+      label_text_sensor->publish_state(std::to_string(this->label_id).c_str());
+    } else {
+      ESP_LOGV(TAG, "No text sensor found for label_id %d", this->label_id);
+    }
 
     if (new_speed == 0) {
       this->state = 0;

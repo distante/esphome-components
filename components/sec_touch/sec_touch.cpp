@@ -106,6 +106,18 @@ void SECTouchComponent::loop() {
   }
 }
 
+void SECTouchComponent::register_text_sensor(int id, text_sensor::TextSensor *sensor) {
+  this->text_sensors[id] = sensor;
+}
+
+esphome::optional<text_sensor::TextSensor *> SECTouchComponent::get_text_sensor(int id) {
+  auto it = this->text_sensors.find(id);
+  if (it != this->text_sensors.end()) {
+    return it->second;
+  }
+  return esphome::optional<text_sensor::TextSensor *>{};
+}
+
 void SECTouchComponent::notify_recursive_update_listeners(int property_id, int new_value) {
   ESP_LOGD(TAG, "notify_recursive_update_listeners for property_id %d", property_id);
 

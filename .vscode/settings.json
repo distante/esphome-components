@@ -94,7 +94,8 @@
   "semaphore": "cpp",
   "span": "cpp",
   "stop_token": "cpp",
-  "thread": "cpp"
+  "thread": "cpp",
+  "codecvt": "cpp"
 },
 "editor.formatOnSave": true,
 "editor.codeActionsOnSave": {

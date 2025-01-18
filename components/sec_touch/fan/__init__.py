@@ -2,10 +2,13 @@ from esphome.components import fan
 import esphome.config_validation as cv
 import esphome.codegen as cg
 from esphome.const import CONF_OUTPUT_ID
-from .. import CONF_SEC_TOUCH_ID, sec_touch_ns, SECTouchComponent
-
-FAN_LEVEL_IDS = (173, 174, 175, 176, 177, 178)
-FAN_LABEL_IDS = (78, 79, 80, 81, 82, 83)
+from .. import (
+    CONF_SEC_TOUCH_ID,
+    sec_touch_ns,
+    SECTouchComponent,
+    FAN_LEVEL_IDS,
+    FAN_LABEL_IDS,
+)
 
 DEPENDENCIES = ["sec_touch"]
 

@@ -44,13 +44,15 @@ void SECTouchComponent::update() {
 
 void SECTouchComponent::loop() {
   if (!this->available()) {  // We are not waiting any response
-    // If no other task is running, lets run all set tasks
+
+    // If no other task is running, lets run all automatic set tasks
     if (this->current_running_task_type == TaskType::NONE && this->data_set_queue.size() > 0) {
       this->process_set_queue();
     }
     return;
   }
 
+  ESP_LOGD(TAG, "SEC-Touch loop Data available");
   // We have send some data and now we are waiting for the response
   uint8_t peakedData;
   this->peek_byte(&peakedData);
@@ -60,29 +62,29 @@ void SECTouchComponent::loop() {
     return;
   }
 
-  if (this->current_running_task_type == TaskType::GET) {
+  if (this->current_running_task_type == TaskType::AUTO_GET) {
     this->handle_uart_input_for_get_queue();
     return;
   }
 
-  if (this->current_running_task_type == TaskType::SET) {
+  if (this->current_running_task_type == TaskType::MANUAL_SET) {
     while (this->available()) {
       uint8_t data;
       this->read_byte(&data);
       this->store_data_to_incoming_message(data);
     }
 
-    ESP_LOGD(TAG_UART, "  Received SET Response %s", this->incoming_message.buffer);
+    ESP_LOGD(TAG_UART, "  Received MANUAL_SET Response %s", this->incoming_message.buffer);
     if (this->incoming_message.buffer_index == 2 && this->incoming_message.buffer[0] == STX &&
         this->incoming_message.buffer[1] == ACK && this->incoming_message.buffer[2] == ETX) {
       if (!this->data_set_queue.empty()) {
-        ESP_LOGI(TAG_UART, "  SET Successful for Task targetType \"%s\" and property_id \"%d\"",
+        ESP_LOGI(TAG_UART, "  MANUAL_SET Successful for Task targetType \"%s\" and property_id \"%d\"",
                  EnumToString::TaskTargetType(this->data_set_queue.front()->targetType),
                  this->data_set_queue.front()->property_id);
       }
 
     } else {
-      ESP_LOGE(TAG_UART, "  SET was not successful");
+      ESP_LOGE(TAG_UART, "  MANUAL_SET was not successful");
     }
 
     // Create create a priority get update after set.
@@ -221,7 +223,7 @@ void SECTouchComponent::process_set_queue() {
     return;
   }
 
-  this->current_running_task_type = TaskType::SET;
+  this->current_running_task_type = TaskType::MANUAL_SET;
 
   ESP_LOGD(TAG, "process_set_queue with size %d", this->data_set_queue.size());
   // Access the smart pointer from the queue
@@ -244,7 +246,7 @@ bool SECTouchComponent::process_get_queue() {
     return false;
   }
 
-  this->current_running_task_type = TaskType::GET;
+  this->current_running_task_type = TaskType::AUTO_GET;
   ESP_LOGD(TAG, "process_get_queue \"%s\" with size %d", queueLoggingName.c_str(), this->data_get_queue.size());
   // Access the smart pointer from the queue
   auto &task_ptr = this->data_get_queue.front();

@@ -1,5 +1,6 @@
 #include "sec_touch_fan.h"
 #include "../sec_touch.h"
+#include "../_definitions.h"
 
 namespace esphome {
 namespace sec_touch {
@@ -7,6 +8,7 @@ namespace sec_touch {
 // Constructor
 SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
     : level_id(level_id), label_id(label_id), parent(parent) {
+  // LEVEL HANDLER
   this->parent->register_recursive_update_listener(this->level_id, [this](int property_id, int new_speed) {
     // if (new_speed > 6) {
     //   ESP_LOGW(TAG, "Value %d is not yet handled for fan level_id %d", new_speed, this->level_id);
@@ -22,13 +24,6 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
       ESP_LOGV(TAG, "No text sensor found for level_id %d", this->level_id);
     }
 
-    text_sensor::TextSensor *label_text_sensor = this->parent->get_text_sensor(this->label_id).value_or(nullptr);
-    if (label_text_sensor != nullptr) {
-      label_text_sensor->publish_state(std::to_string(this->label_id).c_str());
-    } else {
-      ESP_LOGV(TAG, "No text sensor found for label_id %d", this->label_id);
-    }
-
     if (new_speed == 0) {
       this->state = 0;
     } else {
@@ -39,6 +34,31 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
     ESP_LOGI(TAG, "Setting level value for fan with property_id %d to %d (state %d)", property_id, new_speed,
              this->state);
     this->publish_state();
+  });
+
+  // LABEL HANDLER
+  this->parent->register_manual_update_listener(this->label_id, [this](int property_id, int new_value) {
+    text_sensor::TextSensor *label_text_sensor = this->parent->get_text_sensor(this->label_id).value_or(nullptr);
+    if (label_text_sensor == nullptr) {
+      ESP_LOGV(TAG, "No text sensor found for label_id %d", this->label_id);
+      return;
+    }
+
+    if (new_value < 0 || new_value >= NAME_MAPPING_COUNT) {
+      ESP_LOGW(TAG, "Value %d is not yet handled for fan label_id %d (level_id %d)", new_value, this->label_id,
+               this->level_id);
+      return;
+    }
+
+    auto new_label = NAME_MAPPING[new_value];
+
+    const std::string &current_label = label_text_sensor->get_state();  // Get the current state of the text sensor
+    if (current_label == new_label) {
+      ESP_LOGD(TAG, "Value is already up-to-date: %s", new_value);
+      return;  // Do not publish if the value is the same
+    }
+
+    label_text_sensor->publish_state(new_label);
   });
 }
 

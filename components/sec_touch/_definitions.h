@@ -21,7 +21,7 @@ constexpr const int COMMANDID_SET = 32;
 constexpr const int COMMANDID_GET = 32800;
 constexpr const std::array<int, 6> FAN_LEVEL_IDS = {173, 174, 175, 176, 177, 178};
 constexpr const std::array<int, 6> FAN_LABEL_IDS = {78, 79, 80, 81, 82, 83};
-constexpr const int NAME_MAPPING_COUNT = 70;
+constexpr const int NAME_MAPPING_COUNT = 69;
 constexpr const char *NAME_MAPPING[NAME_MAPPING_COUNT] = {
     "",                 // 0
     "Bereich 1",        // 1
@@ -111,8 +111,9 @@ template<typename T, size_t N> static bool contains(const std::array<T, N> &arr,
  */
 enum class TaskTargetType { LEVEL, LABEL };
 enum class TaskType {
-  SET,
-  GET,
+  MANUAL_SET,
+  AUTO_GET,
+  MANUAL_GET,
   /**
    * Used to indicate that no task is currently being processed
    */
@@ -212,7 +213,7 @@ struct SetDataTask {
   char value[8];
   TaskState state = TaskState::TO_BE_SENT;
 
-  const TaskType taskType = TaskType::SET;
+  const TaskType taskType = TaskType::MANUAL_SET;
 
   static std::unique_ptr<SetDataTask> create(TaskTargetType targetType, int property_id, const char *value) {
     if ((targetType == TaskTargetType::LEVEL && contains(FAN_LEVEL_IDS, property_id)) ||
@@ -234,7 +235,7 @@ struct GetDataTask {
   TaskTargetType targetType;
   int property_id;
   TaskState state = TaskState::TO_BE_SENT;
-  const TaskType taskType = TaskType::GET;
+  const TaskType taskType = TaskType::AUTO_GET;
 
   static std::unique_ptr<GetDataTask> create(TaskTargetType targetType, int property_id) {
     if ((targetType == TaskTargetType::LEVEL && contains(FAN_LEVEL_IDS, property_id)) ||

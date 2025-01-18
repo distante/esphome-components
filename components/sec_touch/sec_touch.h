@@ -26,7 +26,9 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
 
   /**
    * Use this for things that need to be updated when manually requested
-   * like labels
+   * like labels.
+   *
+   * It is call one time on setup and then it is up to the user to call it
    */
   void register_manual_update_listener(int property_id, UpdateCallbackListener listener);
 

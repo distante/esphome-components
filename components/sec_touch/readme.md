@@ -118,7 +118,9 @@ Each Fan Pair can have a level from 0 to 10. From there, just 0-6 are "real" lev
 | 7        | Burst Ventilation / Stosslüften      |
 | 8        | Automatic Humidity / Automatik Feuchte      |
 | 9        | Automatic CO2 / Automatik CO2      |
-| 10       | Sleep / Schlummer      |
+| 10       | Automatic Time / Automatik Zeit      |
+| 11       | Sleep / Schlummer      |
+
 
 
 

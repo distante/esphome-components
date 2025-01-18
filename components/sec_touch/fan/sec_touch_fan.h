@@ -16,6 +16,8 @@ class SecTouchFan : public Component, public fan::Fan {
   const int label_id;
   SECTouchComponent *parent;
   void control(const fan::FanCall &call) override;
+  std::string get_mode_from_speed(int speed);
+  void update_mode();
 
  public:
   SecTouchFan(SECTouchComponent *parent, int level_id, int label_id);

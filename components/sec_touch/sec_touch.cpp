@@ -285,6 +285,12 @@ void SECTouchComponent::register_recursive_update_listener(int property_id, Upda
   this->recursive_update_ids.push_back(property_id);
 }
 
+void SECTouchComponent::register_manual_update_listener(int property_id, UpdateCallbackListener listener) {
+  ESP_LOGD(TAG, "register_recursive_update_listener for property_id %d", property_id);
+  this->manual_update_listeners[property_id] = std ::move(listener);
+  this->manual_update_ids.push_back(property_id);
+}
+
 void SECTouchComponent::add_set_task(std::unique_ptr<SetDataTask> task) {
   ESP_LOGD(TAG, "add_set_task");
   this->data_set_queue.push_back(std::move(task));

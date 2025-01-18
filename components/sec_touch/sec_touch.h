@@ -23,6 +23,12 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
    */
   void register_recursive_update_listener(int property_id, UpdateCallbackListener listener);
 
+  /**
+   * Use this for things that need to be updated when manually requested
+   * like labels
+   */
+  void register_manual_update_listener(int property_id, UpdateCallbackListener listener);
+
   void add_set_task(std::unique_ptr<SetDataTask> task);
   void fill_get_queue_with_fans();
   bool process_get_queue();
@@ -31,8 +37,13 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   IncomingMessage incoming_message;
   std::deque<std::unique_ptr<GetDataTask>> data_get_queue;
   std::deque<std::unique_ptr<SetDataTask>> data_set_queue;
+
   std::map<int, UpdateCallbackListener> recursive_update_listeners;
   std::vector<int> recursive_update_ids;
+
+  std::map<int, UpdateCallbackListener> manual_update_listeners;
+  std::vector<int> manual_update_ids;
+
   void notify_recursive_update_listeners(int property_id, int new_value);
   bool processing_queue = false;
   TaskType current_running_task_type = TaskType::NONE;

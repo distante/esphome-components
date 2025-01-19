@@ -149,6 +149,20 @@ class EnumToString {
         return "UNKNOWN";
     }
   }
+  static const char *TaskType(TaskType v) {
+    switch (v) {
+      case TaskType::MANUAL_SET:
+        return "MANUAL_SET";
+      case TaskType::AUTO_GET:
+        return "AUTO_GET";
+      case TaskType::MANUAL_GET:
+        return "MANUAL_GET";
+      case TaskType::NONE:
+        return "NONE";
+      default:
+        return "UNKNOWN";
+    }
+  }
 };
 
 struct IncomingMessage {

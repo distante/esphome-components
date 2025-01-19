@@ -14,7 +14,8 @@ SECTouchComponent::SECTouchComponent() {}
 void SECTouchComponent::setup() {
   ESP_LOGI(TAG, "SEC-Touch setup initializing.");
 
-  this->fill_get_queue_with_fans();
+  this->add_with_manual_tasks_to_get_queue();
+  this->add_recursive_tasks_to_get_queue();
   this->incoming_message.reset();
 
   ESP_LOGI(TAG, " SEC-Touch setup complete.");
@@ -37,7 +38,7 @@ void SECTouchComponent::dump_config() {
 void SECTouchComponent::update() {
   if (this->data_set_queue.empty() && !this->available()) {
     ESP_LOGD(TAG, "SEC-Touch update");
-    this->fill_get_queue_with_fans();
+    this->add_recursive_tasks_to_get_queue();
     this->process_get_queue();
   }
 }
@@ -45,8 +46,14 @@ void SECTouchComponent::update() {
 void SECTouchComponent::loop() {
   if (!this->available()) {  // We are not waiting any response
 
-    // If no other task is running, lets run all automatic set tasks
-    if (this->current_running_task_type == TaskType::NONE && this->data_set_queue.size() > 0) {
+    if (this->current_running_task_type != TaskType::NONE) {
+      ESP_LOGD(TAG, "SEC-Touch loop current_running_task_type %s, but no response available yet",
+               EnumToString::TaskType(this->current_running_task_type));
+      return;
+    }
+
+    // No active task lets run all automatic set tasks
+    if (this->data_set_queue.size() > 0) {
       this->process_set_queue();
     }
     return;
@@ -120,17 +127,29 @@ esphome::optional<text_sensor::TextSensor *> SECTouchComponent::get_text_sensor(
   return esphome::optional<text_sensor::TextSensor *>{};
 }
 
-void SECTouchComponent::notify_recursive_update_listeners(int property_id, int new_value) {
-  ESP_LOGD(TAG, "notify_recursive_update_listeners for property_id %d", property_id);
+void SECTouchComponent::notify_update_listeners(int property_id, int new_value) {
+  ESP_LOGD(TAG, "notify_update_listeners for property_id %d", property_id);
 
-  auto it = this->recursive_update_listeners.find(property_id);
-  if (it == this->recursive_update_listeners.end()) {
-    ESP_LOGE(TAG, "No listener found for property_id %d", property_id);
-    return;
+  auto recursive_listener = this->recursive_update_listeners.find(property_id);
+  if (recursive_listener == this->recursive_update_listeners.end()) {
+    ESP_LOGD(TAG, "No recursive_update_listeners found for property_id %d", property_id);
+  } else {
+    UpdateCallbackListener &listener = recursive_listener->second;
+    listener(property_id, new_value);  // Call the listener
   }
 
-  UpdateCallbackListener &listener = it->second;
-  listener(property_id, new_value);  // Call the listener
+  auto manual_listener = this->manual_update_listeners.find(property_id);
+  if (manual_listener == this->manual_update_listeners.end()) {
+    ESP_LOGD(TAG, "No manual_update_listeners found for property_id %d", property_id);
+  } else {
+    UpdateCallbackListener &listener = manual_listener->second;
+    listener(property_id, new_value);  // Call the listener
+  }
+
+  if (recursive_listener == this->recursive_update_listeners.end() &&
+      manual_listener == this->manual_update_listeners.end()) {
+    ESP_LOGE(TAG, "No listener found for property_id %d", property_id);
+  }
 }
 
 void SECTouchComponent::handle_uart_input_for_get_queue() {
@@ -276,10 +295,13 @@ void SECTouchComponent::mark_current_get_queue_item_as_failed() {
   // TODO: Retry?
 }
 
-void SECTouchComponent::fill_get_queue_with_fans() {
+void SECTouchComponent::add_recursive_tasks_to_get_queue() {
+  if (this->data_get_queue.size() > 0) {
+    ESP_LOGW(TAG, "add_recursive_tasks_to_get_queue: data_get_queue is not empty");
+    return;
+  }
   if (this->recursive_update_ids[0] == 0) {
-    ESP_LOGE(TAG, "No fan is registered for recursive updates");
-    this->mark_failed();
+    ESP_LOGE(TAG, "No property ids are registered for recursive tasks");
     return;
   }
 
@@ -288,8 +310,31 @@ void SECTouchComponent::fill_get_queue_with_fans() {
     if (id == 0) {
       return;
     }
-
+    // For now, just level is recursive
     this->data_get_queue.push_back(GetDataTask::create(TaskTargetType::LEVEL, id));
+  }
+}
+
+void SECTouchComponent::add_with_manual_tasks_to_get_queue() {
+  if (this->data_get_queue.size() > 0) {
+    ESP_LOGW(TAG, "add_with_manual_tasks_to_get_queue: data_get_queue is not empty");
+    return;
+  }
+
+  if (this->manual_update_ids[0] == 0) {
+    ESP_LOGE(TAG, "No property ids are registered for manual tasks");
+    return;
+  }
+
+  for (size_t i = 0; i < this->manual_update_ids.size(); i++) {
+    int id = this->manual_update_ids[i];
+    if (id == 0) {
+      return;
+    }
+
+    // For now, just Label
+    // TODO: Remove TaskTargetType?
+    this->data_get_queue.push_back(GetDataTask::create(TaskTargetType::LABEL, id));
   }
 }
 
@@ -394,7 +439,7 @@ void SECTouchComponent::process_data_for_current_get_queue_item() {
   }
 
   // SEND UPDATE!
-  this->notify_recursive_update_listeners(returned_id, returned_value);
+  this->notify_update_listeners(returned_id, returned_value);
 
   ESP_LOGD(TAG, "  [process_data] Task with targetType %s and id %d processed. New Value is %d",
            EnumToString::TaskTargetType(task_ptr->targetType), task_ptr->property_id, returned_value);

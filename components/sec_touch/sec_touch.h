@@ -33,7 +33,8 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   void register_manual_update_listener(int property_id, UpdateCallbackListener listener);
 
   void add_set_task(std::unique_ptr<SetDataTask> task);
-  void fill_get_queue_with_fans();
+  void add_recursive_tasks_to_get_queue();
+  void add_with_manual_tasks_to_get_queue();
   bool process_get_queue();
   void register_text_sensor(int id, text_sensor::TextSensor *sensor);
   esphome::optional<text_sensor::TextSensor *> get_text_sensor(int id);
@@ -47,10 +48,11 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   std::vector<int> recursive_update_ids;
 
   std::map<int, UpdateCallbackListener> manual_update_listeners;
-  std::map<int, text_sensor::TextSensor *> text_sensors;
   std::vector<int> manual_update_ids;
 
-  void notify_recursive_update_listeners(int property_id, int new_value);
+  std::map<int, text_sensor::TextSensor *> text_sensors;
+
+  void notify_update_listeners(int property_id, int new_value);
   bool processing_queue = false;
   TaskType current_running_task_type = TaskType::NONE;
   /**

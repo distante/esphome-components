@@ -111,7 +111,7 @@ The Fan pairs are ordered from top to bottom, and left to right.
 
 
 # Fan Pair Level special values
-Each Fan Pair can have a level from 0 to 10. From there, just 0-6 are "real" levels, 7-10 are "special" levels.
+Each Fan Pair can have a level from `0` to `10`. There, just `0` to `6` are _"real"_ levels, `7` to `10` are _"special"_ levels. A Level of `255` means there is not fan in that pair.
 
 | Level    | Meaning  |
 |----------|----------|
@@ -120,6 +120,7 @@ Each Fan Pair can have a level from 0 to 10. From there, just 0-6 are "real" lev
 | 9        | Automatic CO2 / Automatik CO2      |
 | 10       | Automatic Time / Automatik Zeit      |
 | 11       | Sleep / Schlummer      |
+| 255      | Not Connected      |
 
 
 

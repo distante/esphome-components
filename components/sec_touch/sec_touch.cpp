@@ -47,8 +47,6 @@ void SECTouchComponent::loop() {
   if (!this->available()) {  // We are not waiting any response
 
     if (this->current_running_task_type != TaskType::NONE) {
-      ESP_LOGD(TAG, "SEC-Touch loop current_running_task_type %s, but no response available yet",
-               EnumToString::TaskType(this->current_running_task_type));
       return;
     }
 
@@ -128,20 +126,24 @@ esphome::optional<text_sensor::TextSensor *> SECTouchComponent::get_text_sensor(
 }
 
 void SECTouchComponent::notify_update_listeners(int property_id, int new_value) {
-  ESP_LOGD(TAG, "notify_update_listeners for property_id %d", property_id);
+  ESP_LOGV(TAG, "notify_update_listeners for property_id %d", property_id);
 
   auto recursive_listener = this->recursive_update_listeners.find(property_id);
+
   if (recursive_listener == this->recursive_update_listeners.end()) {
-    ESP_LOGD(TAG, "No recursive_update_listeners found for property_id %d", property_id);
+    ESP_LOGV(TAG, "No recursive_update_listeners found for property_id %d", property_id);
   } else {
+    ESP_LOGV(TAG, "recursive_update_listeners will be called");
     UpdateCallbackListener &listener = recursive_listener->second;
     listener(property_id, new_value);  // Call the listener
   }
 
   auto manual_listener = this->manual_update_listeners.find(property_id);
+
   if (manual_listener == this->manual_update_listeners.end()) {
-    ESP_LOGD(TAG, "No manual_update_listeners found for property_id %d", property_id);
+    ESP_LOGV(TAG, "No manual_update_listeners found for property_id %d", property_id);
   } else {
+    ESP_LOGD(TAG, "manual_update_listeners will be called");
     UpdateCallbackListener &listener = manual_listener->second;
     listener(property_id, new_value);  // Call the listener
   }
@@ -296,14 +298,7 @@ void SECTouchComponent::mark_current_get_queue_item_as_failed() {
 }
 
 void SECTouchComponent::add_recursive_tasks_to_get_queue() {
-  if (this->data_get_queue.size() > 0) {
-    ESP_LOGW(TAG, "add_recursive_tasks_to_get_queue: data_get_queue is not empty");
-    return;
-  }
-  if (this->recursive_update_ids[0] == 0) {
-    ESP_LOGE(TAG, "No property ids are registered for recursive tasks");
-    return;
-  }
+  ESP_LOGD(TAG, "No property ids are registered for recursive tasks");
 
   for (size_t i = 0; i < this->recursive_update_ids.size(); i++) {
     int id = this->recursive_update_ids[i];
@@ -316,10 +311,7 @@ void SECTouchComponent::add_recursive_tasks_to_get_queue() {
 }
 
 void SECTouchComponent::add_with_manual_tasks_to_get_queue() {
-  if (this->data_get_queue.size() > 0) {
-    ESP_LOGW(TAG, "add_with_manual_tasks_to_get_queue: data_get_queue is not empty");
-    return;
-  }
+  ESP_LOGD(TAG, "add_with_manual_tasks_to_get_queue");
 
   if (this->manual_update_ids[0] == 0) {
     ESP_LOGE(TAG, "No property ids are registered for manual tasks");
@@ -413,7 +405,7 @@ void SECTouchComponent::process_data_for_current_get_queue_item() {
     return;
   }
 
-  ESP_LOGD(TAG, "  [process_data] incoming.returned_id: %s, incoming.extracted_value: %s",
+  ESP_LOGD(TAG, "  [process_data] incoming.returned_id: %s, incoming.returned_value: %s",
            this->incoming_message.get_returned_id().c_str(), this->incoming_message.get_returned_value().c_str());
 
   if (this->incoming_message.returned_id_is_empty()) {
@@ -428,15 +420,33 @@ void SECTouchComponent::process_data_for_current_get_queue_item() {
   }
 
   int returned_id = this->incoming_message.get_returned_id_as_int();
+  ESP_LOGD(TAG, "  [process_data] returned_id: %d", returned_id);
+
   int returned_value = this->incoming_message.get_returned_value_as_int();
 
-  ESP_LOGD(TAG, "  [process_data] returned_id: %d, extracted_value: %d", returned_id, returned_value);
+  ESP_LOGD(TAG, "  [process_data] returned_value: %d", returned_value);
+
+  if (this->data_get_queue.empty()) {
+    ESP_LOGE(TAG, "  [process_data] Queue is empty. Task Failed.");
+    this->mark_current_get_queue_item_as_failed();
+    return;
+  }
+  ESP_LOGD(TAG, "  [process_data] queue is not empty continue");
+
+  std::unique_ptr<GetDataTask> &current_item = this->data_get_queue.front();
+  if (!current_item) {
+    ESP_LOGE(TAG, "  [process_data] Queue front is null. Task Failed.");
+    this->mark_current_get_queue_item_as_failed();
+    return;
+  }
 
   if (this->data_get_queue.front()->property_id != returned_id) {
     ESP_LOGE(TAG, "  [process_data] ID mismatch. Task Failed");
     this->mark_current_get_queue_item_as_failed();
     return;
   }
+
+  ESP_LOGD(TAG, "  [process_data]  LISTENERS WILL BE NOTIFED");
 
   // SEND UPDATE!
   this->notify_update_listeners(returned_id, returned_value);

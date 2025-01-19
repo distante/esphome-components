@@ -103,6 +103,10 @@ std::string SecTouchFan::get_mode_from_speed(int speed) {
     return "Sleep / Schlummer";
   }
 
+  if (speed == 255) {
+    return "Not Connected / Nicht Verbunden";
+  }
+
   return "";
 }
 

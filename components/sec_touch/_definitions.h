@@ -23,7 +23,7 @@ constexpr const std::array<int, 6> FAN_LEVEL_IDS = {173, 174, 175, 176, 177, 178
 constexpr const std::array<int, 6> FAN_LABEL_IDS = {78, 79, 80, 81, 82, 83};
 constexpr const int NAME_MAPPING_COUNT = 69;
 constexpr const char *NAME_MAPPING[NAME_MAPPING_COUNT] = {
-    "",                 // 0
+    "-",                // 0 do NOT use an empty string since the text sensor will crash :)
     "Bereich 1",        // 1
     "Bereich 2",        // 2
     "Bereich 3",        // 3

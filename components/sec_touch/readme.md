@@ -10,6 +10,12 @@ This is a component that allows you to control your SEC-TOUCH ventilation contro
 - [Manuel-Siekmann](https://github.com/Manuel-Siekmann/) who did the heavy lifting of find out the communication protocol of the SEC-TOUCH device in his [VentilationSystem](https://github.com/Manuel-Siekmann/VentilationSystem) project.
 - [Samuel Sieb](https://github.com/ssieb) who helped me to understand some basic c++ and ESPHome concepts and responded my questions on Discord.
 
+## Do it at your own Risk! 
+
+The SEC-Touch has no open api or documentation, so I can no and DO NOT offer any warranty, everything here is reverse engineered. 
+
+If you decide to use this component a **fan damage can not be ruled out**. **You** are the only responsable in case something goes wrong. 
+
 # Configuration:
 
 Add this to `your-device.yaml` file:

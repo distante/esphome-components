@@ -6,9 +6,9 @@
 namespace esphome {
 namespace sec_touch {
 
-class UpdateNowButton : public button::Button, public Parented<SECTouchComponent> {
+class ProgramTextUpdateButton : public button::Button, public Parented<SECTouchComponent> {
  public:
-  UpdateNowButton() = default;
+  ProgramTextUpdateButton() = default;
 
  protected:
   void press_action() override;

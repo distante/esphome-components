@@ -12,13 +12,19 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
 
   // LEVEL HANDLER
   this->parent->register_recursive_update_listener(this->level_id, [this](int property_id, int real_speed_from_device) {
+    bool needs_update = false;
     if (real_speed_from_device == 0) {
       this->state = 0;
     } else {
       this->state = 1;
     }
 
-    this->speed = real_speed_from_device;
+    if (real_speed_from_device == 255) {
+      this->state = 0;
+      this->speed = 0;
+    } else {
+      this->speed = real_speed_from_device;
+    }
 
     ESP_LOGI(TAG, "Setting level value for fan with property_id %d to %d (state %d)", property_id,
              real_speed_from_device, this->state);

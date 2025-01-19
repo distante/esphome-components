@@ -32,42 +32,156 @@ wifi:
 
 captive_portal:
 
-web_server: ## Just if you can to use the web server
+
+web_server:
   port: 80
+  local: true
   log: false
   version: 3
+  sorting_groups:
+    - id: group_1
+      name: Fan Group 1
+      sorting_weight: -100
+    - id: group_2
+      name: Fan Group 2
+      sorting_weight: -99
+    - id: group_3
+      name: Fan Group 3
+      sorting_weight: -98
+    - id: group_4
+      name: Fan Group 4
+      sorting_weight: -97
+    - id: group_5
+      name: Fan Group 5
+      sorting_weight: -96
+    - id: group_6
+      name: Fan Group 6
+      sorting_weight: -95
+    - id: group_settings
+      name: Configuration
+      sorting_weight: -94
   
 uart:
   id: sec_touch_uart
   tx_pin: 
-    number: GPIO17 ## Replace with your TX pin
+    number: GPIO17
   rx_pin:
-    number: GPIO16 ## Replace with your RX pin
+    number: GPIO16
   baud_rate: 28800
 
 sec_touch:
   uart_id: sec_touch_uart
   update_interval: 5s # 5s is the default
 
-fan: ## See the Fan order below
+fan:
   - platform: sec_touch
+    icon: "mdi:fan"
     fan_number: 1
     name: "Fan 1"
+    web_server:
+      sorting_group_id: group_1
   - platform: sec_touch
+    icon: "mdi:fan"
     fan_number: 2
     name: "Fan 2"
-  # - platform: sec_touch
-  #   fan_number: 3
-  #   name: "Fan 3"
-  # - platform: sec_touch
-  #   fan_number: 4
-  #   name: "Fan 4"
-  # - platform: sec_touch
-  #   fan_number: 5
-  #   name: "Fan 5"
-  # - platform: sec_touch
-  #   fan_number: 6
-  #   name: "Fan 6"
+    web_server:
+      sorting_group_id: group_2
+  - platform: sec_touch
+    icon: "mdi:fan"
+    fan_number: 3
+    name: "Fan 3"
+    web_server:
+      sorting_group_id: group_3
+  - platform: sec_touch
+    icon: "mdi:fan"
+    fan_number: 4
+    name: "Fan 4"
+    web_server:
+      sorting_group_id: group_4
+  - platform: sec_touch
+    icon: "mdi:fan"
+    fan_number: 5
+    name: "Fan 5"
+    web_server:
+      sorting_group_id: group_5
+  - platform: sec_touch
+    icon: "mdi:fan"
+    fan_number: 6
+    name: "Fan 6"
+    web_server:
+      sorting_group_id: group_6
+
+
+button:
+  - platform: sec_touch
+    program_text_update:
+      name: "Program Labels Update"
+      icon: "mdi:book-refresh"
+  - platform: restart
+    name: "Restart"
+    
+text_sensor:
+  - platform: sec_touch
+    fan_number: 1
+    label_text:
+      name: "Label Fan 1"
+      web_server:
+        sorting_group_id: group_1
+    mode_text:
+      name: "Mode Fan 1"
+      web_server:
+        sorting_group_id: group_1
+  - platform: sec_touch
+    fan_number: 2
+    label_text:
+      name: "Label Fan 2"
+      web_server:
+        sorting_group_id: group_2
+    mode_text:
+      name: "Mode Fan 2"
+      web_server:
+        sorting_group_id: group_2
+  - platform: sec_touch
+    fan_number: 3
+    label_text:
+      name: "Label Fan 3"
+      web_server:
+        sorting_group_id: group_3
+    mode_text:
+      name: "Mode Fan 3"
+      web_server:
+        sorting_group_id: group_3
+  - platform: sec_touch
+    fan_number: 4
+    label_text:
+      name: "Label Fan 4"
+      web_server:
+        sorting_group_id: group_4
+    mode_text:
+      name: "Mode Fan 4"
+      web_server:
+        sorting_group_id: group_4
+  - platform: sec_touch
+    fan_number: 5
+    label_text:
+      name: "Label Fan 5"
+      web_server:
+        sorting_group_id: group_5
+    mode_text:
+      name: "Mode Fan 5"
+      web_server:
+        sorting_group_id: group_5
+  - platform: sec_touch
+    fan_number: 6
+    label_text:
+      name: "Label Fan 6"
+      web_server:
+        sorting_group_id: group_6
+    mode_text:
+      name: "Mode Fan 6"
+      web_server:
+        sorting_group_id: group_6
+
 ```
 
 Notice that the fans numbers are ordered so:

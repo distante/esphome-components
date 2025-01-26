@@ -1,6 +1,9 @@
 # SEC-TOUCH ESPHome Component
+This is a component that allows you to control your SEC-TOUCH ventilation controller (Dezentrale Lüftung Zentralregler SEC-Touch) from your ESP device and integrate it to Home Assistant.
 
-This is a component that allows you to control your SEC-TOUCH ventilation controller (Dezentrale Lüftung Zentralregler SEC-Touch) from your ESPHome device.
+<div class="text-center">
+  <img src="images/sec-touch-panel.webp" alt="SEC-TOUCH Panel" />
+<div>
 
 (For now) It is limited to change the level of the fan pairs, or put them into their special modes (automatic, time, etc). There is no way to change the timing intervals for now. You need to make that in the SEC-TOUCH device itself.
 

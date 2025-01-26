@@ -14,7 +14,7 @@ SECTouchComponent::SECTouchComponent() {}
 void SECTouchComponent::setup() {
   ESP_LOGI(TAG, "SEC-Touch setup initializing.");
 
-  this->add_with_manual_tasks_to_get_queue();
+  this->add_manual_tasks_to_get_queue();
   this->add_recursive_tasks_to_get_queue();
   this->incoming_message.reset();
 
@@ -35,6 +35,7 @@ void SECTouchComponent::dump_config() {
   }
 }
 
+// poll component update
 void SECTouchComponent::update() {
   if (this->data_set_queue.empty() && !this->available()) {
     ESP_LOGD(TAG, "SEC-Touch update");
@@ -310,8 +311,8 @@ void SECTouchComponent::add_recursive_tasks_to_get_queue() {
   }
 }
 
-void SECTouchComponent::add_with_manual_tasks_to_get_queue() {
-  ESP_LOGD(TAG, "add_with_manual_tasks_to_get_queue");
+void SECTouchComponent::add_manual_tasks_to_get_queue() {
+  ESP_LOGD(TAG, "add_manual_tasks_to_get_queue");
 
   if (this->manual_update_ids[0] == 0) {
     ESP_LOGE(TAG, "No property ids are registered for manual tasks");

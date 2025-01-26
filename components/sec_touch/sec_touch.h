@@ -34,7 +34,7 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
 
   void add_set_task(std::unique_ptr<SetDataTask> task);
   void add_recursive_tasks_to_get_queue();
-  void add_with_manual_tasks_to_get_queue();
+  void add_manual_tasks_to_get_queue();
   bool process_get_queue();
   void register_text_sensor(int id, text_sensor::TextSensor *sensor);
   esphome::optional<text_sensor::TextSensor *> get_text_sensor(int id);

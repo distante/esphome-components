@@ -7,14 +7,39 @@ This is a component that allows you to control your SEC-TOUCH ventilation contro
 
 ## First of all thanks to:
 
-- [Manuel-Siekmann](https://github.com/Manuel-Siekmann/) who did the heavy lifting of find out the communication protocol of the SEC-TOUCH device in his [VentilationSystem](https://github.com/Manuel-Siekmann/VentilationSystem) project.
+- [Manuel Siekmann](https://github.com/Manuel-Siekmann/) who did the heavy lifting of find out the communication protocol of the SEC-TOUCH device in his [VentilationSystem](https://github.com/Manuel-Siekmann/VentilationSystem) project.
 - [Samuel Sieb](https://github.com/ssieb) who helped me to understand some basic c++ and ESPHome concepts and responded my questions on Discord.
 
-## Do it at your own Risk! 
+# Do it at your own Risk! 
 
-The SEC-Touch has no open api or documentation, so I can no and DO NOT offer any warranty, everything here is reverse engineered. 
+The SEC-Touch has no open API or documentation for their UART interfaces, so I can no and DO NOT offer any warranty, everything here is reverse engineered. I have no affiliation with the company that produces the SEC-TOUCH device.
 
-If you decide to use this component a **fan damage can not be ruled out**. **You** are the only responsable in case something goes wrong. 
+If you decide to use this component a **fan damage can not be ruled out**. **You** are the only responsible in case something goes wrong. 
+
+Yes Really.
+
+# Connection
+
+The SEC-TOUCH has an "PC" port at the right bottom part. It has an `3.x` volts output. It worked to power my ESP32 device when I was using Software UART, but when I switched to Hardware UART it didn't work anymore. When I measured the voltage it was around `3.2v` tops.
+
+I recommend you to power your ESP32 device using another source.
+
+That said, probably it has enough power for an ESP8266 device that uses software UART.
+
+### ESP8266 connection
+![https://github.com/Manuel-Siekmann/VentilationSystem/raw/main/doc/sketch.jpg](https://github.com/Manuel-Siekmann/VentilationSystem/raw/main/doc/sketch.jpg)
+
+### ESP32 cable connection (using external power )
+The same but without the 3.3v connection. 😬
+```
+GPIO17 --> RX SEC-TOUCH
+GPIO16 --> TX SEC-TOUCH
+GND    --> GND SEC-TOUCH
+```
+
+## Final Installation
+
+![Final Installation](images/final_install.webp)
 
 # Configuration:
 
@@ -28,7 +53,7 @@ external_components:
       ref: main
 
 wifi:
-  ssid: !secret wifi_ssid
+  ssid: !secret wifi_ssid 
   password: !secret wifi_password
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails

@@ -17,7 +17,7 @@ class SecTouchFan : public Component, public fan::Fan {
   const int label_id;
   SECTouchComponent *parent;
   void control(const fan::FanCall &call) override;
-  std::string get_mode_from_speed(int speed);
+  std::string_view get_mode_from_speed(int speed);
   void update_mode();
   fan::FanTraits traits_;
 
@@ -33,6 +33,12 @@ class SecTouchFan : public Component, public fan::Fan {
 
   // Print method for debugging
   void printConfig();
+
+ private:
+  /**
+   * Will return `true` if publish is needed.
+   */
+  bool assign_new_speed_if_needed(int real_speed_from_device);
 };
 
 }  // namespace sec_touch

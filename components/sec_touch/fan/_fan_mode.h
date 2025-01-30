@@ -21,13 +21,13 @@ class FanModeEnum {
        {FanMode::SLEEP, "Sleep"}}};
 
   // Convert FanMode to string
-  static esphome::optional<std::string_view> toString(FanMode mode) {
+  static std::string_view toString(FanMode mode) {
     for (const auto &pair : FanModeStrings) {
       if (pair.first == mode) {
         return pair.second;
       }
     }
-    return esphome::nullopt;  // Return an empty optional if not found
+    return "Unknown-Error-Mode";  // Return an empty optional if not found
   }
 
   // Convert string to FanMode

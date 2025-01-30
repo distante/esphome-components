@@ -12,9 +12,9 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
 
   // LEVEL HANDLER
   this->parent->register_recursive_update_listener(this->level_id, [this](int property_id, int real_speed_from_device) {
-    bool needs_publish = this->assign_new_speed_if_needed(real_speed_from_device);
+    bool need_speed_publish = this->assign_new_speed_if_needed(real_speed_from_device);
 
-    if (!needs_publish) {
+    if (!need_speed_publish) {
       ESP_LOGD(TAG, "No update needed for fan with property_id %d (state %d)", property_id, this->state);
       return;
     }
@@ -118,7 +118,7 @@ void SecTouchFan::control(const fan::FanCall &call) {
   this->publish_state();
 }
 
-std::string_view SecTouchFan::get_mode_from_speed(int speed) {
+std::string_view SecTouchFan::get_mode_string_from_speed(int speed) {
   if (speed == 0) {
     return "Off";
   }
@@ -154,6 +154,34 @@ std::string_view SecTouchFan::get_mode_from_speed(int speed) {
   return "Unknown";
 }
 
+FanModeEnum::FanMode SecTouchFan::calculate_preset_from_current_speed() {
+  if (this->speed < 7 > 11) {
+    return FanModeEnum::FanMode::NORMAL;
+  }
+
+  if (speed == 7) {
+    return FanModeEnum::FanMode::BURST;
+  }
+
+  if (speed == 8) {
+    return FanModeEnum::FanMode::AUTOMATIC_HUMIDITY;
+  }
+
+  if (speed == 9) {
+    return FanModeEnum::FanMode::AUTOMATIC_CO2;
+  }
+
+  if (speed == 10) {
+    return FanModeEnum::FanMode::AUTOMATIC_TIME;
+  }
+
+  if (speed == 11) {
+    return FanModeEnum::FanMode::SLEEP;
+  }
+
+  return FanModeEnum::FanMode::NORMAL;
+}
+
 void SecTouchFan::update_mode() {
   // Mode
   text_sensor::TextSensor *level_text_sensor = this->parent->get_text_sensor(this->level_id).value_or(nullptr);
@@ -162,7 +190,7 @@ void SecTouchFan::update_mode() {
     return;
   }
 
-  auto new_mode = this->get_mode_from_speed(this->speed);
+  auto new_mode = this->get_mode_string_from_speed(this->speed);
   auto current_mode = level_text_sensor->get_state();
 
   if (new_mode == current_mode) {

@@ -84,9 +84,10 @@ void SECTouchComponent::loop() {
     if (this->incoming_message.buffer_index == 2 && this->incoming_message.buffer[0] == STX &&
         this->incoming_message.buffer[1] == ACK && this->incoming_message.buffer[2] == ETX) {
       if (!this->data_set_queue.empty()) {
-        ESP_LOGI(TAG_UART, "  MANUAL_SET Successful for Task targetType \"%s\" and property_id \"%d\"",
-                 EnumToString::TaskTargetType(this->data_set_queue.front()->targetType),
-                 this->data_set_queue.front()->property_id);
+        ESP_LOGI(
+            TAG_UART, "  MANUAL_SET with value \"%s\" Successful for Task targetType \"%s\" and property_id \"%d\"",
+            this->data_set_queue.front()->value, EnumToString::TaskTargetType(this->data_set_queue.front()->targetType),
+            this->data_set_queue.front()->property_id);
       }
 
     } else {
@@ -183,6 +184,7 @@ void SECTouchComponent::handle_uart_input_for_get_queue() {
       }
 
       ack_already_failed = true;
+      // TODO: This crashes the ESP32
       ESP_LOGW(TAG, "Starting to store message but the data is not ACK. Discarding data: %d", data);
       continue;
     } else if (!start_of_ack_message && data == NOISE) {

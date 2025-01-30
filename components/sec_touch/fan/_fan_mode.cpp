@@ -41,3 +41,18 @@ std::vector<std::string_view> FanModeEnum::getStringValues() {
   }
   return values;
 }
+
+FanModeEnum::FanMode FanModeEnum::getFanModeFromSpeed(int speed) {
+  // Iterate through FanModeMap to find the correct FanMode based on speed
+  for (const auto &pair : getFanModeMap()) {
+    const FanModeData &data = pair.second;
+
+    // Check if speed is within the range
+    if (speed >= data.fromSpeed && (!data.toSpeed.has_value() || speed <= data.toSpeed.value())) {
+      return pair.first;  // Return the FanMode (key)
+    }
+  }
+
+  // Return an invalid mode if no matching FanMode is found
+  return FanMode::NORMAL;  // Default or error mode
+}

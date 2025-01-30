@@ -123,33 +123,12 @@ std::string_view SecTouchFan::get_mode_string_from_speed(int speed) {
     return "Off";
   }
 
-  if (speed > 0 && speed < 7) {
-    return FanModeEnum::toString(FanModeEnum::FanMode::NORMAL);
-  }
-
-  if (speed == 7) {
-    return FanModeEnum::toString(FanModeEnum::FanMode::BURST);
-  }
-
-  if (speed == 8) {
-    return FanModeEnum::toString(FanModeEnum::FanMode::AUTOMATIC_HUMIDITY);
-  }
-
-  if (speed == 9) {
-    return FanModeEnum::toString(FanModeEnum::FanMode::AUTOMATIC_CO2);
-  }
-
-  if (speed == 10) {
-    return FanModeEnum::toString(FanModeEnum::FanMode::AUTOMATIC_TIME);
-  }
-
-  if (speed == 11) {
-    return FanModeEnum::toString(FanModeEnum::FanMode::SLEEP);
-  }
-
   if (speed == 255) {
     return "Not Connected";
   }
+
+  FanModeEnum::FanMode mode = FanModeEnum::getFanModeFromSpeed(speed);
+  return FanModeEnum::toString(mode);
 
   return "Unknown";
 }

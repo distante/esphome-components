@@ -27,4 +27,6 @@ class FanModeEnum {
 
   // Get a list of string values dynamically from the map
   static std::vector<std::string_view> getStringValues();
+
+  static FanMode getFanModeFromSpeed(int speed);
 };

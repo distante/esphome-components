@@ -385,15 +385,15 @@ void SECTouchComponent::send_ack_message() {
 void SECTouchComponent::process_data_for_current_get_queue_item() {
   auto &task_ptr = this->data_get_queue.front();
 
-  ESP_LOGD(TAG, "process_data");
-  ESP_LOGD(TAG, "  [process_data] Incoming message buffer for get task(%d) targetType %s and id %d", COMMANDID_GET,
+  ESP_LOGD(TAG_UART, "process_data");
+  ESP_LOGD(TAG_UART, "  [process_data] Incoming message buffer for get task(%d) targetType %s and id %d", COMMANDID_GET,
            EnumToString::TaskTargetType(task_ptr->targetType), task_ptr->property_id);
 
-  ESP_LOGD(TAG, "  [process_data] buffer %s", this->incoming_message.buffer);
+  ESP_LOGD(TAG_UART, "  [process_data] buffer %s", this->incoming_message.buffer);
 
   // VALIDATION
   if (static_cast<uint8_t>(this->incoming_message.buffer[0]) != STX) {
-    ESP_LOGE(TAG, "  [process_data] Expected STX at index 0, but received %d. Task Failed",
+    ESP_LOGE(TAG_UART, "  [process_data] Expected STX at index 0, but received %d. Task Failed",
              this->incoming_message.buffer[0]);
     this->mark_current_get_queue_item_as_failed();
     return;
@@ -402,59 +402,59 @@ void SECTouchComponent::process_data_for_current_get_queue_item() {
   int last_incoming_message_index = this->incoming_message.buffer_index;
   // buffer_index - 1;  // -1 because the current index is the one that should be written next
   if (static_cast<uint8_t>(this->incoming_message.buffer[last_incoming_message_index]) != ETX) {
-    ESP_LOGE(TAG, "  [process_data] Expected ETX at index %d, but received  %d . Task Failed",
+    ESP_LOGE(TAG_UART, "  [process_data] Expected ETX at index %d, but received  %d . Task Failed",
              last_incoming_message_index, this->incoming_message.buffer[last_incoming_message_index]);
     this->mark_current_get_queue_item_as_failed();
     return;
   }
 
-  ESP_LOGD(TAG, "  [process_data] incoming.returned_id: %s, incoming.returned_value: %s",
+  ESP_LOGD(TAG_UART, "  [process_data] incoming.returned_id: %s, incoming.returned_value: %s",
            this->incoming_message.get_returned_id().c_str(), this->incoming_message.get_returned_value().c_str());
 
   if (this->incoming_message.returned_id_is_empty()) {
-    ESP_LOGE(TAG, "  [process_data]returned_id is empty. Task Failed");
+    ESP_LOGE(TAG_UART, "  [process_data]returned_id is empty. Task Failed");
     this->mark_current_get_queue_item_as_failed();
     return;
   }
   if (this->incoming_message.returned_value_is_empty()) {
-    ESP_LOGE(TAG, "  [process_data returned_value is empty. Task Failed");
+    ESP_LOGE(TAG_UART, "  [process_data returned_value is empty. Task Failed");
     this->mark_current_get_queue_item_as_failed();
     return;
   }
 
   int returned_id = this->incoming_message.get_returned_id_as_int();
-  ESP_LOGD(TAG, "  [process_data] returned_id: %d", returned_id);
+  ESP_LOGD(TAG_UART, "  [process_data] returned_id: %d", returned_id);
 
   int returned_value = this->incoming_message.get_returned_value_as_int();
 
-  ESP_LOGD(TAG, "  [process_data] returned_value: %d", returned_value);
+  ESP_LOGD(TAG_UART, "  [process_data] returned_value: %d", returned_value);
 
   if (this->data_get_queue.empty()) {
-    ESP_LOGE(TAG, "  [process_data] Queue is empty. Task Failed.");
+    ESP_LOGE(TAG_UART, "  [process_data] Queue is empty. Task Failed.");
     this->mark_current_get_queue_item_as_failed();
     return;
   }
-  ESP_LOGD(TAG, "  [process_data] queue is not empty continue");
+  ESP_LOGD(TAG_UART, "  [process_data] queue is not empty continue");
 
   std::unique_ptr<GetDataTask> &current_item = this->data_get_queue.front();
   if (!current_item) {
-    ESP_LOGE(TAG, "  [process_data] Queue front is null. Task Failed.");
+    ESP_LOGE(TAG_UART, "  [process_data] Queue front is null. Task Failed.");
     this->mark_current_get_queue_item_as_failed();
     return;
   }
 
   if (this->data_get_queue.front()->property_id != returned_id) {
-    ESP_LOGE(TAG, "  [process_data] ID mismatch. Task Failed");
+    ESP_LOGE(TAG_UART, "  [process_data] ID mismatch. Task Failed");
     this->mark_current_get_queue_item_as_failed();
     return;
   }
 
-  ESP_LOGD(TAG, "  [process_data]  LISTENERS WILL BE NOTIFED");
+  ESP_LOGD(TAG_UART, "  [process_data]  LISTENERS WILL BE NOTIFED");
 
   // SEND UPDATE!
   this->notify_update_listeners(returned_id, returned_value);
 
-  ESP_LOGD(TAG, "  [process_data] Task with targetType %s and id %d processed. New Value is %d",
+  ESP_LOGD(TAG_UART, "  [process_data] Task with targetType %s and id %d processed. New Value is %d",
            EnumToString::TaskTargetType(task_ptr->targetType), task_ptr->property_id, returned_value);
 
   this->data_get_queue.pop_front();

@@ -12,21 +12,23 @@ class FanModeEnum {
 
   struct FanModeData {
     std::string_view str;
-    int fromSpeed;
-    esphome::optional<int> toSpeed;
+    int start_speed;
+    esphome::optional<int> end_speed;
   };
 
   // Static function to get the FanModeMap
   static const std::unordered_map<FanMode, FanModeData> &getFanModeMap();
 
   // Convert FanMode to string
-  static std::string_view toString(FanMode mode);
+  static std::string_view to_string(FanMode mode);
 
   // Convert string to FanMode
-  static esphome::optional<FanMode> fromString(std::string_view str);
+  static esphome::optional<FanMode> from_string(std::string_view str);
 
   // Get a list of string values dynamically from the map
   static std::vector<std::string_view> getStringValues();
 
-  static FanMode getFanModeFromSpeed(int speed);
+  static FanMode get_fan_mode_fromSpeed(int speed);
+
+  static int get_start_speed(FanMode mode);
 };

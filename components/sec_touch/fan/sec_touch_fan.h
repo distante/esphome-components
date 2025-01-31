@@ -18,8 +18,8 @@ class SecTouchFan : public Component, public fan::Fan {
   SECTouchComponent *parent;
   void control(const fan::FanCall &call) override;
   std::string_view get_mode_string_from_speed(int speed);
-  FanModeEnum::FanMode calculate_preset_from_current_speed();
-  void update_mode();
+  static FanModeEnum::FanMode calculate_mode_from_speed(int speed);
+  void update_label_mode();
   fan::FanTraits traits_;
   /**
    * Will return `true` if an assignment was done so a call to publish is needed.

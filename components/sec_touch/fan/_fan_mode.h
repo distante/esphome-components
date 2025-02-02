@@ -1,51 +1,34 @@
 #pragma once
 
-#include <array>
-#include <string>
-#include <set>
-#include <functional>
+#include <unordered_map>
+#include <string_view>
 #include "esphome/core/optional.h"
+#include "vector"
 
 class FanModeEnum {
  public:
   // Enum type for Fan Modes
   enum class FanMode { NORMAL, BURST, AUTOMATIC_HUMIDITY, AUTOMATIC_CO2, AUTOMATIC_TIME, SLEEP };
 
-  // Static mapping of FanMode enum values to strings
-  static constexpr std::array<std::pair<FanMode, std::string_view>, 6> FanModeStrings = {
-      {{FanMode::NORMAL, "Normal"},
-       {FanMode::BURST, "Burst"},
-       {FanMode::AUTOMATIC_HUMIDITY, "Automatic Humidity"},
-       {FanMode::AUTOMATIC_CO2, "Automatic CO2"},
-       {FanMode::AUTOMATIC_TIME, "Automatic Time"},
-       {FanMode::SLEEP, "Sleep"}}};
+  struct FanModeData {
+    std::string_view str;
+    int start_speed;
+    esphome::optional<int> end_speed;
+  };
+
+  // Static function to get the FanModeMap
+  static const std::unordered_map<FanMode, FanModeData> &getFanModeMap();
 
   // Convert FanMode to string
-  static std::string_view toString(FanMode mode) {
-    for (const auto &pair : FanModeStrings) {
-      if (pair.first == mode) {
-        return pair.second;
-      }
-    }
-    return "Unknown-Error-Mode";  // Return an empty optional if not found
-  }
+  static std::string_view to_string(FanMode mode);
 
   // Convert string to FanMode
-  static esphome::optional<FanMode> fromString(std::string_view str) {
-    for (const auto &pair : FanModeStrings) {
-      if (pair.second == str) {
-        return pair.first;
-      }
-    }
-    return esphome::nullopt;  // Return an empty optional if not found
-  }
+  static esphome::optional<FanMode> from_string(std::string_view str);
 
-  // Get a set of string values
-  static std::set<std::string> getStringValues() {
-    std::set<std::string> values;
-    for (const auto &pair : FanModeStrings) {
-      values.insert(std::string(pair.second));  // Convert string_view to string and insert into set
-    }
-    return values;
-  }
+  // Get a list of string values dynamically from the map
+  static std::vector<std::string_view> getStringValues();
+
+  static FanMode get_fan_mode_fromSpeed(int speed);
+
+  static int get_start_speed(FanMode mode);
 };

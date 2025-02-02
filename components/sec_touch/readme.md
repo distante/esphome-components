@@ -229,6 +229,13 @@ Notice that the fans numbers are ordered so:
 ## :bulb: Setting The Fan Level above 6
 Please check the [Special Fan level Values](#fan-pair-level-special-values) section to understand the special values for the fan level.
 
+# Home Assistant
+Home assistant has the problem that all fans show their speed as percentage. But we do not have percentage values, we have levels from `0` to `11`. From which some of those values are special ones.
+
+For now we have to "live with" that, selecting presets will carry the fan speed/percent to their corresponding level, but going into `NORMAL` mode will put the speed to 1. I would recommend to use a button card with all the states instead of the fan one until this can be fixed.
+
+```yaml
+
 # Development
 
 # Known Ids
@@ -259,7 +266,7 @@ The Fan pairs are ordered from top to bottom, and left to right.
 
 
 # Fan Pair Level special values
-Each Fan Pair can have a level from `0` to `10`. There, just `0` to `6` are _"real"_ levels, `7` to `10` are _"special"_ levels. A Level of `255` means there is not fan in that pair.
+Each Fan Pair can have a level from `0` to `11`. There, just `0` to `6` are _"real"_ levels, `7` to `11` are _"special"_ levels. A Level of `255` means there is not fan in that pair.
 
 | Level    | Meaning  |
 |----------|----------|

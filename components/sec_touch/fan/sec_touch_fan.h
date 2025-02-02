@@ -17,7 +17,6 @@ class SecTouchFan : public Component, public fan::Fan {
   const int label_id;
   SECTouchComponent *parent;
   void control(const fan::FanCall &call) override;
-  std::string_view get_mode_string_from_speed(int speed);
   static FanModeEnum::FanMode calculate_mode_from_speed(int speed);
   void update_label_mode();
   fan::FanTraits traits_;
@@ -30,7 +29,7 @@ class SecTouchFan : public Component, public fan::Fan {
   SecTouchFan(SECTouchComponent *parent, int level_id, int label_id);
 
   void setup() override {
-    this->traits_ = fan::FanTraits(false, true, false, 10);
+    this->traits_ = fan::FanTraits(false, true, false, 11);
     std::set<std::string> preset_modes;
     for (auto str_view : FanModeEnum::getStringValues()) {
       preset_modes.insert(std::string(str_view));

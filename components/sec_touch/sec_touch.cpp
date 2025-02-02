@@ -91,7 +91,10 @@ void SECTouchComponent::loop() {
       }
 
     } else {
-      ESP_LOGE(TAG_UART, "  MANUAL_SET was not successful");
+      ESP_LOGE(TAG_UART, "  MANUAL_SET  \"%s\" NOT Successful for Task targetType \"%s\" and property_id \"%d\"",
+               this->data_set_queue.front()->value,
+               EnumToString::TaskTargetType(this->data_set_queue.front()->targetType),
+               this->data_set_queue.front()->property_id);
     }
 
     // Create create a priority get update after set.

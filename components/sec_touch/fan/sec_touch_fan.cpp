@@ -24,14 +24,6 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
       needs_preset_publish = true;
     }
 
-    // If we are on any special mode, the fan "speed" is saved for when we go back to normal mode.
-    // No speed change should be done in this case.
-    if (this->preset_mode != FanModeEnum::to_string(FanModeEnum::FanMode::NORMAL)) {
-      this->state = 1;  // Always on when on a special mode
-      this->publish_state();
-      return;
-    };
-
     bool need_speed_publish = this->assign_new_speed_if_needed(real_speed_from_device);
 
     if (!need_speed_publish && !needs_preset_publish) {
@@ -114,10 +106,16 @@ bool SecTouchFan::assign_new_speed_if_needed(int real_speed_from_device) {
 void SecTouchFan::control(const fan::FanCall &call) {
   ESP_LOGD(TAG, "Control called");
 
-  if (call.get_preset_mode() != this->preset_mode) {
-    this->preset_mode = call.get_preset_mode();
-    ESP_LOGI("SecTouchFan", "NEW Fan preset mode: %s", this->preset_mode.c_str());
+  bool new_preset_found = false;
+  if (!call.get_preset_mode().empty()) {
+    if (call.get_preset_mode() != this->preset_mode) {
+      this->preset_mode = call.get_preset_mode();
+      new_preset_found = true;
+      ESP_LOGI("SecTouchFan", "NEW Fan preset mode: %s", this->preset_mode.c_str());
+    }
   }
+
+  auto old_state = this->state;
 
   if (call.get_state().has_value()) {
     ESP_LOGD(TAG, "New state to %d", *call.get_state());
@@ -129,48 +127,31 @@ void SecTouchFan::control(const fan::FanCall &call) {
     this->speed = *call.get_speed();
   }
 
-  if (this->state == 0 || this->speed == 0) {
+  if (this->state == 0 && old_state == 1) {
     // OFF
-    ESP_LOGD(TAG, "[Update for %d] - Turning off", this->level_id);
+    ESP_LOGI(TAG, "[Update for %d] - Turning off", this->level_id);
     this->parent->add_set_task(SetDataTask::create(TaskTargetType::LEVEL, this->level_id, std::to_string(0).c_str()));
     this->publish_state();
     return;
   }
 
   // ON
-  FanModeEnum::FanMode current_mode =
-      FanModeEnum::from_string(this->preset_mode).value_or(FanModeEnum::FanMode::NORMAL);
-
-  if (current_mode == FanModeEnum::FanMode::NORMAL) {
-    ESP_LOGI(TAG, "[Update for %d] - speed: %d - state: %d", this->level_id, this->speed, this->state);
-    this->parent->add_set_task(
-        SetDataTask::create(TaskTargetType::LEVEL, this->level_id, std::to_string(this->speed).c_str()));
-  } else {
-    int real_speed_for_hardware = FanModeEnum::get_start_speed(current_mode);
-
-    ESP_LOGI(TAG, "[Update for %d] - [%s] speed: %d ", this->level_id, this->preset_mode.c_str(),
-             real_speed_for_hardware);
-    this->parent->add_set_task(
-        SetDataTask::create(TaskTargetType::LEVEL, this->level_id, std::to_string(real_speed_for_hardware).c_str()));
+  if (new_preset_found) {
+    FanModeEnum::FanMode calculated_mode =
+        FanModeEnum::from_string(this->preset_mode).value_or(FanModeEnum::FanMode::NORMAL);
+    if (calculated_mode == FanModeEnum::FanMode::NORMAL) {
+      this->speed = 1;
+    } else {
+      this->speed = FanModeEnum::get_start_speed(calculated_mode);
+    }
   }
+
+  ESP_LOGI(TAG, "[Update for %d] - [%s] speed: %d", this->level_id, this->preset_mode.c_str(), this->speed);
+  this->parent->add_set_task(
+      SetDataTask::create(TaskTargetType::LEVEL, this->level_id, std::to_string(this->speed).c_str()));
 
   ESP_LOGI(TAG, "Publishing state of FAN");
   this->publish_state();
-}
-
-std::string_view SecTouchFan::get_mode_string_from_speed(int speed) {
-  if (speed == 0) {
-    return "Off";
-  }
-
-  if (speed == 255) {
-    return "Not Connected";
-  }
-
-  FanModeEnum::FanMode mode = FanModeEnum::get_fan_mode_fromSpeed(speed);
-  return FanModeEnum::to_string(mode);
-
-  return "Unknown";
 }
 
 FanModeEnum::FanMode SecTouchFan::calculate_mode_from_speed(int speed) {
@@ -209,15 +190,22 @@ void SecTouchFan::update_label_mode() {
     return;
   }
 
-  auto new_mode = this->get_mode_string_from_speed(this->speed);
-  auto current_mode = level_text_sensor->get_state();
-
-  if (new_mode == current_mode) {
-    ESP_LOGD(TAG, "Label Mode is already up-to-date: %s (%d)", new_mode.data(), this->speed);
+  if (this->state == 0) {
+    level_text_sensor->publish_state("Off");
     return;
   }
 
-  level_text_sensor->publish_state(std::string(new_mode));
+  if (this->speed == 255) {
+    level_text_sensor->publish_state("Not Connected");
+    return;
+  }
+
+  if (this->preset_mode.empty()) {
+    level_text_sensor->publish_state("Unknown");
+    return;
+  }
+
+  level_text_sensor->publish_state(this->preset_mode.c_str());
 }
 
 // Print method for debugging

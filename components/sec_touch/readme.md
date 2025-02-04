@@ -3,7 +3,7 @@ This is a component that allows you to control your SEC-TOUCH ventilation contro
 
 <div class="text-center">
   <img src="images/sec-touch-panel.webp" alt="SEC-TOUCH Panel" />
-<div>
+</div>
 
 (For now) It is limited to change the level of the fan pairs, or put them into their special modes (automatic, time, etc). There is no way to change the timing intervals for now. You need to make that in the SEC-TOUCH device itself.
 
@@ -232,10 +232,125 @@ Please check the [Special Fan level Values](#fan-pair-level-special-values) sect
 # Home Assistant
 Home assistant has the problem that all fans show their speed as percentage. But we do not have percentage values, we have levels from `0` to `11`. From which some of those values are special ones.
 
-For now we have to "live with" that, selecting presets will carry the fan speed/percent to their corresponding level, but going into `NORMAL` mode will put the speed to 1. I would recommend to use a button card with all the states instead of the fan one until this can be fixed.
+For now we have to "live with" that, selecting presets will carry the fan speed/percent to their corresponding level, but going into `NORMAL` mode will put the speed to 1.
+
+My recommendation is to use your own custom card to control the de fans.
+
+## Custom HA Cards Example
+
+Here I am using [lovelace-mushroom](https://github.com/piitaya/lovelace-mushroom), [lovelace-card-mod](https://github.com/thomasloven/lovelace-card-mod) and [service-call-tile-feature](https://github.com/Nerwyn/service-call-tile-feature). On a Sections board.
+
+If you are using the configuration written above, you just need to search and replace `fan_1` with the corresponding fan number to get more cards 
+![Home Assistant Dashboard](images/ha-dashboard.webp)
 
 ```yaml
+type: grid
+cards:
+  - type: heading
+    heading_style: title
+    heading: Heading
+    card_mod:
+      style: |
+        .container .title {
+           color: transparent !important;
+        }
 
+        .container .title:after {
+          content: "{{ states('sensor.esp_ventilation_controller_label_fan_1') }}";
+          position: absolute;
+          left: 0px;
+          color: var(--primary-text-color);
+        }
+  - type: custom:mushroom-fan-card
+    entity: fan.esp_ventilation_controller_fan_1
+    show_percentage_control: false
+    fill_container: false
+    icon_animation: true
+    collapsible_controls: false
+    secondary_info: last-updated
+    primary_info: state
+    grid_options:
+      columns: 3
+      rows: 2
+    layout: vertical
+    hold_action:
+      action: more-info
+    card_mod:
+      style:
+        mushroom-state-info$: |
+          .primary {
+            color: transparent !important;
+            position: relative;
+          }
+          .primary:after {
+            content: "{{ 'Unknown' if state_attr('fan.esp_ventilation_controller_fan_1', 'percentage') | int(0) == 255 else 'Off' if states('fan.esp_ventilation_controller_fan_1') == 'off' else 'On' }}";
+            position: absolute;
+            left: 0px;
+            color: var(--primary-text-color);
+            width:100%
+          }
+  - features:
+      - style: dropdown
+        type: fan-preset-modes
+      - type: custom:service-call
+        entries:
+          - type: slider
+            entity_id: fan.esp_ventilation_controller_fan_1
+            range:
+              - 9.09
+              - 54.55
+            tap_action:
+              action: perform-action
+              target:
+                entity_id:
+                  - fan.esp_ventilation_controller_fan_1
+              confirmation: false
+              perform_action: fan.set_percentage
+              data:
+                percentage: |
+                  {{ value | int  }} 
+            step: 9.090909090909092
+            unit_of_measurement: U
+            label: >-
+              {% set percentage =
+              state_attr('fan.esp_ventilation_controller_fan_1', 'percentage') |
+              float(0) %}
+
+              {% if percentage == 0 %}
+                  Off
+              {% elif percentage <= (6 / 11 * 100) %}
+                  Speed {{ ((percentage / 100) * 10) | round(0, 'floor') + 1 }}
+              {% else %}
+                  Special Mode
+              {% endif %}
+            value_attribute: percentage
+            autofill_entity_id: true
+            thumb: flat
+    type: tile
+    entity: fan.esp_ventilation_controller_fan_1
+    grid_options:
+      columns: 9
+      rows: 3
+    icon_tap_action:
+      action: none
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    card_mod:
+      style: |
+        ha-card {
+         height: auto !important;
+        }
+        .container .content {
+          padding-bottom: 4px;  
+        }
+        .container .content > *{
+          display:none;
+        }
+column_span: 1
+
+```
 # Development
 
 # Known Ids

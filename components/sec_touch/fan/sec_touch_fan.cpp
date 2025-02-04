@@ -74,9 +74,9 @@ bool SecTouchFan::assign_new_speed_if_needed(int real_speed_from_device) {
   }
 
   if (real_speed_from_device == 255) {
-    if (this->state != 0 || this->speed != 0) {
+    if (this->state != 0 || this->speed != 255) {
       this->state = 0;
-      this->speed = 0;
+      this->speed = 255;
       return true;
     }
     return false;

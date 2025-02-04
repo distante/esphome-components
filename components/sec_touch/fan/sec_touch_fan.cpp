@@ -12,7 +12,7 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
 
   // LEVEL HANDLER This is the data tha comes from the real device.
   this->parent->register_recursive_update_listener(this->level_id, [this](int property_id, int real_speed_from_device) {
-    ESP_LOGW(TAG, "New Real Speed from device for property_id %d (speed %d)", property_id, real_speed_from_device);
+    ESP_LOGD(TAG, "New Real Speed from device for property_id %d (speed %d)", property_id, real_speed_from_device);
 
     FanModeEnum::FanMode mode_from_hardware = SecTouchFan::calculate_mode_from_speed(real_speed_from_device);
     std::string_view mode_from_hardware_str = FanModeEnum::to_string(mode_from_hardware);

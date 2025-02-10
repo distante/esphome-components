@@ -7,6 +7,7 @@ This is a component that allows you to control your SEC-TOUCH ventilation contro
 
 (For now) It is limited to change the level of the fan pairs, or put them into their special modes (automatic, time, etc). There is no way to change the timing intervals for now. You need to make that in the SEC-TOUCH device itself.
 
+The SEC-Touch device is always the source of true. No fan state restoration is done after a power loss.
 
 ## First of all thanks to:
 
@@ -15,12 +16,24 @@ This is a component that allows you to control your SEC-TOUCH ventilation contro
 
 # Do it at your own Risk! 
 
-The SEC-Touch has no open API or documentation for their UART interfaces, so I can no and DO NOT offer any warranty, everything here is reverse engineered. I have no affiliation with the company that produces the SEC-TOUCH device.
+The SEC-Touch has no open API or documentation for their UART interfaces, so I can no and DO NOT offer any warranty, everything here is reverse engineered. I have no affiliation with the company that produces the SEC-TOUCH device nor do I want this component to be used for financial gains. The only reason I developed this is because the official alternative is needs internet to works, which I do not want for a device that costs +200€ EURO.
 
 If you decide to use this component a **fan damage can not be ruled out**. **You** are the only responsible in case something goes wrong. 
 
 Yes Really.
 
+# Hardware.
+
+## Required
+- An ESP32 or ESP8266 device.
+  - I use [this one with USB C](https://amzn.to/40R7ee3).
+- 4 Pin Pluggable Terminals
+-  [4 core](https://amzn.to/3EK0uao) or [3 core cable](https://amzn.to/4jS36Dm) (depending on how you can/want to power the ESP device)
+
+## Optional
+- [Breakout board](https://amzn.to/416UuBA) if you do not want to solder stuff
+- [PCB board with header connectors](https://amzn.to/40TYcNl) if you want to solder everything (like I did, see bellow).
+- [Din Rail Mounting clips](https://amzn.to/4aS99nc) to mount the device if needed. 
 # Connection
 
 The SEC-TOUCH has an "PC" port at the right bottom part. It has an `3.x` volts output. It worked to power my ESP32 device when I was using Software UART, but when I switched to Hardware UART it didn't work anymore. When I measured the voltage it was around `3.2v` tops.
@@ -30,7 +43,10 @@ I recommend you to power your ESP32 device using another source.
 That said, probably it has enough power for an ESP8266 device that uses software UART.
 
 ### ESP8266 connection
-![https://github.com/Manuel-Siekmann/VentilationSystem/raw/main/doc/sketch.jpg](https://github.com/Manuel-Siekmann/VentilationSystem/raw/main/doc/sketch.jpg)
+<div class="text-center">
+  <img src="https://github.com/Manuel-Siekmann/VentilationSystem/raw/main/doc/sketch.jpg" alt="https://github.com/Manuel-Siekmann/VentilationSystem/raw/main/doc/sketch.jpg" />
+</div>
+
 
 ### ESP32 cable connection (using external power )
 The same but without the 3.3v connection. 😬
@@ -41,8 +57,10 @@ GND    --> GND SEC-TOUCH
 ```
 
 ## Final Installation
+<div class="text-center">
+  <img src="images/final_install.webp" alt="Final Installation" />
+</div>
 
-![Final Installation](images/final_install.webp)
 
 # Configuration:
 
@@ -229,6 +247,12 @@ Notice that the fans numbers are ordered so:
 ## :bulb: Setting The Fan Level above 6
 Please check the [Special Fan level Values](#fan-pair-level-special-values) section to understand the special values for the fan level.
 
+# Web Server preview
+
+<div class="text-center">
+  <img src="images/web-server.webp" alt="ESPHome Webserver" />
+</div>
+
 # Home Assistant
 Home assistant has the problem that all fans show their speed as percentage. But we do not have percentage values, we have levels from `0` to `11`. From which some of those values are special ones.
 
@@ -240,8 +264,12 @@ My recommendation is to use your own custom card to control the de fans.
 
 Here I am using [lovelace-mushroom](https://github.com/piitaya/lovelace-mushroom), [lovelace-card-mod](https://github.com/thomasloven/lovelace-card-mod) and [service-call-tile-feature](https://github.com/Nerwyn/service-call-tile-feature). On a Sections board.
 
-If you are using the configuration written above, you just need to search and replace `fan_1` with the corresponding fan number to get more cards 
-![Home Assistant Dashboard](images/ha-dashboard.webp)
+If you are using the configuration written above, you just need to search and replace `fan_1` with the corresponding fan number to get more cards.
+
+<div class="text-center">
+  <img src="images/ha-dashboard.webp" alt="Home Assistant Dashboard" />
+</div>
+
 
 ```yaml
 type: grid

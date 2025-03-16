@@ -304,7 +304,9 @@ void SECTouchComponent::mark_current_get_queue_item_as_failed() {
 }
 
 void SECTouchComponent::add_recursive_tasks_to_get_queue() {
-  ESP_LOGD(TAG, "No property ids are registered for recursive tasks");
+  if (this->recursive_update_ids.empty()) {
+    ESP_LOGW(TAG, "No property ids are registered for recursive tasks");
+  }
 
   for (size_t i = 0; i < this->recursive_update_ids.size(); i++) {
     int id = this->recursive_update_ids[i];

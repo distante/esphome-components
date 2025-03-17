@@ -42,20 +42,20 @@ I recommend you to power your ESP32 device using another source.
 
 That said, probably it has enough power for an ESP8266 device that uses software UART.
 
+### ESP32 cable connection (using external power )
+The same but without the 3.3v connection. 😬
+
+|ESP32  | SEC-Touch| 
+|--- | ---| 
+|GND | GND (1st from the left)|
+|GPIO 17 | RX (2nd from the left)| 
+|GPIO 16 | TX (3rd from the left)|
+
 ### ESP8266 connection
 <div class="text-center">
   <img src="https://github.com/Manuel-Siekmann/VentilationSystem/raw/main/doc/sketch.jpg" alt="https://github.com/Manuel-Siekmann/VentilationSystem/raw/main/doc/sketch.jpg" />
 </div>
-
-
-### ESP32 cable connection (using external power )
-The same but without the 3.3v connection. 😬
-```
-GPIO17 --> RX SEC-TOUCH
-GPIO16 --> TX SEC-TOUCH
-GND    --> GND SEC-TOUCH
-```
-
+# Installation
 ## Final Installation
 <div class="text-center">
   <img src="images/final_install.webp" alt="Final Installation" />

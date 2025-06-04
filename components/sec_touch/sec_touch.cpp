@@ -63,7 +63,7 @@ void SECTouchComponent::loop() {
   uint8_t peakedData;
   this->peek_byte(&peakedData);
   if (peakedData == NOISE && this->incoming_message.buffer_index == -1) {
-    ESP_LOGD(TAG, "  Discarding noise byte");
+    ESP_LOGD(TAG, "  Discarding noise byte (Or is it a Heartbeat with %d?)", peakedData);
     this->read_byte(&peakedData);  // Discard the noise
     return;
   }
@@ -190,10 +190,6 @@ void SECTouchComponent::handle_uart_input_for_get_queue() {
       // TODO: This crashes the ESP32
       ESP_LOGW(TAG, "Starting to store message but the data is not ACK. Discarding data: %d", data);
       continue;
-    } else if (!start_of_ack_message && data == NOISE) {
-      ESP_LOGE(TAG, "  received NOISE (255) inside message discarding all data: %d", data);
-      this->incoming_message.reset();
-      return;
     }
 
     bool inside_id = total_etx == 1 && total_stx > 1 && total_tabs == 1;

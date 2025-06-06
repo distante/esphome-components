@@ -187,8 +187,6 @@ void SECTouchComponent::handle_uart_input_for_get_queue() {
     uint8_t data;
     this->read_byte(&data);
 
-    ESP_LOGD(TAG_UART, "  Byte received: %d", data);
-
     bool start_of_ack_message = this->incoming_message.buffer_index == 0;
 
     if (start_of_ack_message && data != ACK) {
@@ -212,13 +210,13 @@ void SECTouchComponent::handle_uart_input_for_get_queue() {
     current_index = this->store_data_to_incoming_message(data);
 
     if (inside_id) {
-      ESP_LOGD(TAG_UART, "    saving into id");
+      ESP_LOGD(TAG_UART, "  Byte received: %d - Saved into id", data);
       this->incoming_message.add_to_returned_id(data);
     } else if (inside_value) {
-      ESP_LOGD(TAG_UART, "    saving into value");
+      ESP_LOGD(TAG_UART, "  Byte received: %d - Saved into value", data);
       this->incoming_message.add_to_returned_value(data);
     } else {
-      ESP_LOGD(TAG_UART, "    saving into buffer without id or value");
+      ESP_LOGD(TAG_UART, "  Byte received: %d - Saved into buffer without id or value", data);
     }
 
     if (data == ETX) {

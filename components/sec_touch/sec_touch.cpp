@@ -73,7 +73,8 @@ void SECTouchComponent::loop() {
 
   // Check if there is no running task
   if (this->current_running_task_type == TaskType::NONE) {
-    ESP_LOGW(TAG, "  No running task, but data available!? Data: %d", peakedData);
+    ESP_LOGW(TAG, "  No running task, but data available!? Discarding Data: %d", peakedData);
+    this->read_byte(&peakedData);  // Discard the noise
     return;
   }
 

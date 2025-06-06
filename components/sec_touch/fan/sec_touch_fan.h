@@ -41,7 +41,7 @@ class SecTouchFan : public Component, public fan::Fan {
   fan::FanTraits get_traits() override { return this->traits_; }
 
   // Print method for debugging
-  void printConfig();
+  void dump_config() override;
 };
 
 }  // namespace sec_touch

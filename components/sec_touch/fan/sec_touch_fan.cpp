@@ -209,8 +209,8 @@ void SecTouchFan::update_label_mode() {
 }
 
 // Print method for debugging
-void SecTouchFan::printConfig() {
-  ESP_LOGCONFIG(TAG, "Level ID: %d, Label ID: %d, Fan Level Value: %d", this->level_id, this->label_id, this->speed);
+void SecTouchFan::dump_config() {
+  ESP_LOGCONFIG(TAG, "Level ID: %d, Label ID: %d, Current Fan Level: %d", this->level_id, this->label_id, this->speed);
 }
 
 }  // namespace sec_touch

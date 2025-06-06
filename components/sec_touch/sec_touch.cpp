@@ -27,7 +27,10 @@ void SECTouchComponent::dump_config() {
 
   // Iterate through the map and log each property_id
   for (const auto &pair : this->recursive_update_listeners) {
-    ESP_LOGCONFIG(TAG, "  - Fan Property ID: %d", pair.first);  // Log the property_id
+    ESP_LOGCONFIG(TAG, "  - Recursive Updated Property ID: %d", pair.first);  // Log the property_id
+  }
+  for (const auto &pair : this->manual_update_listeners) {
+    ESP_LOGCONFIG(TAG, "  - Manual Update Property ID: %d", pair.first);  // Log the property_id
   }
 
   if (this->is_failed()) {
@@ -65,6 +68,12 @@ void SECTouchComponent::loop() {
   if (peakedData == NOISE && this->incoming_message.buffer_index == -1) {
     ESP_LOGD(TAG, "  Discarding noise byte (Or is it a Heartbeat with %d?)", peakedData);
     this->read_byte(&peakedData);  // Discard the noise
+    return;
+  }
+
+  // Check if there is no running task
+  if (this->current_running_task_type == TaskType::NONE) {
+    ESP_LOGW(TAG, "  No running task, but data available!? Data: %d", peakedData);
     return;
   }
 
@@ -115,7 +124,11 @@ void SECTouchComponent::loop() {
       ESP_LOGD(TAG, "  No more tasks in the set queue, calling get tasks");
       this->process_get_queue();
     }
+
+    return;
   }
+
+  ESP_LOGE(TAG, "SEC-Touch loop: Unknown current_running_task_type %d", this->current_running_task_type);
 }
 
 void SECTouchComponent::register_text_sensor(int id, text_sensor::TextSensor *sensor) {

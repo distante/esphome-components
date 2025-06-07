@@ -10,11 +10,11 @@
 namespace esphome {
 namespace sec_touch {
 
-#define STX 0x02
-#define ETX 0x0A
-#define ACK 0x06
-#define NAK 0x15
-#define TAB 0x09
+#define STX 0x02    // Start of Text
+#define ETX 0x0A    // End of Text
+#define ACK 0x06    // Acknowledge
+#define NAK 0x15    // Not Acknowledge
+#define TAB 0x09    // Tab
 #define NOISE 0xFF  // 255
 
 constexpr const int COMMANDID_SET = 32;
@@ -111,16 +111,13 @@ template<typename T, size_t N> static bool contains(const std::array<T, N> &arr,
  */
 enum class TaskTargetType { LEVEL, LABEL };
 enum class TaskType {
-  MANUAL_SET,
-  AUTO_GET,
-  MANUAL_GET,
+  SET_DATA,
+  GET_DATA,
   /**
    * Used to indicate that no task is currently being processed
    */
   NONE
 };
-
-enum class TaskState { TO_BE_SENT, TO_BE_PROCESSED };
 
 class EnumToString {
  private:
@@ -138,25 +135,12 @@ class EnumToString {
     }
   }
 
-  static const char *TaskState(TaskState v) {
-    switch (v) {
-      case TaskState::TO_BE_SENT:
-        return "TO_BE_SENT";
-
-      case TaskState::TO_BE_PROCESSED:
-        return "TO_BE_PROCESSED";
-      default:
-        return "UNKNOWN";
-    }
-  }
   static const char *TaskType(TaskType v) {
     switch (v) {
-      case TaskType::MANUAL_SET:
-        return "MANUAL_SET";
-      case TaskType::AUTO_GET:
-        return "AUTO_GET";
-      case TaskType::MANUAL_GET:
-        return "MANUAL_GET";
+      case TaskType::SET_DATA:
+        return "SET_DATA";
+      case TaskType::GET_DATA:
+        return "GET_DATA";
       case TaskType::NONE:
         return "NONE";
       default:
@@ -221,13 +205,15 @@ struct IncomingMessage {
   }
 };
 
-struct SetDataTask {
+struct BaseTask {
+  virtual ~BaseTask() = default;
+  virtual TaskType get_task_type() const = 0;
   TaskTargetType targetType;
   int property_id;
-  char value[8];
-  TaskState state = TaskState::TO_BE_SENT;
+};
 
-  const TaskType taskType = TaskType::MANUAL_SET;
+struct SetDataTask : public BaseTask {
+  char value[8];
 
   static std::unique_ptr<SetDataTask> create(TaskTargetType targetType, int property_id, const char *value) {
     if ((targetType == TaskTargetType::LEVEL && contains(FAN_LEVEL_IDS, property_id)) ||
@@ -237,20 +223,18 @@ struct SetDataTask {
     return nullptr;  // Null unique_ptr if validation fails
   }
 
+  TaskType get_task_type() const override { return TaskType::SET_DATA; }
+
  private:
-  SetDataTask(TaskTargetType targetType, int property_id, const char *value)
-      : targetType(targetType), property_id(property_id) {
+  SetDataTask(TaskTargetType targetType, int property_id, const char *value) {
+    this->targetType = targetType;
+    this->property_id = property_id;
     std::strncpy(this->value, value, sizeof(this->value) - 1);
     this->value[sizeof(this->value) - 1] = '\0';  // Ensure null termination
   }
 };
 
-struct GetDataTask {
-  TaskTargetType targetType;
-  int property_id;
-  TaskState state = TaskState::TO_BE_SENT;
-  const TaskType taskType = TaskType::AUTO_GET;
-
+struct GetDataTask : public BaseTask {
   static std::unique_ptr<GetDataTask> create(TaskTargetType targetType, int property_id) {
     if ((targetType == TaskTargetType::LEVEL && contains(FAN_LEVEL_IDS, property_id)) ||
         (targetType == TaskTargetType::LABEL && contains(FAN_LABEL_IDS, property_id))) {
@@ -259,8 +243,13 @@ struct GetDataTask {
     return nullptr;  // Null unique_ptr if validation fails
   }
 
+  TaskType get_task_type() const override { return TaskType::GET_DATA; }
+
  private:
-  GetDataTask(TaskTargetType targetType, int property_id) : targetType(targetType), property_id(property_id) {}
+  GetDataTask(TaskTargetType targetType, int property_id) {
+    this->targetType = targetType;
+    this->property_id = property_id;
+  }
 };
 
 }  // namespace sec_touch

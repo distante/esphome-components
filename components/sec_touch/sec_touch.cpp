@@ -43,7 +43,6 @@ void SECTouchComponent::update() {
   if (this->data_task_queue.empty() && !this->available()) {
     ESP_LOGD(TAG, "SEC-Touch update");
     this->add_recursive_tasks_to_get_queue();
-    // this->process_task_queue();
   }
 }
 
@@ -53,6 +52,13 @@ void SECTouchComponent::loop() {
     if (this->data_task_queue.empty()) {
       return;
     }
+
+    if (this->current_running_task_type != TaskType::NONE) {
+      ESP_LOGD(TAG, "[loop] We are waiting for the response after a task of type %s",
+               EnumToString::TaskType(this->current_running_task_type));
+      return;  // We have a task running, so we don't need to process the queue
+    }
+
     ESP_LOGD(TAG, "[loop] No Data available, processing task queue");
     this->process_task_queue();
     return;
@@ -62,47 +68,42 @@ void SECTouchComponent::loop() {
   // We have send some data and now we are waiting for the response
   uint8_t peakedData;
   this->peek_byte(&peakedData);
-  if (peakedData == NOISE && this->incoming_message.buffer_index == -1) {
-    ESP_LOGD(TAG, "  Discarding noise byte (Or is it a Heartbeat with %d?)", peakedData);
+
+  // Noise or Heartbeat handling?
+  if (this->incoming_message.buffer_index == -1 && peakedData != STX) {
+    ESP_LOGD(TAG, "[loop]  Discarding noise byte (or maybe a Heartbeat with %d?)", peakedData);
+    this->read_byte(&peakedData);
+    return;
+  }
+
+  if (this->incoming_message.buffer_index != -1) {
+    ESP_LOGE(TAG, "[loop]  The loop found a non-empty incoming message buffer, but we are not in the middle of "
+                  "processing a message. This is unexpected.");
+    return;
+  }
+
+  if (peakedData != STX) {
+    ESP_LOGW(TAG, "  Discarding noise(?) byte %d, expected STX", peakedData);
     this->read_byte(&peakedData);  // Discard the noise
     return;
   }
 
-  /*
-  check if the buffer is empty
-  if it is empty check that the byte is a STX
-  if it is not a STX, then we have noise and we log it and discard it
-  if it is a STX, then we start storing the data in the this->incoming_message
-  when we get and ETX, we need to check which kind of message we have received (TODO)
-  */
+  ESP_LOGD(TAG, "  Received STX %d. Starting to store Message", peakedData);
 
-  if (this->incoming_message.buffer_index == -1) {
-    if (peakedData != STX) {
-      ESP_LOGW(TAG, "  Discarding noise(?) byte %d, expected STX", peakedData);
-      this->read_byte(&peakedData);  // Discard the noise
+  // keep storing data in the incoming message until we reach ETX
+  while (this->available()) {
+    uint8_t data;
+    this->read_byte(&data);
+    this->store_data_to_incoming_message(data);
+    // we need to exist if we reach ETX
+    if (data == ETX) {
+      ESP_LOGD(TAG, "  Received ETX %d, processing message", data);
+
+      this->process_data_of_current_incoming_message();
+      this->current_running_task_type = TaskType::NONE;  // Reset the current running task type
       return;
     }
-
-    ESP_LOGD(TAG, "  Received STX %d. Starting to store Message", peakedData);
-
-    // keep storing data in the incoming message until we reach ETX
-    while (this->available()) {
-      uint8_t data;
-      this->read_byte(&data);
-      this->store_data_to_incoming_message(data);
-      // we need to exist if we reach ETX
-      if (data == ETX) {
-        ESP_LOGD(TAG, "  Received ETX %d, processing message", data);
-
-        this->process_data_of_current_incoming_message();
-
-        return;
-      }
-    }
-    return;
   }
-
-  return;
 }
 
 void SECTouchComponent::register_text_sensor(int id, text_sensor::TextSensor *sensor) {
@@ -149,12 +150,16 @@ void SECTouchComponent::notify_update_listeners(int property_id, int new_value) 
 // Unified task processing function
 void SECTouchComponent::process_task_queue() {
   if (data_task_queue.empty()) {
-    ESP_LOGD(TAG, "No tasks in the unified queue");
+    ESP_LOGD(TAG, "The queue is empty, nothing to process");
+    this->current_running_task_type = TaskType::NONE;
     return;
   }
   auto &task_ptr = data_task_queue.front();
   BaseTask *task = task_ptr.get();
-  ESP_LOGD(TAG, "Processing task of type: %s", EnumToString::TaskType(task->get_task_type()));
+  ESP_LOGD(TAG, "Processing one task of %d -  type: %s", data_task_queue.size(),
+           EnumToString::TaskType(task->get_task_type()));
+
+  this->current_running_task_type = task->get_task_type();
   switch (task->get_task_type()) {
     case TaskType::SET_DATA:
       send_set_message(*static_cast<SetDataTask *>(task));
@@ -287,8 +292,8 @@ Now, we need to extract the parts of the message. It can be either:
   // This is the ACK
   if (this->incoming_message.buffer[0] == STX && this->incoming_message.buffer[1] == ACK &&
       this->incoming_message.buffer[this->incoming_message.buffer_index] == ETX) {
-    // ESP_LOGD(TAG, "  Received ACK message, sending ACK back");
-    // this->send_ack_message();
+    ESP_LOGD(TAG, "  Received ACK message");
+    // this->send_ack_message(); // I do not think we need to send ACK back here, do we?
     this->incoming_message.reset();
     return;
   }

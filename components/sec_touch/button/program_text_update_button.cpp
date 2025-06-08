@@ -3,7 +3,7 @@
 namespace esphome {
 namespace sec_touch {
 
-void ProgramTextUpdateButton::press_action() { this->parent_->add_manual_tasks_to_get_queue(); }
+void ProgramTextUpdateButton::press_action() { this->parent_->add_manual_tasks_to_queue(); }
 
 }  // namespace sec_touch
 }  // namespace esphome

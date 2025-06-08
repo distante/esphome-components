@@ -493,8 +493,8 @@ where:
 - `32` is the command id for a SET request.
 - `173` is the property id of the fan pair.
 - `5` is the value assigned to that id.
-- `42625` is the checksum.
-- 
+- `42625` is the checksum (probably).
+
 ### SET Response Message
 Sadly (IMHO) the SEC-TOUCH just sends an `ACK` message after receiving a SET message and sometimes it takes a couple of seconds for the SEC-TOUCH screen to update the new value, so the best we can do is to wait for the `ACK` message and then send a `GET` message to do a security sync of the new value.
 
@@ -504,11 +504,7 @@ Byte received: 6   // ACK 0x06
 Byte received: 10  // ETX 0x0A
 ```
 
-
-
-
-
-### Update submodules
+# Update submodules
 ```
 git submodule update --remote --merge
 ```

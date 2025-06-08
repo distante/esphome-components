@@ -19,6 +19,9 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   void dump_config() override;
   void loop() override;
   void update() override;
+  float get_setup_priority() const override {
+    return setup_priority::LATE;  // Use LATE priority to ensure all components are set up first
+  }
   /**
    * Use this for things that need to be updated on each loop
    */
@@ -34,15 +37,13 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
 
   void add_set_task(std::unique_ptr<SetDataTask> task);
   void add_recursive_tasks_to_get_queue();
-  void add_manual_tasks_to_get_queue();
-  bool process_get_queue();
+  void add_manual_tasks_to_queue();
   void register_text_sensor(int id, text_sensor::TextSensor *sensor);
   esphome::optional<text_sensor::TextSensor *> get_text_sensor(int id);
 
  protected:
   IncomingMessage incoming_message;
-  std::deque<std::unique_ptr<GetDataTask>> data_get_queue;
-  std::deque<std::unique_ptr<SetDataTask>> data_set_queue;
+  std::deque<std::unique_ptr<BaseTask>> data_task_queue;
 
   std::map<int, UpdateCallbackListener> recursive_update_listeners;
   std::vector<int> recursive_update_ids;
@@ -53,14 +54,9 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   std::map<int, text_sensor::TextSensor *> text_sensors;
 
   void notify_update_listeners(int property_id, int new_value);
-  bool processing_queue = false;
   TaskType current_running_task_type = TaskType::NONE;
-  /**
-   * @returns true if the queue was processed
-   */
-  void process_set_queue();
 
-  void handle_uart_input_for_get_queue();
+  void process_task_queue();
 
   void send_get_message(GetDataTask &task);
 
@@ -70,12 +66,11 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
    * Returns the index of the last byte stored in the buffer
    */
   int store_data_to_incoming_message(uint8_t data);
-  void mark_current_get_queue_item_as_failed();
+  void cleanup_after_task_complete(bool failed = false);
   void send_ack_message();
 
-  // QUEUE HANDLING
-
-  void process_data_for_current_get_queue_item();
+  unsigned long task_start_time_ = 0;
+  void process_data_of_current_incoming_message();
 };
 }  // namespace sec_touch
 }  // namespace esphome

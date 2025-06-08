@@ -56,7 +56,7 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
 
     const std::string &current_label = label_text_sensor->get_state();  // Get the current state of the text sensor
     if (current_label == new_label) {
-      ESP_LOGD(TAG, "Label is already up-to-date: %s", current_label);
+      ESP_LOGD(TAG, "Label is already up-to-date: %s", current_label.c_str());
       return;  // Do not publish if the value is the same
     }
 
@@ -209,8 +209,8 @@ void SecTouchFan::update_label_mode() {
 }
 
 // Print method for debugging
-void SecTouchFan::printConfig() {
-  ESP_LOGCONFIG(TAG, "Level ID: %d, Label ID: %d, Fan Level Value: %d", this->level_id, this->label_id, this->speed);
+void SecTouchFan::dump_config() {
+  ESP_LOGCONFIG(TAG, "Level ID: %d, Label ID: %d, Current Fan Level: %d", this->level_id, this->label_id, this->speed);
 }
 
 }  // namespace sec_touch

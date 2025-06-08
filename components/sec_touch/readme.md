@@ -504,38 +504,6 @@ Byte received: 6   // ACK 0x06
 Byte received: 10  // ETX 0x0A
 ```
 
-# Unknown Messages
-
-## Id 170
-Sometimes we get this message (id `170`):
-```
-32	170	0	2137
-```
-
-At least when captured, it was a "response" for id `174`
-
-```log
-[13:21:28][D][sec-touch-uart:400]:   [process_data] Incoming message buffer for get task(32800) targetType LEVEL and id 174
-[13:21:28][D][sec-touch-uart:403]:   [process_data] buffer 
-32	170	0	2137
-[13:21:28][D][sec-touch-uart:422]:   [process_data] incoming.returned_id: 170	, incoming.returned_value: 0	
-[13:21:28][D][sec-touch-uart:437]:   [process_data] returned_id: 170
-[13:21:28][D][sec-touch-uart:441]:   [process_data] returned_value: 0
-[13:21:28][D][sec-touch-uart:448]:   [process_data] queue is not empty continue
-[13:21:28][E][sec-touch-uart:458]:   [process_data] ID mismatch. Task Failed
-[13:21:28][D][sec-touch:303]: [FAILED Task] targetType "LEVEL" and id "174"
-```
-
-This is the configuration log:
-```log
-[13:27:23][C][sec-touch:025]: SEC-Touch:
-[13:27:23][C][sec-touch:026]:   total_register_fans: 3
-[13:27:23][C][sec-touch:030]:   - Fan Property ID: 173
-[13:27:23][C][sec-touch:030]:   - Fan Property ID: 174
-[13:27:23][C][sec-touch:030]:   - Fan Property ID: 177
-```
-
-
 # Update submodules
 ```
 git submodule update --remote --merge

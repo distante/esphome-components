@@ -69,8 +69,7 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   void cleanup_after_task_complete(bool failed = false);
   void send_ack_message();
 
-  // QUEUE HANDLING
-
+  unsigned long task_start_time_ = 0;
   void process_data_of_current_incoming_message();
 };
 }  // namespace sec_touch

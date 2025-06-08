@@ -9,6 +9,8 @@ namespace sec_touch {
 static const char *const TAG = "sec-touch";
 static const char *const TAG_UART = "sec-touch-uart";
 
+static const unsigned long TASK_TIMEOUT_MS = 2000;  // 2 seconds
+
 SECTouchComponent::SECTouchComponent() {}
 
 void SECTouchComponent::setup() {
@@ -53,12 +55,18 @@ void SECTouchComponent::loop() {
       return;
     }
 
+    // Watchdog check
     if (this->current_running_task_type != TaskType::NONE) {
-      ESP_LOGD(TAG, "[loop] We are waiting for the response after a task of type %s",
-               EnumToString::TaskType(this->current_running_task_type));
-      return;  // We have a task running, so we don't need to process the queue
+      if (this->task_start_time_ > 0 && millis() - this->task_start_time_ > TASK_TIMEOUT_MS) {
+        ESP_LOGW(TAG, "[watchdog] Task of type %s timed out, forcing cleanup",
+                 EnumToString::TaskType(this->current_running_task_type));
+        this->cleanup_after_task_complete(true);
+      } else {
+        ESP_LOGD(TAG, "[loop] We are waiting for the response after a task of type %s",
+                 EnumToString::TaskType(this->current_running_task_type));
+        return;
+      }
     }
-
     ESP_LOGD(TAG, "[loop] No Data available, processing task queue");
     this->process_task_queue();
     return;
@@ -158,6 +166,8 @@ void SECTouchComponent::process_task_queue() {
            EnumToString::TaskType(task->get_task_type()));
 
   this->current_running_task_type = task->get_task_type();
+  this->task_start_time_ = millis();  // <-- Set watchdog timer here
+
   switch (task->get_task_type()) {
     case TaskType::SET_DATA:
       send_set_message(*static_cast<SetDataTask *>(task));
@@ -229,19 +239,8 @@ void SECTouchComponent::add_set_task(std::unique_ptr<SetDataTask> task) {
   ESP_LOGD(TAG, "add_set_task");
   this->data_task_queue.push_back(std::move(task));
 
-  // Instead of adding all recursive tasks, only add the one related to this task
-  for (size_t i = 0; i < this->recursive_update_ids.size(); i++) {
-    int id = this->recursive_update_ids[i];
-    if (id == 0) {
-      continue;
-    }
-    if (id == task->property_id) {
-      this->data_task_queue.push_back(GetDataTask::create(task->targetType, id));
-      break;
-    }
-  }
-
-  // this->process_task_queue();  // Process the queue immediately
+  // WARNING: Do not add get tasks to update here. For now, we will just wait for the usual update cycle
+  // if you add a get task here a recursive loop will be created (TODO?)
 }
 
 void SECTouchComponent::send_get_message(GetDataTask &task) {
@@ -292,7 +291,8 @@ Now, we need to extract the parts of the message. It can be either:
       this->incoming_message.buffer[this->incoming_message.buffer_index] == ETX) {
     ESP_LOGD(TAG, "  Received ACK message");
     // this->send_ack_message(); // I do not think we need to send ACK back here, do we?
-    this->cleanup_after_task_complete() return;
+    this->cleanup_after_task_complete();
+    return;
   }
 
   /*
@@ -316,7 +316,8 @@ where:
   // Defensive: ensure message starts with STX and ends with ETX
   if (len < 7 || static_cast<uint8_t>(buf[0]) != STX || static_cast<uint8_t>(buf[len - 1]) != ETX) {
     ESP_LOGE(TAG_UART, "  [process_data] Invalid message format. Task Failed");
-    this->cleanup_after_task_complete(true) return;
+    this->cleanup_after_task_complete(true);
+    return;
   }
 
   // Find TABs
@@ -334,7 +335,8 @@ where:
   }
   if (tab1 == -1 || tab2 == -1 || tab3 == -1) {
     ESP_LOGE(TAG_UART, "  [process_data] Not enough TABs in message. Task Failed");
-    this->cleanup_after_task_complete(true) return;
+    this->cleanup_after_task_complete(true);
+    return;
   }
 
   // Extract command id, property id, value, crc
@@ -358,8 +360,9 @@ where:
 void SECTouchComponent::cleanup_after_task_complete(bool failed) {
   ESP_LOGD(TAG, "cleanup_after_task_complete called, failed: %s", failed ? "true" : "false");
   this->incoming_message.reset();
-  this->current_running_task_type = TaskType::NONE;  // Reset the current running task type
-                                                     // TODO: SEND NACK??
+  this->current_running_task_type = TaskType::NONE;
+  this->task_start_time_ = 0;  // <-- Reset watchdog timer
+                               // TODO: SEND NACK??
 }
 }  // namespace sec_touch
 }  // namespace esphome

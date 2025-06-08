@@ -66,6 +66,7 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
    * Returns the index of the last byte stored in the buffer
    */
   int store_data_to_incoming_message(uint8_t data);
+  void cleanup_after_task_complete(bool failed = false);
   void send_ack_message();
 
   // QUEUE HANDLING

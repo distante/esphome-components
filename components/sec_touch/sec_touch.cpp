@@ -95,7 +95,6 @@ void SECTouchComponent::loop() {
         ESP_LOGD(TAG, "  Received ETX %d, processing message", data);
 
         this->process_data_of_current_incoming_message();
-        this->current_running_task_type = TaskType::NONE;  // Reset the current running task type
         return;
       }
     }
@@ -293,8 +292,7 @@ Now, we need to extract the parts of the message. It can be either:
       this->incoming_message.buffer[this->incoming_message.buffer_index] == ETX) {
     ESP_LOGD(TAG, "  Received ACK message");
     // this->send_ack_message(); // I do not think we need to send ACK back here, do we?
-    this->incoming_message.reset();
-    return;
+    this->cleanup_after_task_complete() return;
   }
 
   /*
@@ -318,8 +316,7 @@ where:
   // Defensive: ensure message starts with STX and ends with ETX
   if (len < 7 || static_cast<uint8_t>(buf[0]) != STX || static_cast<uint8_t>(buf[len - 1]) != ETX) {
     ESP_LOGE(TAG_UART, "  [process_data] Invalid message format. Task Failed");
-    this->incoming_message.reset();
-    return;
+    this->cleanup_after_task_complete(true) return;
   }
 
   // Find TABs
@@ -337,9 +334,7 @@ where:
   }
   if (tab1 == -1 || tab2 == -1 || tab3 == -1) {
     ESP_LOGE(TAG_UART, "  [process_data] Not enough TABs in message. Task Failed");
-    // this->mark_current_get_queue_item_as_failed();
-    // TODO: SEND NACK??
-    return;
+    this->cleanup_after_task_complete(true) return;
   }
 
   // Extract command id, property id, value, crc
@@ -360,5 +355,11 @@ where:
   this->send_ack_message();  // Send ACK back
 }
 
+void SECTouchComponent::cleanup_after_task_complete(bool failed) {
+  ESP_LOGD(TAG, "cleanup_after_task_complete called, failed: %s", failed ? "true" : "false");
+  this->incoming_message.reset();
+  this->current_running_task_type = TaskType::NONE;  // Reset the current running task type
+                                                     // TODO: SEND NACK??
+}
 }  // namespace sec_touch
 }  // namespace esphome

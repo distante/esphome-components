@@ -76,34 +76,33 @@ void SECTouchComponent::loop() {
     return;
   }
 
-  if (this->incoming_message.buffer_index != -1) {
-    ESP_LOGE(TAG, "[loop]  The loop found a non-empty incoming message buffer, but we are not in the middle of "
-                  "processing a message. This is unexpected.");
-    return;
-  }
-
-  if (peakedData != STX) {
-    ESP_LOGW(TAG, "  Discarding noise(?) byte %d, expected STX", peakedData);
-    this->read_byte(&peakedData);  // Discard the noise
-    return;
-  }
-
-  ESP_LOGD(TAG, "  Received STX %d. Starting to store Message", peakedData);
-
-  // keep storing data in the incoming message until we reach ETX
-  while (this->available()) {
-    uint8_t data;
-    this->read_byte(&data);
-    this->store_data_to_incoming_message(data);
-    // we need to exist if we reach ETX
-    if (data == ETX) {
-      ESP_LOGD(TAG, "  Received ETX %d, processing message", data);
-
-      this->process_data_of_current_incoming_message();
-      this->current_running_task_type = TaskType::NONE;  // Reset the current running task type
+  if (this->incoming_message.buffer_index == -1) {
+    if (peakedData != STX) {
+      ESP_LOGW(TAG, "  Discarding noise(?) byte %d, expected STX", peakedData);
+      this->read_byte(&peakedData);  // Discard the noise
       return;
     }
+
+    ESP_LOGD(TAG, "  Received STX %d. Starting to store Message", peakedData);
+
+    // keep storing data in the incoming message until we reach ETX
+    while (this->available()) {
+      uint8_t data;
+      this->read_byte(&data);
+      this->store_data_to_incoming_message(data);
+      // we need to exist if we reach ETX
+      if (data == ETX) {
+        ESP_LOGD(TAG, "  Received ETX %d, processing message", data);
+
+        this->process_data_of_current_incoming_message();
+        this->current_running_task_type = TaskType::NONE;  // Reset the current running task type
+        return;
+      }
+    }
+    return;
   }
+
+  return;
 }
 
 void SECTouchComponent::register_text_sensor(int id, text_sensor::TextSensor *sensor) {

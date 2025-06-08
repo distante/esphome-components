@@ -178,19 +178,6 @@ int SECTouchComponent::store_data_to_incoming_message(uint8_t data) {
   return this->incoming_message.store_data(data);
 }
 
-void SECTouchComponent::mark_current_get_queue_item_as_failed() {
-  ESP_LOGE(TAG, "mark_current_get_queue_item_as_failed should not be called");
-  // auto &task_ptr = this->data_get_queue.front();
-  // auto &task = *task_ptr;
-  // ESP_LOGD(TAG, "[FAILED Task] targetType \"%s\" and id \"%d\"", EnumToString::TaskTargetType(task.targetType),
-  //          task.property_id);
-
-  // this->incoming_message.reset();
-  // this->data_get_queue.pop_front();
-
-  // TODO: Retry?
-}
-
 void SECTouchComponent::add_recursive_tasks_to_get_queue() {
   if (this->recursive_update_ids.empty()) {
     ESP_LOGW(TAG, "No property ids are registered for recursive tasks");
@@ -242,6 +229,19 @@ void SECTouchComponent::register_manual_update_listener(int property_id, UpdateC
 void SECTouchComponent::add_set_task(std::unique_ptr<SetDataTask> task) {
   ESP_LOGD(TAG, "add_set_task");
   this->data_task_queue.push_back(std::move(task));
+
+  // Instead of adding all recursive tasks, only add the one related to this task
+  for (size_t i = 0; i < this->recursive_update_ids.size(); i++) {
+    int id = this->recursive_update_ids[i];
+    if (id == 0) {
+      continue;
+    }
+    if (id == task->property_id) {
+      this->data_task_queue.push_back(GetDataTask::create(task->targetType, id));
+      break;
+    }
+  }
+
   // this->process_task_queue();  // Process the queue immediately
 }
 

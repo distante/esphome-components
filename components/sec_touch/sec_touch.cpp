@@ -72,7 +72,8 @@ void SECTouchComponent::loop() {
     return;
   }
 
-  ESP_LOGD(TAG, "[loop] Data available");
+  ESP_LOGD(TAG, "[loop] Data available (Current buffer size: %d, Task queue size: %d)",
+           this->incoming_message.buffer_index + 1, this->data_task_queue.size());
   // We have send some data and now we are waiting for the response
   uint8_t peakedData;
   this->peek_byte(&peakedData);
@@ -98,14 +99,16 @@ void SECTouchComponent::loop() {
       uint8_t data;
       this->read_byte(&data);
       this->store_data_to_incoming_message(data);
-      // we need to exist if we reach ETX
+
+      // if a ETX appears, then exit to process the message
       if (data == ETX) {
         ESP_LOGD(TAG, "  Received ETX %d, processing message", data);
-
-        this->process_data_of_current_incoming_message();
-        return;
+        break;
       }
     }
+
+    // Process the incoming message will also verify that the message format is correct
+    this->process_data_of_current_incoming_message();
     return;
   }
 

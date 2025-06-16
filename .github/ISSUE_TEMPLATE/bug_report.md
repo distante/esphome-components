@@ -7,25 +7,36 @@ assignees: ''
 
 ---
 
-**Describe the bug**
+## Description
 A clear and concise description of what the bug is.
 
-**To Reproduce**
+## Reproduction Steps
 Steps to reproduce the behavior:
 1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+1. Click on '....'
+1. Scroll down to '....'
+1. See error
 
-**Expected behavior**
+## Expected behavior
 A clear and concise description of what you expected to happen.
 
-**Screenshots**
+## Current behavior
+What happened instead.
+
+## Screenshots
 If applicable, add screenshots to help explain your problem.
 
-**Desktop (please complete the following information):**
+## Environment
  - ESPHome version : ``
  - Home Assistant Version: ``
 
-**Additional context**
+## Additional context
 Add any other context about the problem here.
+
+## Logs
+<details>
+<summary>Click to expand the logs</summary>
+```
+Paste the logs here (or upload a file)
+```
+</details>

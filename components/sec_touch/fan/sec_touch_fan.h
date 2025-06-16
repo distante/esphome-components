@@ -19,6 +19,7 @@ class SecTouchFan : public Component, public fan::Fan {
   void control(const fan::FanCall &call) override;
   static FanModeEnum::FanMode calculate_mode_from_speed(int speed);
   void update_label_mode();
+  void turn_off_sec_touch_hardware_fan();
   fan::FanTraits traits_;
   /**
    * Will return `true` if an assignment was done so a call to publish is needed.

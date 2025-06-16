@@ -118,20 +118,29 @@ void SecTouchFan::control(const fan::FanCall &call) {
   auto old_state = this->state;
 
   if (call.get_state().has_value()) {
-    ESP_LOGD(TAG, "New state to %d", *call.get_state());
+    ESP_LOGD(TAG, "New state found in call: %d", *call.get_state());
     this->state = *call.get_state();
   }
 
   if (call.get_speed().has_value()) {
-    ESP_LOGD(TAG, "Setting speed to %d", *call.get_speed());
+    ESP_LOGD(TAG, "New speed found in call: %d", *call.get_speed());
     this->speed = *call.get_speed();
   }
 
   if (this->state == 0 && old_state == 1) {
     // OFF
-    ESP_LOGI(TAG, "[Update for %d] - Turning off", this->level_id);
-    this->parent->add_set_task(SetDataTask::create(TaskTargetType::LEVEL, this->level_id, std::to_string(0).c_str()));
-    this->publish_state();
+    ESP_LOGI(TAG, "[State Update for %d] - Turning off", this->level_id);
+    turn_off_sec_touch_hardware_fan();
+
+    return;
+  }
+
+  // if new state and no speed
+  if (call.get_state().has_value() && !call.get_speed().has_value()) {
+    // OFF
+    ESP_LOGI(TAG, "[State Update for %d] - Requesting just state OFF but device is already OFF. Requesting anyway",
+             this->level_id);
+    turn_off_sec_touch_hardware_fan();
     return;
   }
 
@@ -151,6 +160,11 @@ void SecTouchFan::control(const fan::FanCall &call) {
       SetDataTask::create(TaskTargetType::LEVEL, this->level_id, std::to_string(this->speed).c_str()));
 
   ESP_LOGI(TAG, "Publishing state of FAN");
+  this->publish_state();
+}
+
+void SecTouchFan::turn_off_sec_touch_hardware_fan() {
+  this->parent->add_set_task(SetDataTask::create(TaskTargetType::LEVEL, this->level_id, std::to_string(0).c_str()));
   this->publish_state();
 }
 

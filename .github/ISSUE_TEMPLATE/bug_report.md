@@ -36,6 +36,7 @@ Add any other context about the problem here.
 ## Logs
 <details>
 <summary>Click to expand the logs</summary>
+
 ```
 Paste the logs here (or upload a file)
 ```

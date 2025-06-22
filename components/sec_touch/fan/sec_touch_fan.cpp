@@ -137,11 +137,22 @@ void SecTouchFan::control(const fan::FanCall &call) {
 
   // if new state and no speed
   if (call.get_state().has_value() && !call.get_speed().has_value()) {
-    // OFF
-    ESP_LOGI(TAG, "[State Update for %d] - Requesting just state OFF but device is already OFF. Requesting anyway",
-             this->level_id);
-    turn_off_sec_touch_hardware_fan();
-    return;
+    if (call.get_state().value() == 0 && old_state == 0) {
+      // OFF
+      ESP_LOGI(TAG, "[State Update for %d] - Requesting just state OFF but device is already OFF. Requesting anyway",
+               this->level_id);
+      turn_off_sec_touch_hardware_fan();
+      return;
+    }
+
+    if (call.get_state().value() == 1 && old_state == 0) {
+      // ON
+      ESP_LOGI(TAG, "[State Update for %d] - Requesting just state ON", this->level_id);
+      // Use the current speed if it exists, otherwise use 1
+      // TODO Use a configuration https://github.com/distante/esphome-components/issues/10
+      int speed_to_set = (this->speed > 0) ? this->speed : 1;
+      this->speed = speed_to_set;
+    }
   }
 
   // ON

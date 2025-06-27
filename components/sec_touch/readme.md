@@ -27,13 +27,14 @@ Yes Really.
 ## Required
 - An ESP32 or ESP8266 device.
   - I use [this one with USB C](https://amzn.to/40R7ee3).
-- 4 Pin Pluggable Terminals
--  [4 core](https://amzn.to/3EK0uao) or [3 core cable](https://amzn.to/4jS36Dm) (depending on how you can/want to power the ESP device)
+- [4 Pin Pluggable Terminals](https://amzn.to/4lqQoLN)
+- [4 core](https://amzn.to/3EK0uao) or [3 core cable](https://amzn.to/4jS36Dm) (depending on how you can/want to power the ESP device)
 
 ## Optional
 - [Breakout board](https://amzn.to/416UuBA) if you do not want to solder stuff
 - [PCB board with header connectors](https://amzn.to/40TYcNl) if you want to solder everything (like I did, see bellow).
 - [Din Rail Mounting clips](https://amzn.to/4aS99nc) to mount the device if needed. 
+  
 # Connection
 
 The SEC-TOUCH has an "PC" port at the right bottom part. It has an `3.x` volts output. It worked to power my ESP32 device when I was using Software UART, but when I switched to Hardware UART it didn't work anymore. When I measured the voltage it was around `3.2v` tops.
@@ -55,8 +56,8 @@ The same but without the 3.3v connection. 😬
 <div class="text-center">
   <img src="https://github.com/Manuel-Siekmann/VentilationSystem/raw/main/doc/sketch.jpg" alt="https://github.com/Manuel-Siekmann/VentilationSystem/raw/main/doc/sketch.jpg" />
 </div>
-# Installation
-## Final Installation
+
+## Final Installation Example
 <div class="text-center">
   <img src="images/final_install.webp" alt="Final Installation" />
 </div>

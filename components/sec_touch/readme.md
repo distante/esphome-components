@@ -261,18 +261,21 @@ For now we have to "live with" that, selecting presets will carry the fan speed/
 
 My recommendation is to use your own custom card to control the de fans.
 
-## Custom HA Cards Example
+## Custom HA Cards
 
+### Slider Card
 Here I am using [lovelace-mushroom](https://github.com/piitaya/lovelace-mushroom), [lovelace-card-mod](https://github.com/thomasloven/lovelace-card-mod) and [service-call-tile-feature](https://github.com/Nerwyn/service-call-tile-feature). On a Sections board.
 
 If you are using the configuration written above, you just need to search and replace `fan_1` with the corresponding fan number to get more cards.
 
 <div class="text-center">
-  <img src="images/ha-dashboard.webp" alt="Home Assistant Dashboard" />
+  <img src="images/ha-slider-card.webp" alt="Slider Card" />
 </div>
 
+<details>
+  <summary>Click to see the Slider Card Code</summary>
 
-```yaml
+  ```yaml
 type: grid
 cards:
   - type: heading
@@ -380,6 +383,284 @@ cards:
 column_span: 1
 
 ```
+
+</details>
+
+
+### Button Card
+Here I am also Including the [decluttering-card](https://github.com/custom-cards/decluttering-card) and the extension of the Slider Card. The headers are standard Home Assistant Heading cards.
+
+
+<div class="text-center">
+  <img src="images/ha-button-card.png" alt="Button Card" />
+</div>
+
+<details>
+  <summary>Click to see the Button Decluttering card Code</summary>
+
+```yaml
+sec_touch_fan_control_template:
+  card:
+    square: false
+    type: grid
+    columns: 1
+    cards:
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-fan-card
+            entity: '[[FAN_ENTITY_ID]]'
+            show_percentage_control: false
+            fill_container: true
+            icon_animation: true
+            collapsible_controls: false
+            secondary_info: last-updated
+            primary_info: state
+            layout: vertical
+            hold_action:
+              action: more-info
+          - features:
+              - type: fan-preset-modes
+                style: dropdown
+            type: tile
+            entity: '[[FAN_ENTITY_ID]]'
+            features_position: bottom
+            vertical: false
+            tap_action:
+              action: none
+            hide_state: true
+            name: Preset
+            icon_tap_action:
+              action: none
+      - square: false
+        type: grid
+        columns: 6
+        cards:
+          - type: custom:button-card
+            name: '1'
+            icon: mdi:fan
+            entity: '[[FAN_ENTITY_ID]]'
+            tap_action:
+              action: call-service
+              service: fan.set_percentage
+              data:
+                entity_id: '[[FAN_ENTITY_ID]]'
+                percentage: 9
+            styles:
+              card:
+                - border-radius: 12px
+                - padding: 12px
+                - font-weight: bold
+                - background-color: |
+                    [[[
+                      if (entity.state === 'off' && entity.attributes.percentage === 9) {
+                        return 'var(--disabled-color)';
+                      }
+                      return entity.attributes.percentage === 9 ? 'var(--accent-color)' : 'var(--card-background-color)';
+                    ]]]
+              icon:
+                - color: |
+                    [[[
+                      return entity.attributes.percentage === 9 ? 'white' : 'var(--primary-text-color)';
+                    ]]]
+              name:
+                - color: |
+                    [[[
+                      return entity.attributes.percentage === 9 ? 'white' : 'var(--primary-text-color)';
+                    ]]]
+          - type: custom:button-card
+            name: '2'
+            icon: mdi:fan
+            entity: '[[FAN_ENTITY_ID]]'
+            tap_action:
+              action: call-service
+              service: fan.set_percentage
+              data:
+                entity_id: '[[FAN_ENTITY_ID]]'
+                percentage: 18
+            styles:
+              card:
+                - border-radius: 12px
+                - padding: 12px
+                - font-weight: bold
+                - background-color: |
+                    [[[
+                      if (entity.state === 'off' && entity.attributes.percentage === 18) {
+                        return 'var(--disabled-color)';
+                      }
+                      return entity.attributes.percentage === 18 ? 'var(--accent-color)' : 'var(--card-background-color)';
+                    ]]]
+              icon:
+                - color: |
+                    [[[
+                      return entity.attributes.percentage === 18 ? 'white' : 'var(--primary-text-color)';
+                    ]]]
+              name:
+                - color: |
+                    [[[
+                      return entity.attributes.percentage === 18 ? 'white' : 'var(--primary-text-color)';
+                    ]]]
+          - type: custom:button-card
+            name: '3'
+            icon: mdi:fan
+            entity: '[[FAN_ENTITY_ID]]'
+            tap_action:
+              action: call-service
+              service: fan.set_percentage
+              data:
+                entity_id: '[[FAN_ENTITY_ID]]'
+                percentage: 27
+            styles:
+              card:
+                - border-radius: 12px
+                - padding: 12px
+                - font-weight: bold
+                - background-color: |
+                    [[[
+                      if (entity.state === 'off' && entity.attributes.percentage === 27) {
+                        return 'var(--disabled-color)';
+                      }
+                      return entity.attributes.percentage === 27 ? 'var(--accent-color)' : 'var(--card-background-color)';
+                    ]]]
+              icon:
+                - color: |
+                    [[[
+                      return entity.attributes.percentage === 27 ? 'white' : 'var(--primary-text-color)';
+                    ]]]
+              name:
+                - color: |
+                    [[[
+                      return entity.attributes.percentage === 27 ? 'white' : 'var(--primary-text-color)';
+                    ]]]
+          - type: custom:button-card
+            name: '4'
+            icon: mdi:fan
+            entity: '[[FAN_ENTITY_ID]]'
+            tap_action:
+              action: call-service
+              service: fan.set_percentage
+              data:
+                entity_id: '[[FAN_ENTITY_ID]]'
+                percentage: 36
+            styles:
+              card:
+                - border-radius: 12px
+                - padding: 12px
+                - font-weight: bold
+                - background-color: |
+                    [[[
+                      if (entity.state === 'off' && entity.attributes.percentage === 36) {
+                        return 'var(--disabled-color)';
+                      }
+                      return entity.attributes.percentage === 36 ? 'var(--accent-color)' : 'var(--card-background-color)';
+                    ]]]
+              icon:
+                - color: |
+                    [[[
+                      return entity.attributes.percentage === 36 ? 'white' : 'var(--primary-text-color)';
+                    ]]]
+              name:
+                - color: |
+                    [[[
+                      return entity.attributes.percentage === 36 ? 'white' : 'var(--primary-text-color)';
+                    ]]]
+          - type: custom:button-card
+            name: '5'
+            icon: mdi:fan
+            entity: '[[FAN_ENTITY_ID]]'
+            tap_action:
+              action: call-service
+              service: fan.set_percentage
+              data:
+                entity_id: '[[FAN_ENTITY_ID]]'
+                percentage: 45
+            styles:
+              card:
+                - border-radius: 12px
+                - padding: 12px
+                - font-weight: bold
+                - background-color: |
+                    [[[
+                      if (entity.state === 'off' && entity.attributes.percentage === 45) {
+                        return 'var(--disabled-color)';
+                      }
+                      return entity.attributes.percentage === 45 ? 'var(--accent-color)' : 'var(--card-background-color)';
+                    ]]]
+              icon:
+                - color: |
+                    [[[
+                      return entity.attributes.percentage === 45 ? 'white' : 'var(--primary-text-color)';
+                    ]]]
+              name:
+                - color: |
+                    [[[
+                      return entity.attributes.percentage === 45 ? 'white' : 'var(--primary-text-color)';
+                    ]]]
+          - type: custom:button-card
+            name: '6'
+            icon: mdi:fan
+            entity: '[[FAN_ENTITY_ID]]'
+            tap_action:
+              action: call-service
+              service: fan.set_percentage
+              data:
+                entity_id: '[[FAN_ENTITY_ID]]'
+                percentage: 54
+            styles:
+              card:
+                - border-radius: 12px
+                - padding: 12px
+                - font-weight: bold
+                - background-color: |
+                    [[[
+                      if (entity.state === 'off' && entity.attributes.percentage === 54) {
+                        return 'var(--disabled-color)';
+                      }
+                      return entity.attributes.percentage === 54 ? 'var(--accent-color)' : 'var(--card-background-color)';
+                    ]]]
+              icon:
+                - color: |
+                    [[[
+                      return entity.attributes.percentage === 54 ? 'white' : 'var(--primary-text-color)';
+                    ]]]
+              name:
+                - color: |
+                    [[[
+                      return entity.attributes.percentage === 54 ? 'white' : 'var(--primary-text-color)';
+                    ]]]
+  
+
+```
+
+</details>
+
+<details>
+  <summary>Click to see the Button Card Usage Code</summary>
+
+```yaml
+type: custom:decluttering-card
+template: sec_touch_fan_control_template
+variables:
+  - FAN_ENTITY_ID: fan.esp_ventilation_controller_dachboden
+  - TITLE: Dach
+card_mod:
+  style: |
+    div#root {
+      background: var(--ha-card-background,var(--card-background-color,#fff));
+      padding: 1em;
+      border-radius: var(--ha-card-border-radius, 12px);
+      border-width: var(--ha-card-border-width, 1px);
+      border-color: var(--ha-card-border-color, var(--divider-color, #e0e0e0));
+      border-style: solid;
+    }
+      background: var(--ha-card-background,var(--card-background-color,#fff));
+      padding: 1em;
+      border-radius: var(--ha-card-border-radius, 12px);
+      border-width: var(--ha-card-border-width, 1px);
+    }
+
+```
+</details>
+
 # Development
 
 # Known Ids

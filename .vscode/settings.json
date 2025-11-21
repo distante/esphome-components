@@ -11,6 +11,7 @@
   ".eslintrc.base.json": "jsonc",
   ".env*": "dotenv",
   ".env": "env",
+  "*.log": "log",
   "istream": "cpp",
   "__bit_reference": "cpp",
   "__hash_table": "cpp",
@@ -95,7 +96,8 @@
   "span": "cpp",
   "stop_token": "cpp",
   "thread": "cpp",
-  "codecvt": "cpp"
+  "codecvt": "cpp",
+  "csignal": "cpp"
 },
 "editor.formatOnSave": true,
 "editor.codeActionsOnSave": {

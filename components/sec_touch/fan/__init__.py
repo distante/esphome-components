@@ -17,13 +17,15 @@ SecTouchFan = sec_touch_ns.class_("SecTouchFan", cg.Component, fan.Fan)
 FAN_NUMBER = "fan_number"
 
 CONFIG_SCHEMA = cv.All(
-    fan.FAN_SCHEMA.extend(
+    fan.fan_schema(SecTouchFan)
+    .extend(
         {
             cv.GenerateID(CONF_OUTPUT_ID): cv.declare_id(SecTouchFan),
             cv.GenerateID(CONF_SEC_TOUCH_ID): cv.use_id(SECTouchComponent),
             cv.Required(FAN_NUMBER): cv.one_of(1, 2, 3, 4, 5, 6),
         }
-    ).extend(cv.COMPONENT_SCHEMA),
+    )
+    .extend(cv.COMPONENT_SCHEMA),
 )
 
 

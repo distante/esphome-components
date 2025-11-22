@@ -1,9 +1,9 @@
 #pragma once
 
-#include <unordered_map>
+#include <vector>
 #include <string_view>
+#include <utility>
 #include "esphome/core/optional.h"
-#include "vector"
 
 class FanModeEnum {
  public:
@@ -16,8 +16,8 @@ class FanModeEnum {
     esphome::optional<int> end_speed;
   };
 
-  // Static function to get the FanModeMap
-  static const std::unordered_map<FanMode, FanModeData> &getFanModeMap();
+  // Static function to get the FanMode list (preserves order)
+  static const std::vector<std::pair<FanMode, FanModeData>> &getFanModeList();
 
   // Convert FanMode to string
   static std::string_view to_string(FanMode mode);
@@ -25,7 +25,7 @@ class FanModeEnum {
   // Convert string to FanMode
   static esphome::optional<FanMode> from_string(std::string_view str);
 
-  // Get a list of string values dynamically from the map
+  // Get a list of string values dynamically from the list
   static std::vector<std::string_view> getStringValues();
 
   static FanMode get_fan_mode_fromSpeed(int speed);

@@ -5,6 +5,7 @@
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "../sec_touch.h"
 #include "_fan_mode.h"
+#include <vector>
 
 namespace esphome {
 namespace sec_touch {
@@ -31,9 +32,9 @@ class SecTouchFan : public Component, public fan::Fan {
 
   void setup() override {
     this->traits_ = fan::FanTraits(false, true, false, 11);
-    std::set<std::string> preset_modes;
+    std::vector<const char *> preset_modes;
     for (auto str_view : FanModeEnum::getStringValues()) {
-      preset_modes.insert(std::string(str_view));
+      preset_modes.push_back(str_view.data());
     }
 
     this->traits_.set_supported_preset_modes(preset_modes);

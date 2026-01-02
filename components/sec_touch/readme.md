@@ -26,14 +26,14 @@ Yes Really.
 
 ## Required
 - An ESP32 or ESP8266 device.
-  - I use [this one with USB C](https://amzn.to/40R7ee3).
-- [4 Pin Pluggable Terminals](https://amzn.to/4lqQoLN)
-- [4 core](https://amzn.to/3EK0uao) or [3 core cable](https://amzn.to/4jS36Dm) (depending on how you can/want to power the ESP device)
+  - I use [this one with USB C](https://amzn.to/4stOUoz).
+- [4 Pin Pluggable Terminals](https://amzn.to/4jqp9kP)
+- [4 core](https://amzn.to/3EK0uao) or [3 core cable](https://amzn.to/49e3jMB) (depending on how you can/want to power the ESP device)
 
 ## Optional
-- [Breakout board](https://amzn.to/416UuBA) if you do not want to solder stuff
-- [PCB board with header connectors](https://amzn.to/40TYcNl) if you want to solder everything (like I did, see bellow).
-- [Din Rail Mounting clips](https://amzn.to/4aS99nc) to mount the device if needed. 
+- [Breakout board](https://amzn.to/4aGkvwM) if you do not want to solder stuff
+- [PCB board with header connectors](https://amzn.to/3YUpXos) if you want to solder everything (like I did, see bellow).
+- [Din Rail Mounting clips](https://amzn.to/4aBUr5V) to mount the device if needed. 
   
 # Connection
 
@@ -789,4 +789,5 @@ Byte received: 10  // ETX 0x0A
 # Update submodules
 ```
 git submodule update --remote --merge
+
 ```

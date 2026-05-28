@@ -528,7 +528,6 @@ Enable `split_special_modes: true` on the fan to get a cleaner UX:
 ```yaml
 fan:
   - platform: sec_touch
-    sec_touch_id: my_sec_touch
     fan_number: 1
     name: "Lüftung Büro"
     split_special_modes: true
@@ -543,6 +542,10 @@ With the flag enabled:
 > :information_source: The preset dropdown is what HA already shows under the fan tile's
 > "more info" view, or via the `fan-preset-modes` tile feature. It reads and writes the
 > same underlying BDE level — `split_special_modes` just keeps the slider range sane.
+
+> :warning: ESPHome's built-in `web_server` does **not** render fan `preset_mode` dropdowns.
+> If you rely on the local web UI (e.g. non-HA fallback), add a `select.sec_touch` entity per fan
+> to expose a clickable Mode dropdown. See [`examples/webserver-fallback.yaml`](../../examples/webserver-fallback.yaml).
 
 # Web Server preview
 

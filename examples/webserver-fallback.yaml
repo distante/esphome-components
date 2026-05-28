@@ -29,14 +29,12 @@ web_server:
 
 fan:
   - platform: sec_touch
-    sec_touch_id: my_sec_touch
     fan_number: 1
     name: "Living Fan"
     split_special_modes: true
     web_server:
       sorting_group_id: sg_living
   - platform: sec_touch
-    sec_touch_id: my_sec_touch
     fan_number: 2
     name: "Bedroom Fan"
     split_special_modes: true
@@ -47,7 +45,6 @@ fan:
 # Each select needs a matching fan.sec_touch with the same fan_number.
 select:
   - platform: sec_touch
-    sec_touch_id: my_sec_touch
     fan_number: 1
     mode_select:
       name: "Living Mode"
@@ -55,7 +52,6 @@ select:
       web_server:
         sorting_group_id: sg_living
   - platform: sec_touch
-    sec_touch_id: my_sec_touch
     fan_number: 2
     mode_select:
       name: "Bedroom Mode"

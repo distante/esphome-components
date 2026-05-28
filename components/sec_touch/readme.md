@@ -517,6 +517,33 @@ Scan performed over IDs 1–208. IDs 78–83 (fan labels) and 173–178 (fan lev
 ## :bulb: Setting The Fan Level above 6
 Please check the [Special Fan level Values](#fan-pair-level-special-values) section to understand the special values for the fan level.
 
+## :bulb: Split Special Modes (recommended)
+By default each fan entity exposes all 11 levels as a single continuous speed range.
+Because levels 1–6 are _continuous ventilation_ but levels 7–11 are _discrete operating modes_
+(Burst / Auto Humidity / Auto CO2 / Auto Time / Sleep), the default HA slider shows a linear
+0–100 % range with 9.09 % steps — awkward to use and not visually distinguishable.
+
+Enable `split_special_modes: true` on the fan to get a cleaner UX:
+
+```yaml
+fan:
+  - platform: sec_touch
+    sec_touch_id: my_sec_touch
+    fan_number: 1
+    name: "Lüftung Büro"
+    split_special_modes: true
+```
+
+With the flag enabled:
+
+- The HA fan slider exposes **only speeds 1–6** (`speed_count: 6`), so each detent maps to one real ventilation level.
+- Levels 7–11 remain reachable through the existing **preset_mode dropdown** (`Burst`, `Automatic Humidity`, `Automatic CO2`, `Automatic Time`, `Sleep`).
+- The flag is **opt-in** and defaults to `false` — existing installations are unaffected.
+
+> :information_source: The preset dropdown is what HA already shows under the fan tile's
+> "more info" view, or via the `fan-preset-modes` tile feature. It reads and writes the
+> same underlying BDE level — `split_special_modes` just keeps the slider range sane.
+
 # Web Server preview
 
 <div class="text-center">
@@ -526,9 +553,11 @@ Please check the [Special Fan level Values](#fan-pair-level-special-values) sect
 # Home Assistant
 Home assistant has the problem that all fans show their speed as percentage. But we do not have percentage values, we have levels from `0` to `11`. From which some of those values are special ones.
 
-For now we have to "live with" that, selecting presets will carry the fan speed/percent to their corresponding level, but going into `NORMAL` mode will put the speed to 1.
+Selecting presets will carry the fan speed/percent to their corresponding level. In legacy mode, going into `NORMAL` mode will put the speed to 1. With [`split_special_modes`](#bulb-split-special-modes-recommended) enabled, selecting `Normal` preserves the current slider level when it is already within `1`-`6`, and only clamps invalid values into that range.
 
-My recommendation is to use your own custom card to control the de fans.
+**For a better HA experience, enable [`split_special_modes`](#bulb-split-special-modes-recommended)** on the fan — this limits the slider to levels 1–6 and keeps special modes 7–11 accessible via the preset dropdown. See the example below under [`examples/split-mode.yaml`](../../examples/split-mode.yaml).
+
+If you prefer full control you can also build a custom card (examples below).
 
 ## Custom HA Cards
 

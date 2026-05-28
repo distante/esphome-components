@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <queue>
 #include "esphome/core/component.h"
 #include "esphome/core/gpio.h"
@@ -11,6 +12,8 @@
 #include <typeinfo>
 namespace esphome {
 namespace sec_touch {
+
+class SecTouchFan;
 
 class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
  public:
@@ -54,6 +57,8 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   void add_manual_tasks_to_queue();
   void register_text_sensor(int id, text_sensor::TextSensor *sensor);
   esphome::optional<text_sensor::TextSensor *> get_text_sensor(int id);
+  void register_fan(int level_id, SecTouchFan *fan);
+  esphome::optional<SecTouchFan *> get_fan(int level_id);
 
  protected:
   IncomingMessage incoming_message;
@@ -71,6 +76,7 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   bool queue_was_idle_{false};
 
   std::map<int, text_sensor::TextSensor *> text_sensors;
+  std::map<int, SecTouchFan *> fans_;
 
   void notify_update_listeners(int command_id, int property_id, int new_value);
   TaskType current_running_task_type = TaskType::NONE;

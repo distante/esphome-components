@@ -1,0 +1,51 @@
+## Example: sec_touch fan with split_special_modes enabled
+#
+# With split_special_modes: true the fan entity reports speed_count: 6.
+# Levels 7..11 (Burst / Automatic Humidity / CO2 / Time / Sleep) remain
+# accessible through the fan's preset_mode dropdown.
+#
+# Drop this snippet into an existing ESPHome configuration that already has
+# uart + sec_touch set up. See the main readme for the uart/sec_touch block.
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/distante/esphome-components
+      ref: main
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 19200
+  data_bits: 8
+  parity: NONE
+  stop_bits: 1
+
+sec_touch:
+  id: my_sec_touch
+  uart_id: sec_touch_uart
+
+fan:
+  # Fan 1: split mode ON — HA slider has 6 detents, presets expose 7..11.
+  - platform: sec_touch
+    sec_touch_id: my_sec_touch
+    fan_number: 1
+    name: "Lüftung Büro"
+    split_special_modes: true
+
+  # Fan 2: legacy mode — default speed_count: 11 (backward compatible).
+  - platform: sec_touch
+    sec_touch_id: my_sec_touch
+    fan_number: 2
+    name: "Lüftung Wohnzimmer (legacy)"
+
+text_sensor:
+  - platform: sec_touch
+    sec_touch_id: my_sec_touch
+    fan_number: 1
+    mode_text:
+      name: "Lüftung Büro Mode"
+    label_text:
+      name: "Lüftung Büro Label"

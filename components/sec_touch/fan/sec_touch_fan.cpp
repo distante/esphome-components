@@ -96,7 +96,31 @@ bool SecTouchFan::assign_new_speed_if_needed(int real_speed_from_device) {
     return false;
   }
 
-  // SPECIAL MODE SPEEDS
+  // SPECIAL MODE SPEEDS (levels 7..11)
+  if (this->split_special_modes_) {
+    // In split mode the HA fan only exposes speeds 1..6. Most special modes leave
+    // this->speed untouched because storing 7..11 would exceed speed_count=6.
+    // Exception: Burst is semantically "aggressive airing-out", so we snap the
+    // slider to 6 (100%) for visual hint parity with the outbound control() path -
+    // otherwise the UI would show stale 16% while preset=Burst is active.
+    bool changed = false;
+    if (this->state != 1) {
+      this->state = 1;
+      changed = true;
+    }
+    // Guarantee a valid 1..6 slider value before publishing state=ON. Without this,
+    // the first update after boot (speed=0) or after the "not connected" path (speed=255)
+    // would publish state=ON with a speed outside the advertised range.
+    if (this->speed < 1 || this->speed > 6) {
+      this->speed = (real_speed_from_device == 7) ? 6 : 1;
+      changed = true;
+    } else if (real_speed_from_device == 7 && this->speed != 6) {
+      this->speed = 6;
+      changed = true;
+    }
+    return changed;
+  }
+
   if (this->state != 1 || this->speed != real_speed_from_device) {
     this->state = 1;
     this->speed = real_speed_from_device;
@@ -163,22 +187,46 @@ void SecTouchFan::control(const fan::FanCall &call) {
   }
 
   // ON
+  int target_level = this->speed;
   if (new_preset_found) {
     auto current = this->get_preset_mode();
     std::string_view cur_sv =
         current.empty() ? std::string_view("") : std::string_view(current.c_str(), current.size());
     FanModeEnum::FanMode calculated_mode = FanModeEnum::from_string(cur_sv).value_or(FanModeEnum::FanMode::NORMAL);
     if (calculated_mode == FanModeEnum::FanMode::NORMAL) {
-      this->speed = 1;
+      if (this->split_special_modes_) {
+        // Split mode: the slider is the source of truth for continuous ventilation.
+        // Preserve the current speed; only clamp if it is outside the 1..6 range.
+        if (this->speed < 1 || this->speed > 6) {
+          this->speed = 1;
+        }
+        target_level = this->speed;
+      } else {
+        this->speed = 1;
+        target_level = 1;
+      }
     } else {
-      this->speed = FanModeEnum::get_start_speed(calculated_mode);
+      target_level = FanModeEnum::get_start_speed(calculated_mode);
+      if (this->split_special_modes_ && target_level > 6) {
+        // Split mode: pick a representative slider position per preset so HA gives
+        // the user a visual hint of the airflow intensity. The BDE receives the real
+        // special level via target_level; the preset_mode dropdown remains authoritative.
+        if (calculated_mode == FanModeEnum::FanMode::BURST) {
+          // Burst = Stosslüften: aggressive airing-out, map to slider max (level 6).
+          this->speed = 6;
+        }
+        // Sleep and the Automatic_* modes leave the slider untouched:
+        // Sleep is low-intensity, Auto-* varies per sensor - neither maps cleanly.
+      } else {
+        this->speed = target_level;
+      }
     }
   }
   auto log_preset = this->get_preset_mode();
-  ESP_LOGI(TAG, "[Update for %d] - [%s] speed: %d", this->level_id, log_preset.empty() ? "Unknown" : log_preset.c_str(),
-           this->speed);
+  ESP_LOGI(TAG, "[Update for %d] - [%s] target_level: %d (ha_speed: %d)", this->level_id,
+           log_preset.empty() ? "Unknown" : log_preset.c_str(), target_level, this->speed);
   this->parent->add_set_task(
-      SetDataTask::create(TaskTargetType::LEVEL, this->level_id, std::to_string(this->speed).c_str()));
+      SetDataTask::create(TaskTargetType::LEVEL, this->level_id, std::to_string(target_level).c_str()));
 
   ESP_LOGI(TAG, "Publishing state of FAN");
   this->publish_state();

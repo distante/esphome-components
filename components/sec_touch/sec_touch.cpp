@@ -2,6 +2,7 @@
 #include "XModemCRC.h"
 #include "esphome/core/log.h"
 #include "_definitions.h"
+#include "fan/sec_touch_fan.h"
 
 namespace esphome {
 namespace sec_touch {
@@ -143,6 +144,16 @@ esphome::optional<text_sensor::TextSensor *> SECTouchComponent::get_text_sensor(
     return it->second;
   }
   return esphome::optional<text_sensor::TextSensor *>{};
+}
+
+void SECTouchComponent::register_fan(int level_id, SecTouchFan *fan) { this->fans_[level_id] = fan; }
+
+esphome::optional<SecTouchFan *> SECTouchComponent::get_fan(int level_id) {
+  auto it = this->fans_.find(level_id);
+  if (it != this->fans_.end()) {
+    return it->second;
+  }
+  return esphome::optional<SecTouchFan *>{};
 }
 
 void SECTouchComponent::notify_update_listeners(int command_id, int property_id, int new_value) {

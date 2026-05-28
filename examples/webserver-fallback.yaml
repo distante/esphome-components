@@ -1,0 +1,64 @@
+## Example: sec_touch with web_server fallback control
+#
+# Motivation: ESPHome's built-in web_server does NOT render fan preset_modes,
+# so without this setup a non-Home-Assistant user cannot pick Burst / Sleep /
+# Automatic_* from the local web UI. The select.sec_touch platform exposes a
+# clickable Mode dropdown (Off + 6 modes) per fan, making the device fully
+# controllable from any browser on the LAN if the main HA dashboard breaks.
+#
+# Drop this snippet into an existing ESPHome configuration that already has
+# uart + sec_touch + wifi set up. See the main readme for the uart/sec_touch
+# block.
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/distante/esphome-components
+      ref: main
+    components: [sec_touch]
+
+# Local web UI on http://<device-ip>/ — no Home Assistant required.
+web_server:
+  version: 3
+  port: 80
+  sorting_groups:
+    - id: sg_living
+      name: "Living Room"
+    - id: sg_bedroom
+      name: "Bedroom"
+
+fan:
+  - platform: sec_touch
+    sec_touch_id: my_sec_touch
+    fan_number: 1
+    name: "Living Fan"
+    split_special_modes: true
+    web_server:
+      sorting_group_id: sg_living
+  - platform: sec_touch
+    sec_touch_id: my_sec_touch
+    fan_number: 2
+    name: "Bedroom Fan"
+    split_special_modes: true
+    web_server:
+      sorting_group_id: sg_bedroom
+
+# The new bit: writable Mode dropdown — one per fan.
+# Each select needs a matching fan.sec_touch with the same fan_number.
+select:
+  - platform: sec_touch
+    sec_touch_id: my_sec_touch
+    fan_number: 1
+    mode_select:
+      name: "Living Mode"
+      icon: "mdi:tune"
+      web_server:
+        sorting_group_id: sg_living
+  - platform: sec_touch
+    sec_touch_id: my_sec_touch
+    fan_number: 2
+    mode_select:
+      name: "Bedroom Mode"
+      icon: "mdi:tune"
+      web_server:
+        sorting_group_id: sg_bedroom

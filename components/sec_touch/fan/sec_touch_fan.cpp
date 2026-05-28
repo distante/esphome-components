@@ -5,13 +5,19 @@
 namespace esphome {
 namespace sec_touch {
 
-// Constructor
 SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
     : level_id(level_id), label_id(label_id), parent(parent) {
   this->add_on_state_callback([this]() { this->update_label_mode(); });
 
-  // LEVEL HANDLER This is the data tha comes from the real device.
   this->parent->register_recursive_update_listener(this->level_id, [this](int property_id, int real_speed_from_device) {
+    // A newer SET task for this level is already queued — this echo is from a
+    // superseded command and would briefly revert the UI to a stale state.
+    if (this->parent->has_pending_set_task_for(property_id)) {
+      ESP_LOGD(TAG, "Skipping stale echo for property_id %d (value %d) — newer SET pending", property_id,
+               real_speed_from_device);
+      return;
+    }
+
     ESP_LOGD(TAG, "New Real Speed from device for property_id %d (speed %d)", property_id, real_speed_from_device);
 
     FanModeEnum::FanMode mode_from_hardware = SecTouchFan::calculate_mode_from_speed(real_speed_from_device);
@@ -41,7 +47,6 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
     this->publish_state();
   });
 
-  // LABEL HANDLER
   this->parent->register_manual_update_listener(this->label_id, [this](int property_id, int new_value) {
     text_sensor::TextSensor *label_text_sensor = this->parent->get_text_sensor(this->label_id).value_or(nullptr);
     if (label_text_sensor == nullptr) {
@@ -85,7 +90,6 @@ bool SecTouchFan::assign_new_speed_if_needed(int real_speed_from_device) {
     return false;
   }
 
-  // REGULAR SPEEDS
   if (real_speed_from_device < 7) {
     if (this->state != 1 || this->speed != real_speed_from_device) {
       this->state = 1;
@@ -96,13 +100,9 @@ bool SecTouchFan::assign_new_speed_if_needed(int real_speed_from_device) {
     return false;
   }
 
-  // SPECIAL MODE SPEEDS (levels 7..11)
   if (this->split_special_modes_) {
-    // In split mode the HA fan only exposes speeds 1..6. Most special modes leave
-    // this->speed untouched because storing 7..11 would exceed speed_count=6.
-    // Exception: Burst is semantically "aggressive airing-out", so we snap the
-    // slider to 6 (100%) for visual hint parity with the outbound control() path -
-    // otherwise the UI would show stale 16% while preset=Burst is active.
+    // Burst snaps the slider to 6 for visual parity with the outbound control() path;
+    // other special modes leave speed untouched as they don't map to a single level.
     bool changed = false;
     if (this->state != 1) {
       this->state = 1;
@@ -166,7 +166,6 @@ void SecTouchFan::control(const fan::FanCall &call) {
     return;
   }
 
-  // if new state and no speed
   if (call.get_state().has_value() && !call.get_speed().has_value()) {
     if (call.get_state().value() == 0 && old_state == 0) {
       // OFF
@@ -179,7 +178,6 @@ void SecTouchFan::control(const fan::FanCall &call) {
     if (call.get_state().value() == 1 && old_state == 0) {
       // ON
       ESP_LOGI(TAG, "[State Update for %d] - Requesting just state ON", this->level_id);
-      // Use the current speed if it exists, otherwise use 1
       // TODO Use a configuration https://github.com/distante/esphome-components/issues/10
       int speed_to_set = (this->speed > 0) ? this->speed : 1;
       this->speed = speed_to_set;
@@ -222,6 +220,19 @@ void SecTouchFan::control(const fan::FanCall &call) {
       }
     }
   }
+
+  // If no explicit preset was given and the level is in the normal range (1–6),
+  // clear any stale special-mode preset immediately so the UI stays consistent
+  // without waiting for the device echo (which may arrive seconds later).
+  if (!new_preset_found && target_level >= 1 && target_level <= 6) {
+    auto current = this->get_preset_mode();
+    std::string_view cur_sv = current.empty() ? std::string_view("") : std::string_view(current.c_str(), current.size());
+    auto cur_mode = FanModeEnum::from_string(cur_sv).value_or(FanModeEnum::FanMode::NORMAL);
+    if (cur_mode != FanModeEnum::FanMode::NORMAL) {
+      this->set_preset_mode_(FanModeEnum::to_string(FanModeEnum::FanMode::NORMAL).data());
+    }
+  }
+
   auto log_preset = this->get_preset_mode();
   ESP_LOGI(TAG, "[Update for %d] - [%s] target_level: %d (ha_speed: %d)", this->level_id,
            log_preset.empty() ? "Unknown" : log_preset.c_str(), target_level, this->speed);
@@ -238,7 +249,7 @@ void SecTouchFan::turn_off_sec_touch_hardware_fan() {
 }
 
 FanModeEnum::FanMode SecTouchFan::calculate_mode_from_speed(int speed) {
-  if (speed < 7 > 11) {
+  if (speed < 7 || speed > 11) {
     return FanModeEnum::FanMode::NORMAL;
   }
 

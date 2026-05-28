@@ -148,6 +148,15 @@ esphome::optional<text_sensor::TextSensor *> SECTouchComponent::get_text_sensor(
 
 void SECTouchComponent::register_fan(int level_id, SecTouchFan *fan) { this->fans_[level_id] = fan; }
 
+bool SECTouchComponent::has_pending_set_task_for(int property_id) const {
+  for (const auto &task : this->data_task_queue) {
+    if (task->get_task_type() == TaskType::SET_DATA && task->property_id == property_id) {
+      return true;
+    }
+  }
+  return false;
+}
+
 esphome::optional<SecTouchFan *> SECTouchComponent::get_fan(int level_id) {
   auto it = this->fans_.find(level_id);
   if (it != this->fans_.end()) {

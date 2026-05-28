@@ -21,9 +21,7 @@ class SecTouchFan : public Component, public fan::Fan {
   static FanModeEnum::FanMode calculate_mode_from_speed(int speed);
   void update_label_mode();
   void turn_off_sec_touch_hardware_fan();
-  /**
-   * Will return `true` if an assignment was done so a call to publish is needed.
-   */
+  // Returns true when state/speed changed and publish_state() should be called.
   bool assign_new_speed_if_needed(int real_speed_from_device);
 
  public:
@@ -34,14 +32,12 @@ class SecTouchFan : public Component, public fan::Fan {
   void set_split_special_modes(bool v) { this->split_special_modes_ = v; }
 
   void setup() override { this->set_supported_preset_modes(FanModeEnum::getPresetModePointers()); }
-  // From Fan
   fan::FanTraits get_traits() override {
     auto traits = fan::FanTraits(false, true, false, this->split_special_modes_ ? 6 : 11);
     this->wire_preset_modes_(traits);
     return traits;
   }
 
-  // Print method for debugging
   void dump_config() override;
 };
 

@@ -59,6 +59,7 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   esphome::optional<text_sensor::TextSensor *> get_text_sensor(int id);
   void register_fan(int level_id, SecTouchFan *fan);
   esphome::optional<SecTouchFan *> get_fan(int level_id);
+  bool has_pending_set_task_for(int property_id) const;
 
  protected:
   IncomingMessage incoming_message;

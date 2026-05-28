@@ -72,7 +72,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/distante/esphome-components
-      ref: main
+      ref: stable
 
 wifi:
   ssid: !secret wifi_ssid 

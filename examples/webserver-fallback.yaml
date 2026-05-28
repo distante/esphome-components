@@ -14,7 +14,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/distante/esphome-components
-      ref: main
+      ref: stable
     components: [sec_touch]
 
 # Local web UI on http://<device-ip>/ — no Home Assistant required.

@@ -11,14 +11,14 @@ external_components:
   - source:
       type: git
       url: https://github.com/distante/esphome-components
-      ref: main
+      ref: stable
     components: [sec_touch]
 
 uart:
   id: sec_touch_uart
   tx_pin: GPIO17
   rx_pin: GPIO16
-  baud_rate: 28800  # Some users also report 19200 working depending on device firmware
+  baud_rate: 28800 # Some users also report 19200 working depending on device firmware
   data_bits: 8
   parity: NONE
   stop_bits: 1

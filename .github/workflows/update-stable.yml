@@ -1,0 +1,22 @@
+name: Update stable branch on release
+
+on:
+  push:
+    tags:
+      - "v*" # triggers on any version tag like v1.2.3
+
+jobs:
+  update-stable:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reset stable to tag
+        run: |
+          git checkout stable || git checkout -b stable
+          git reset --hard ${{ github.ref_name }}
+          git push --force origin stable

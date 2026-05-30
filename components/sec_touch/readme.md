@@ -252,22 +252,24 @@ Each component uses a distinct log tag. You can suppress noisy tags without hidi
 ```yaml
 logger:
   logs:
-    sec-touch: WARN         # core component (polling loop, task queue, watchdog)
-    sec-touch-uart: WARN    # raw UART byte traffic — very noisy at DEBUG
-    SecTouchFan: WARN       # fan entity state changes and control calls
-    SecTouchModeSelect: WARN  # mode select entity
-    SecTouchSniffer: DEBUG  # sniffer discoveries and scan progress
+    sec_touch: WARN           # core component (polling loop, task queue, watchdog)
+    sec_touch.uart: WARN      # raw UART sends/receives — very noisy at DEBUG
+    sec_touch.incoming: WARN  # incoming message buffer (overflow warnings)
+    sec_touch.fan: WARN       # fan entity state changes and control calls
+    sec_touch.mode_select: WARN  # mode select entity
+    sec_touch_sniffer: DEBUG  # sniffer discoveries and scan progress
 ```
 
 | Tag | Component | Noisy at DEBUG? |
 |---|---|---|
-| `sec-touch` | Core component — loop, task queue, watchdog | Yes |
-| `sec-touch-uart` | Raw UART sends/receives | Very |
-| `SecTouchFan` | Fan entity | Moderate |
-| `SecTouchModeSelect` | Mode select entity | Low |
-| `SecTouchSniffer` | Sniffer (passive + active scan) | Moderate |
+| `sec_touch` | Core component — loop, task queue, watchdog | Yes |
+| `sec_touch.uart` | Raw UART sends/receives | Very |
+| `sec_touch.incoming` | Incoming message buffer | Low |
+| `sec_touch.fan` | Fan entity | Moderate |
+| `sec_touch.mode_select` | Mode select entity | Low |
+| `sec_touch_sniffer` | Sniffer (passive + active scan) | Moderate |
 
-> **Tip:** When using the sniffer and you only want to see discovery output, set `sec-touch` and `sec-touch-uart` to `WARN` and `SecTouchSniffer` to `INFO` or `DEBUG`.
+> **Tip:** When using the sniffer and you only want to see discovery output, set `sec_touch` and `sec_touch.uart` to `WARN` and `sec_touch_sniffer` to `INFO` or `DEBUG`.
 
 ## Sniffer
 

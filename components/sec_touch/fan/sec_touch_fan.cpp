@@ -5,6 +5,8 @@
 namespace esphome {
 namespace sec_touch {
 
+const char *const SecTouchFan::TAG = "sec_touch.fan";
+
 SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
     : level_id(level_id), label_id(label_id), parent(parent) {
   this->add_on_state_callback([this]() { this->update_label_mode(); });
@@ -142,7 +144,7 @@ void SecTouchFan::control(const fan::FanCall &call) {
       this->set_preset_mode_(pm);
       new_preset_found = true;
       auto logged = this->get_preset_mode();
-      ESP_LOGI("SecTouchFan", "NEW Fan preset mode: %s", logged.empty() ? pm : logged.c_str());
+      ESP_LOGI(TAG, "NEW Fan preset mode: %s", logged.empty() ? pm : logged.c_str());
     }
   }
 

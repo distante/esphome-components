@@ -10,7 +10,7 @@ namespace sec_touch {
 class SecTouchFan;
 
 class SecTouchModeSelect : public Component, public select::Select {
-  static constexpr const char *TAG = "SecTouchModeSelect";
+  static const char *const TAG;
 
  public:
   SecTouchModeSelect(SECTouchComponent *parent, int level_id);

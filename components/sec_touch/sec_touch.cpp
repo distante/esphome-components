@@ -7,8 +7,8 @@
 namespace esphome {
 namespace sec_touch {
 
-static const char *const TAG = "sec-touch";
-static const char *const TAG_UART = "sec-touch-uart";
+static const char *const TAG = "sec_touch";
+static const char *const TAG_UART = "sec_touch.uart";
 
 static const unsigned long TASK_TIMEOUT_MS = 2000;  // 2 seconds
 

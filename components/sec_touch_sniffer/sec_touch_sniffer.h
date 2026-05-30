@@ -17,7 +17,7 @@ struct SniffedEntry {
 };
 
 class SecTouchSniffer : public Component, public text_sensor::TextSensor {
-  static constexpr const char *TAG = "SecTouchSniffer";
+  static const char *const TAG;
   // Text sensor payload cap: keeps output within comfortable MQTT/API packet sizes.
   // Each entry is ~35 chars; 2048 chars fits ~58 entries before truncation.
   static constexpr size_t MAX_STATE_LEN = 2048;

@@ -206,7 +206,7 @@ struct IncomingMessage {
       this->buffer[this->buffer_index] = data;
 
     } else {
-      ESP_LOGW("sec-touch:incoming", "  Buffer overflow! Discarding extra data.");
+      ESP_LOGW("sec_touch.incoming", "  Buffer overflow! Discarding extra data.");
     }
 
     return this->buffer_index;

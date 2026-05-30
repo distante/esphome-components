@@ -5,6 +5,8 @@
 namespace esphome {
 namespace sec_touch {
 
+const char *const SecTouchModeSelect::TAG = "sec_touch.mode_select";
+
 static const char *const OFF_OPTION = "Off";
 
 SecTouchModeSelect::SecTouchModeSelect(SECTouchComponent *parent, int level_id)

@@ -5,6 +5,8 @@
 namespace esphome {
 namespace sec_touch {
 
+const char *const SecTouchSniffer::TAG = "sec_touch_sniffer";
+
 SecTouchSniffer::SecTouchSniffer(SECTouchComponent *parent) : parent_(parent) {}
 
 void SecTouchSniffer::setup() {

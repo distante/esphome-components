@@ -10,7 +10,7 @@ namespace esphome {
 namespace sec_touch {
 
 class SecTouchFan : public Component, public fan::Fan {
-  static constexpr const char *TAG = "SecTouchFan";
+  static const char *const TAG;
 
  protected:
   const int level_id;

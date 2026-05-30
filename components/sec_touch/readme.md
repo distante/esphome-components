@@ -245,6 +245,30 @@ Notice that the fans numbers are ordered so:
 | Pair 2 | Pair 4 | Pair 6 | ⚙️  |
 
 
+## Logging
+
+Each component uses a distinct log tag. You can suppress noisy tags without hiding everything by adding a `logger` block to your YAML:
+
+```yaml
+logger:
+  logs:
+    sec-touch: WARN         # core component (polling loop, task queue, watchdog)
+    sec-touch-uart: WARN    # raw UART byte traffic — very noisy at DEBUG
+    SecTouchFan: WARN       # fan entity state changes and control calls
+    SecTouchModeSelect: WARN  # mode select entity
+    SecTouchSniffer: DEBUG  # sniffer discoveries and scan progress
+```
+
+| Tag | Component | Noisy at DEBUG? |
+|---|---|---|
+| `sec-touch` | Core component — loop, task queue, watchdog | Yes |
+| `sec-touch-uart` | Raw UART sends/receives | Very |
+| `SecTouchFan` | Fan entity | Moderate |
+| `SecTouchModeSelect` | Mode select entity | Low |
+| `SecTouchSniffer` | Sniffer (passive + active scan) | Moderate |
+
+> **Tip:** When using the sniffer and you only want to see discovery output, set `sec-touch` and `sec-touch-uart` to `WARN` and `SecTouchSniffer` to `INFO` or `DEBUG`.
+
 ## Sniffer
 
 The sniffer listens for UART messages sent by the SEC-Touch for property IDs that no component has registered interest in. This lets you discover unknown property IDs for future use.

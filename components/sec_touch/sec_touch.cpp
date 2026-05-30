@@ -64,13 +64,10 @@ void SECTouchComponent::loop() {
         return;
       }
       if (this->incoming_message.buffer_index >= 0) {
-        char hex_buf[128];
-        int hex_pos = 0;
         int plen = this->incoming_message.buffer_index + 1;
-        for (int i = 0; i < plen && hex_pos < (int) sizeof(hex_buf) - 4; i++) {
-          hex_pos += snprintf(hex_buf + hex_pos, sizeof(hex_buf) - hex_pos, "%02X ",
-                              (uint8_t) this->incoming_message.buffer[i]);
-        }
+        char hex_buf[128];
+        this->format_hex_dump(reinterpret_cast<const uint8_t *>(this->incoming_message.buffer), plen, hex_buf,
+                              sizeof(hex_buf));
         ESP_LOGW(TAG, "[watchdog] Task of type %s for property_id %d timed out — partial buffer (%d bytes: %s)",
                  EnumToString::TaskType(this->current_running_task_type), this->current_running_task_property_id_, plen,
                  hex_buf);
@@ -362,6 +359,45 @@ void SECTouchComponent::send_ack_message() {
   ESP_LOGD(TAG, "SendMessageAck sended");
 }
 
+void SECTouchComponent::format_hex_dump(const uint8_t *buf, int len, char *out, size_t out_size) {
+  if (out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  int pos = 0;
+  for (int i = 0; i < len && pos < (int) out_size - 4; i++) {
+    pos += snprintf(out + pos, out_size - pos, "%02X ", buf[i]);
+  }
+}
+
+void SECTouchComponent::log_not_enough_tabs_error(const char *buf, int len, int tab1, int tab2) {
+  char hex_buf[128];
+  this->format_hex_dump(reinterpret_cast<const uint8_t *>(buf), len, hex_buf, sizeof(hex_buf));
+
+  char parsed_buf[96];
+  int parsed_pos = 0;
+  parsed_buf[0] = '\0';
+  if (tab1 != -1) {
+    int cmd = atoi(std::string(&buf[1], tab1 - 1).c_str());
+    parsed_pos += snprintf(parsed_buf + parsed_pos, sizeof(parsed_buf) - parsed_pos, "command_id=%d", cmd);
+  }
+  if (tab1 != -1 && tab2 != -1) {
+    int prop = atoi(std::string(&buf[tab1 + 1], tab2 - tab1 - 1).c_str());
+    parsed_pos += snprintf(parsed_buf + parsed_pos, sizeof(parsed_buf) - parsed_pos, " property_id=%d", prop);
+  }
+
+  // TABs are discovered left-to-right, so tabN == -1 implies tab(N+1)... == -1.
+  const char *missing = (tab1 == -1)   ? "command_id, property_id, value, crc"
+                        : (tab2 == -1) ? "property_id, value, crc"
+                                       : "value, crc";
+
+  ESP_LOGE(TAG_UART,
+           "  [process_data] Not enough TABs in message (task=%s property_id=%d len=%d parsed: [%s] missing: [%s] "
+           "hex: %s). Task Failed",
+           EnumToString::TaskType(this->current_running_task_type), this->current_running_task_property_id_, len,
+           parsed_buf, missing, hex_buf);
+}
+
 void SECTouchComponent::process_data_of_current_incoming_message() {
   ESP_LOGD(TAG, "  [process_data] buffer: %s", this->incoming_message.buffer);
 
@@ -417,11 +453,7 @@ where:
   // Defensive: ensure message starts with STX and ends with ETX
   if (len < 7 || static_cast<uint8_t>(buf[0]) != STX || static_cast<uint8_t>(buf[len - 1]) != ETX) {
     char hex_buf[128];
-    hex_buf[0] = '\0';
-    int hex_pos = 0;
-    for (int i = 0; i < len && hex_pos < (int) sizeof(hex_buf) - 4; i++) {
-      hex_pos += snprintf(hex_buf + hex_pos, sizeof(hex_buf) - hex_pos, "%02X ", (uint8_t) buf[i]);
-    }
+    this->format_hex_dump(reinterpret_cast<const uint8_t *>(buf), len, hex_buf, sizeof(hex_buf));
     ESP_LOGE(TAG_UART, "  [process_data] Invalid message format (task=%s property_id=%d len=%d hex: %s). Task Failed",
              EnumToString::TaskType(this->current_running_task_type), this->current_running_task_property_id_, len,
              hex_buf);
@@ -443,15 +475,7 @@ where:
     }
   }
   if (tab1 == -1 || tab2 == -1 || tab3 == -1) {
-    char hex_buf[128];
-    hex_buf[0] = '\0';
-    int hex_pos = 0;
-    for (int i = 0; i < len && hex_pos < (int) sizeof(hex_buf) - 4; i++) {
-      hex_pos += snprintf(hex_buf + hex_pos, sizeof(hex_buf) - hex_pos, "%02X ", (uint8_t) buf[i]);
-    }
-    ESP_LOGE(
-        TAG_UART, "  [process_data] Not enough TABs in message (task=%s property_id=%d len=%d hex: %s). Task Failed",
-        EnumToString::TaskType(this->current_running_task_type), this->current_running_task_property_id_, len, hex_buf);
+    this->log_not_enough_tabs_error(buf, len, tab1, tab2);
     this->cleanup_after_task_complete(true);
     return;
   }

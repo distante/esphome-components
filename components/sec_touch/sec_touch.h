@@ -101,6 +101,8 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   int current_running_task_property_id_ = -1;
   bool last_scan_task_timed_out_ = false;
   void process_data_of_current_incoming_message();
+  void log_not_enough_tabs_error(const char *buf, int len, int tab1, int tab2);
+  void format_hex_dump(const uint8_t *buf, int len, char *out, size_t out_size);
 };
 }  // namespace sec_touch
 }  // namespace esphome

@@ -140,6 +140,7 @@ void SecTouchSniffer::on_raw_message_(int command_id, int property_id, int new_v
   }
 
   std::string ts = this->get_timestamp_();
+  int old_value = is_new ? 0 : it->second.value;
   SniffedEntry &entry = this->discovered_ids_[property_id];
   entry.command_id = command_id;
   entry.value = new_value;
@@ -150,7 +151,8 @@ void SecTouchSniffer::on_raw_message_(int command_id, int property_id, int new_v
     ESP_LOGI(TAG, "NEW property_id %d (cmd=%d value=%d at=%s) total=%d", property_id, command_id, new_value, ts.c_str(),
              this->discovered_ids_.size());
   } else {
-    ESP_LOGD(TAG, "property_id %d updated (cmd=%d value=%d at=%s)", property_id, command_id, new_value, ts.c_str());
+    ESP_LOGW(TAG, "property_id %d updated (cmd=%d value=%d->%d at=%s)", property_id, command_id, old_value, new_value,
+             ts.c_str());
   }
 
   if (!this->is_scanning_) {

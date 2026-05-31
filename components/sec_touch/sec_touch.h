@@ -38,6 +38,13 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
    */
   void register_manual_update_listener(int property_id, UpdateCallbackListener listener);
 
+  /**
+   * Use this for global controller settings (not per-fan) that should be polled
+   * at the configured `global_settings_update_interval` cadence — independent
+   * from the fan-level recursive polling.
+   */
+  void register_global_setting_recursive_listener(int property_id, UpdateCallbackListener listener);
+
   void register_raw_message_listener(RawMessageCallbackListener listener);
   void register_queue_empty_listener(QueueEmptyListener listener);
   void add_discovery_get_task(int property_id);
@@ -51,10 +58,13 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   }
 
   void set_inter_task_delay(uint32_t ms) { inter_task_delay_ms_ = ms; }
+  void set_global_settings_update_interval_ms(uint32_t ms) { global_settings_update_interval_ms_ = ms; }
+  void set_optional_crc(bool v) { optional_crc_ = v; }
 
   void add_set_task(std::unique_ptr<SetDataTask> task);
   void add_recursive_tasks_to_get_queue();
   void add_manual_tasks_to_queue();
+  void add_global_setting_tasks_to_queue();
   void register_text_sensor(int id, text_sensor::TextSensor *sensor);
   esphome::optional<text_sensor::TextSensor *> get_text_sensor(int id);
   void register_fan(int level_id, SecTouchFan *fan);
@@ -66,10 +76,12 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   std::deque<std::unique_ptr<BaseTask>> data_task_queue;
 
   std::map<int, UpdateCallbackListener> recursive_update_listeners;
-  std::vector<int> recursive_update_ids;
+  std::vector<int> fan_level_property_ids_;
 
   std::map<int, UpdateCallbackListener> manual_update_listeners;
-  std::vector<int> manual_update_ids;
+  std::vector<int> fan_label_property_ids_;
+
+  std::vector<int> global_setting_property_ids_;
 
   std::vector<RawMessageCallbackListener> raw_message_listeners;
   std::vector<QueueEmptyListener> queue_empty_listeners;
@@ -98,9 +110,14 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   unsigned long task_start_time_ = 0;
   unsigned long task_ready_at_ms_ = 0;
   uint32_t inter_task_delay_ms_ = 30;
+  uint32_t global_settings_update_interval_ms_ = 30000;
+  unsigned long last_global_settings_update_ms_ = 0;
   int current_running_task_property_id_ = -1;
   bool last_scan_task_timed_out_ = false;
+  bool optional_crc_{false};
   void process_data_of_current_incoming_message();
+  bool validate_message_tabs(const char *buf, int len, int tab1, int tab2, int tab3);
+  int parse_value_field(const char *buf, int len, int tab2, int tab3);
   void log_not_enough_tabs_error(const char *buf, int len, int tab1, int tab2);
   void format_hex_dump(const uint8_t *buf, int len, char *out, size_t out_size);
 };

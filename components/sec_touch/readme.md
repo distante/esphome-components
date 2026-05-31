@@ -5,7 +5,7 @@ This is a component that allows you to control your SEC-TOUCH ventilation contro
   <img src="images/sec-touch-panel.webp" alt="SEC-TOUCH Panel" />
 </div>
 
-(For now) It is limited to change the level of the fan pairs, or put them into their special modes (automatic, time, etc). There is no way to change the timing intervals for now. You need to make that in the SEC-TOUCH device itself.
+It allows you to change the level of the fan pairs, put them into their special modes (automatic, time, etc), and toggle global settings such as **Summer Ventilation**. There is no way to change the timing intervals for now. You need to make that in the SEC-TOUCH device itself.
 
 The SEC-Touch device is always the source of true. No fan state restoration is done after a power loss.
 
@@ -125,6 +125,8 @@ uart:
 sec_touch:
   uart_id: sec_touch_uart
   update_interval: 5s # 5s is the default
+  global_settings_update_interval: 30s # 30s is the default — controls how often global settings (e.g. summer ventilation) are re-polled
+  optional_crc: false # false is the default — set to true if your device sends responses without a CRC field
 
 fan:
   - platform: sec_touch
@@ -164,6 +166,13 @@ fan:
     web_server:
       sorting_group_id: group_6
 
+
+switch:
+  - platform: sec_touch
+    name: "Summer Ventilation"
+    icon: "mdi:weather-sunny"
+    web_server:
+      sorting_group_id: group_settings
 
 button:
   - platform: sec_touch
@@ -257,6 +266,7 @@ logger:
     sec_touch.incoming: WARN  # incoming message buffer (overflow warnings)
     sec_touch.fan: WARN       # fan entity state changes and control calls
     sec_touch.mode_select: WARN  # mode select entity
+    sec_touch.switch: WARN  # summer ventilation switch
     sec_touch_sniffer: DEBUG  # sniffer discoveries and scan progress
 ```
 
@@ -267,6 +277,7 @@ logger:
 | `sec_touch.incoming` | Incoming message buffer | Low |
 | `sec_touch.fan` | Fan entity | Moderate |
 | `sec_touch.mode_select` | Mode select entity | Low |
+| `sec_touch.switch` | Summer ventilation and other global switches | Low |
 | `sec_touch_sniffer` | Sniffer (passive + active scan) | Moderate |
 
 > **Tip:** When using the sniffer and you only want to see discovery output, set `sec_touch` and `sec_touch.uart` to `WARN` and `sec_touch_sniffer` to `INFO` or `DEBUG`.
@@ -333,7 +344,7 @@ Scan performed over IDs 1–208. IDs 78–83 (fan labels) and 173–178 (fan lev
 <details>
 <summary>ID analysis table (help wanted — fill in what you know)</summary>
 
-> **IDs not in output:** 78–82 (fan pair labels, registered listener), 173–175, 177 (fan pair levels, registered listener), 193 (no response from device).
+> **IDs not in output:** 48 (summer ventilation, registered listener), 78–82 (fan pair labels, registered listener), 173–175, 177 (fan pair levels, registered listener), 193 (no response from device).
 
 | ID | Value | Hypothesis | Confidence |
 |----|-------|------------|------------|
@@ -384,7 +395,6 @@ Scan performed over IDs 1–208. IDs 78–83 (fan labels) and 173–178 (fan lev
 | 45 | 50 | | |
 | 46 | 50 | | |
 | 47 | 75 | | |
-| 48 | 800 | | |
 | 49 | 1200 | | |
 | 50 | 400 | | |
 | 51 | 20 | | |
@@ -574,6 +584,20 @@ With the flag enabled:
 > If you rely on the local web UI (e.g. non-HA fallback), add a `select.sec_touch` entity per fan
 > to expose a clickable Mode dropdown. See [`examples/webserver-fallback.yaml`](examples/webserver-fallback.yaml).
 
+## :bulb: Optional CRC (`optional_crc`)
+
+By default, every response from the SEC-Touch is expected to contain four TAB-delimited fields: `command_id`, `property_id`, `value`, and `crc`. If the CRC field is absent the component logs an error and discards the message.
+
+Some firmware versions or configurations of the SEC-Touch appear to omit the CRC field, sending only `[STX]command_id[TAB]property_id[TAB]value[ETX]`. If you see repeated `Not enough TABs in message … missing: [value, crc]` errors in your logs but the parsed `command_id` and `property_id` look correct, enable this flag:
+
+```yaml
+sec_touch:
+  uart_id: sec_touch_uart
+  optional_crc: true
+```
+
+When enabled, a message with a missing CRC field is still processed normally. A `[D]` debug log is emitted so you can confirm the behavior. Messages that are missing `command_id` or `property_id` are still rejected as malformed regardless of this setting.
+
 # Web Server preview
 
 <div class="text-center">
@@ -603,6 +627,18 @@ Stored on `FAN_LABEL_IDS` array as:
 ```
 78, 79, 80, 81, 82, 83
 ```
+
+## Global Settings
+Stored on `GLOBAL_SETTING_IDS` array as:
+
+```
+48
+```
+
+| ID | Description | ON value | OFF value |
+|----|-------------|----------|-----------|
+| 48 | Summer Ventilation | `0` | `800` |
+
 ---
 ### ⚠️ ID Mapping to Hardware Fan Pair
 The Fan pairs are ordered from top to bottom, and left to right.

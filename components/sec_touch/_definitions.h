@@ -21,6 +21,8 @@ constexpr const int COMMANDID_SET = 32;
 constexpr const int COMMANDID_GET = 32800;
 constexpr const std::array<int, 6> FAN_LEVEL_IDS = {173, 174, 175, 176, 177, 178};
 constexpr const std::array<int, 6> FAN_LABEL_IDS = {78, 79, 80, 81, 82, 83};
+constexpr const int SUMMER_VENTILATION_PROPERTY_ID = 48;
+constexpr const std::array<int, 1> GLOBAL_SETTING_IDS = {SUMMER_VENTILATION_PROPERTY_ID};
 constexpr const int NAME_MAPPING_COUNT = 69;
 constexpr const char *NAME_MAPPING[NAME_MAPPING_COUNT] = {
     "-",                // 0 do NOT use an empty string since the text sensor will crash :)
@@ -117,7 +119,7 @@ template<typename T, size_t N> static bool contains(const std::array<T, N> &arr,
 /**
  * Used to couple `SetDataTask->id` with the level_id or label_id for example
  */
-enum class TaskTargetType { LEVEL, LABEL };
+enum class TaskTargetType { LEVEL, LABEL, GLOBAL_SETTING };
 enum class TaskType {
   SET_DATA,
   GET_DATA,
@@ -138,6 +140,8 @@ class EnumToString {
         return "LEVEL";
       case TaskTargetType::LABEL:
         return "LABEL";
+      case TaskTargetType::GLOBAL_SETTING:
+        return "GLOBAL_SETTING";
       default:
         return "UNKNOWN";
     }
@@ -225,7 +229,8 @@ struct SetDataTask : public BaseTask {
 
   static std::unique_ptr<SetDataTask> create(TaskTargetType targetType, int property_id, const char *value) {
     if ((targetType == TaskTargetType::LEVEL && contains(FAN_LEVEL_IDS, property_id)) ||
-        (targetType == TaskTargetType::LABEL && contains(FAN_LABEL_IDS, property_id))) {
+        (targetType == TaskTargetType::LABEL && contains(FAN_LABEL_IDS, property_id)) ||
+        (targetType == TaskTargetType::GLOBAL_SETTING && contains(GLOBAL_SETTING_IDS, property_id))) {
       return std::unique_ptr<SetDataTask>(new SetDataTask(targetType, property_id, value));  // Valid task
     }
     return nullptr;  // Null unique_ptr if validation fails
@@ -245,7 +250,8 @@ struct SetDataTask : public BaseTask {
 struct GetDataTask : public BaseTask {
   static std::unique_ptr<GetDataTask> create(TaskTargetType targetType, int property_id) {
     if ((targetType == TaskTargetType::LEVEL && contains(FAN_LEVEL_IDS, property_id)) ||
-        (targetType == TaskTargetType::LABEL && contains(FAN_LABEL_IDS, property_id))) {
+        (targetType == TaskTargetType::LABEL && contains(FAN_LABEL_IDS, property_id)) ||
+        (targetType == TaskTargetType::GLOBAL_SETTING && contains(GLOBAL_SETTING_IDS, property_id))) {
       return std::unique_ptr<GetDataTask>(new GetDataTask(targetType, property_id));  // Valid task
     }
     return nullptr;  // Null unique_ptr if validation fails

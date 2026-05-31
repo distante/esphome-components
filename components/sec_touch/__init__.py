@@ -16,12 +16,18 @@ FAN_LABEL_IDS = (78, 79, 80, 81, 82, 83)
 
 CONF_SEC_TOUCH_ID = "sec_touch_id"
 CONF_INTER_TASK_DELAY = "inter_task_delay_ms"
+CONF_GLOBAL_SETTINGS_UPDATE_INTERVAL = "global_settings_update_interval"
+CONF_OPTIONAL_CRC = "optional_crc"
 # The total of fan pairs that the SEC-Touch shows in the screen
 
 CONFIG_SCHEMA = cv.Schema(
     {
         cv.GenerateID(): cv.declare_id(SECTouchComponent),
         cv.Optional(CONF_INTER_TASK_DELAY, default=30): cv.positive_int,
+        cv.Optional(
+            CONF_GLOBAL_SETTINGS_UPDATE_INTERVAL, default="30s"
+        ): cv.positive_time_period_milliseconds,
+        cv.Optional(CONF_OPTIONAL_CRC, default=False): cv.boolean,
     }
 )
 
@@ -47,3 +53,9 @@ async def to_code(config):
     await cg.register_component(var, config)
     await uart.register_uart_device(var, config)
     cg.add(var.set_inter_task_delay(config[CONF_INTER_TASK_DELAY]))
+    cg.add(
+        var.set_global_settings_update_interval_ms(
+            config[CONF_GLOBAL_SETTINGS_UPDATE_INTERVAL]
+        )
+    )
+    cg.add(var.set_optional_crc(config[CONF_OPTIONAL_CRC]))

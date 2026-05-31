@@ -26,6 +26,11 @@ web_server:
       name: "Living Room"
     - id: sg_bedroom
       name: "Bedroom"
+    - id: sg_settings
+      name: "Settings"
+
+sec_touch:
+  uart_id: sec_touch_uart  # reference your existing uart block
 
 fan:
   - platform: sec_touch
@@ -41,8 +46,15 @@ fan:
     web_server:
       sorting_group_id: sg_bedroom
 
-# The new bit: writable Mode dropdown — one per fan.
-# Each select needs a matching fan.sec_touch with the same fan_number.
+# Global toggle — not per-fan, applies to the whole controller.
+switch:
+  - platform: sec_touch
+    name: "Summer Ventilation"
+    icon: "mdi:weather-sunny"
+    web_server:
+      sorting_group_id: sg_settings
+
+# Mode dropdown — one per fan. Each select needs a matching fan.sec_touch entry.
 select:
   - platform: sec_touch
     fan_number: 1

@@ -20,13 +20,14 @@ void SECTouchComponent::setup() {
   this->incoming_message.reset();
   this->add_manual_tasks_to_queue();
   this->add_recursive_tasks_to_get_queue();
+  this->add_global_setting_tasks_to_queue();
 
   ESP_LOGI(TAG, " SEC-Touch setup complete.");
 }
 
 void SECTouchComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "SEC-Touch:");
-  ESP_LOGCONFIG(TAG, "  total_register_fans: %d", this->recursive_update_ids.size());
+  ESP_LOGCONFIG(TAG, "  total_register_fans: %d", this->fan_level_property_ids_.size());
 
   // Iterate through the map and log each property_id
   for (const auto &pair : this->recursive_update_listeners) {
@@ -35,6 +36,11 @@ void SECTouchComponent::dump_config() {
   for (const auto &pair : this->manual_update_listeners) {
     ESP_LOGCONFIG(TAG, "  - Manual Update Property ID: %d", pair.first);  // Log the property_id
   }
+  ESP_LOGCONFIG(TAG, "  global_settings_update_interval_ms: %u", this->global_settings_update_interval_ms_);
+  for (int id : this->global_setting_property_ids_) {
+    ESP_LOGCONFIG(TAG, "  - Global Setting Property ID: %d", id);
+  }
+  ESP_LOGCONFIG(TAG, "  optional_crc: %s", this->optional_crc_ ? "true" : "false");
 
   if (this->is_failed()) {
     ESP_LOGE(TAG, "  !!!! SETUP of SEC-Touch failed !!!!");
@@ -79,6 +85,10 @@ void SECTouchComponent::loop() {
     }
 
     if (this->data_task_queue.empty()) {
+      if (!this->scan_mode_active_ && !this->available() &&
+          millis() - this->last_global_settings_update_ms_ >= this->global_settings_update_interval_ms_) {
+        this->add_global_setting_tasks_to_queue();
+      }
       if (!this->queue_was_idle_) {
         this->queue_was_idle_ = true;
         for (auto &cb : this->queue_empty_listeners) {
@@ -234,13 +244,13 @@ int SECTouchComponent::store_data_to_incoming_message(uint8_t data) {
 }
 
 void SECTouchComponent::add_recursive_tasks_to_get_queue() {
-  if (this->recursive_update_ids.empty()) {
+  if (this->fan_level_property_ids_.empty()) {
     ESP_LOGW(TAG, "No property ids are registered for recursive tasks");
     return;
   }
 
-  for (size_t i = 0; i < this->recursive_update_ids.size(); i++) {
-    int id = this->recursive_update_ids[i];
+  for (size_t i = 0; i < this->fan_level_property_ids_.size(); i++) {
+    int id = this->fan_level_property_ids_[i];
     if (id == 0) {
       return;
     }
@@ -252,13 +262,13 @@ void SECTouchComponent::add_recursive_tasks_to_get_queue() {
 void SECTouchComponent::add_manual_tasks_to_queue() {
   ESP_LOGD(TAG, "add_manual_tasks_to_queue");
 
-  if (this->manual_update_ids[0] == 0) {
+  if (this->fan_label_property_ids_[0] == 0) {
     ESP_LOGE(TAG, "No property ids are registered for manual tasks");
     return;
   }
 
-  for (size_t i = 0; i < this->manual_update_ids.size(); i++) {
-    int id = this->manual_update_ids[i];
+  for (size_t i = 0; i < this->fan_label_property_ids_.size(); i++) {
+    int id = this->fan_label_property_ids_[i];
     if (id == 0) {
       return;
     }
@@ -270,16 +280,34 @@ void SECTouchComponent::add_manual_tasks_to_queue() {
   }
 }
 
+void SECTouchComponent::add_global_setting_tasks_to_queue() {
+  this->last_global_settings_update_ms_ = millis();
+
+  if (this->global_setting_property_ids_.empty()) {
+    return;
+  }
+
+  for (int id : this->global_setting_property_ids_) {
+    this->data_task_queue.push_back(GetDataTask::create(TaskTargetType::GLOBAL_SETTING, id));
+  }
+}
+
 void SECTouchComponent::register_recursive_update_listener(int property_id, UpdateCallbackListener listener) {
   ESP_LOGD(TAG, "register_recursive_update_listener for property_id %d", property_id);
   this->recursive_update_listeners[property_id] = std ::move(listener);
-  this->recursive_update_ids.push_back(property_id);
+  this->fan_level_property_ids_.push_back(property_id);
 }
 
 void SECTouchComponent::register_manual_update_listener(int property_id, UpdateCallbackListener listener) {
   ESP_LOGD(TAG, "register_manual_update_listener for property_id %d", property_id);
   this->manual_update_listeners[property_id] = std::move(listener);
-  this->manual_update_ids.push_back(property_id);
+  this->fan_label_property_ids_.push_back(property_id);
+}
+
+void SECTouchComponent::register_global_setting_recursive_listener(int property_id, UpdateCallbackListener listener) {
+  ESP_LOGD(TAG, "register_global_setting_recursive_listener for property_id %d", property_id);
+  this->recursive_update_listeners[property_id] = std::move(listener);
+  this->global_setting_property_ids_.push_back(property_id);
 }
 
 void SECTouchComponent::register_raw_message_listener(RawMessageCallbackListener listener) {
@@ -311,6 +339,7 @@ void SECTouchComponent::exit_scan_mode() {
   ESP_LOGI(TAG, "Exiting scan mode — resuming regular polling");
   this->scan_mode_active_ = false;
   this->add_recursive_tasks_to_get_queue();
+  this->add_global_setting_tasks_to_queue();
 }
 
 void SECTouchComponent::add_set_task(std::unique_ptr<SetDataTask> task) {
@@ -398,6 +427,28 @@ void SECTouchComponent::log_not_enough_tabs_error(const char *buf, int len, int 
            parsed_buf, missing, hex_buf);
 }
 
+bool SECTouchComponent::validate_message_tabs(const char *buf, int len, int tab1, int tab2, int tab3) {
+  if (tab1 == -1 || tab2 == -1) {
+    this->log_not_enough_tabs_error(buf, len, tab1, tab2);
+    return false;
+  }
+  if (tab3 == -1) {
+    if (!this->optional_crc_) {
+      this->log_not_enough_tabs_error(buf, len, tab1, tab2);
+      return false;
+    }
+    ESP_LOGD(TAG, "  [process_data] No CRC field in message (optional_crc=true), continuing");
+  }
+  return true;
+}
+
+int SECTouchComponent::parse_value_field(const char *buf, int len, int tab2, int tab3) {
+  if (tab3 != -1) {
+    return atoi(std::string(&buf[tab2 + 1], tab3 - tab2 - 1).c_str());
+  }
+  return atoi(std::string(&buf[tab2 + 1], len - tab2 - 2).c_str());  // -2 to skip ETX
+}
+
 void SECTouchComponent::process_data_of_current_incoming_message() {
   ESP_LOGD(TAG, "  [process_data] buffer: %s", this->incoming_message.buffer);
 
@@ -474,17 +525,16 @@ where:
       ++tabs;
     }
   }
-  if (tab1 == -1 || tab2 == -1 || tab3 == -1) {
-    this->log_not_enough_tabs_error(buf, len, tab1, tab2);
+  if (!this->validate_message_tabs(buf, len, tab1, tab2, tab3)) {
     this->cleanup_after_task_complete(true);
     return;
   }
 
   // Extract command id, property id, value, crc
-  int command_id = atoi(std::string(&buf[1], tab1 - 1).c_str());
+  int command_id  = atoi(std::string(&buf[1], tab1 - 1).c_str());
   int property_id = atoi(std::string(&buf[tab1 + 1], tab2 - tab1 - 1).c_str());
-  int value = atoi(std::string(&buf[tab2 + 1], tab3 - tab2 - 1).c_str());
-  int crc = atoi(std::string(&buf[tab3 + 1], len - tab3 - 2).c_str());  // -2 to skip ETX
+  int value       = this->parse_value_field(buf, len, tab2, tab3);
+  int crc         = (tab3 != -1) ? atoi(std::string(&buf[tab3 + 1], len - tab3 - 2).c_str()) : -1;
 
   ESP_LOGD(TAG, "  [process_data] command_id: %d, property_id: %d, value: %d, crc: %d", command_id, property_id, value,
            crc);

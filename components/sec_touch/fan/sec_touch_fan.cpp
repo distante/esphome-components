@@ -20,6 +20,11 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
       return;
     }
 
+    if (real_speed_from_device < 0 || (real_speed_from_device > 11 && real_speed_from_device != 255)) {
+      ESP_LOGW(TAG, "Ignoring out-of-range speed %d for property_id %d", real_speed_from_device, property_id);
+      return;
+    }
+
     ESP_LOGD(TAG, "New Real Speed from device for property_id %d (speed %d)", property_id, real_speed_from_device);
 
     FanModeEnum::FanMode mode_from_hardware = SecTouchFan::calculate_mode_from_speed(real_speed_from_device);
@@ -38,8 +43,8 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
 
     if (!need_speed_publish && !needs_preset_publish) {
       auto log_p = this->get_preset_mode();
-      ESP_LOGD(TAG, "No update needed for fan with property_id %d (state %d) (speed %d)(preset %s)", property_id,
-               this->state, this->speed, log_p.empty() ? "Unknown" : log_p.c_str());
+      ESP_LOGD(TAG, "No update needed for fan with property_id %d incoming_speed=%d (state %d) (speed %d)(preset %s)",
+               property_id, real_speed_from_device, this->state, this->speed, log_p.empty() ? "Unknown" : log_p.c_str());
       return;
     }
 

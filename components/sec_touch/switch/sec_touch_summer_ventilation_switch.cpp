@@ -6,9 +6,12 @@ namespace sec_touch {
 
 const char *const SecTouchSummerVentilationSwitch::TAG = "sec_touch.switch";
 
-// Device-side encoding of the toggle (sniffer-confirmed in SUMMER_VENTILATION.md).
-static constexpr const char *VALUE_ON = "0";
-static constexpr const char *VALUE_OFF = "800";
+// Device-side encoding of the toggle. The controller expects the raw string values
+// "0A00" (on) / "0800" (off) — the same the panel sends. Reads report these too, but
+// the incoming parser runs them through atoi, so a listener sees 0 / 800 (see below).
+// Writing the atoi'd "0"/"800" is silently ignored by the device.
+static constexpr const char *VALUE_ON = "0A00";
+static constexpr const char *VALUE_OFF = "0800";
 
 SecTouchSummerVentilationSwitch::SecTouchSummerVentilationSwitch(SECTouchComponent *parent) : parent_(parent) {
   this->parent_->register_global_setting_recursive_listener(SUMMER_VENTILATION_PROPERTY_ID, [this](int property_id,

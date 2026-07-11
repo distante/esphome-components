@@ -10,12 +10,20 @@
 
 **Property ID `48` controls Summer Ventilation.**
 
-| State | Value |
-|-------|-------|
-| OFF   | `800` |
-| ON    | `0`   |
+The controller sends and expects the value as a raw string. The read and write
+values differ once parsed:
+
+| State | On the wire | Parsed (`atoi`) |
+|-------|-------------|-----------------|
+| ON    | `0A00`      | `0`             |
+| OFF   | `0800`      | `800`           |
 
 Consistent across all four captures. No other property changed reliably between states.
+
+> **Important:** the incoming parser runs values through `atoi`, so a GET response of
+> `0A00`/`0800` reaches listeners as `0`/`800`. That truncation is fine for *reading*
+> (a listener just checks `== 0`), but a SET **must** send the full `0A00`/`0800`
+> string — writing the truncated `0`/`800` is silently ignored by the device.
 
 ---
 
@@ -28,9 +36,9 @@ This is a **global setting** — it is not per-fan and applies to the entire con
 ## Implementation Notes
 
 - **Property ID:** `48`
-- **Type:** numeric (integer), range observed: `0`–`800`
-- **Write to activate summer ventilation:** set property `48` to `0`
-- **Write to deactivate summer ventilation:** set property `48` to `800` (default/restore value)
+- **Type:** string value on the wire (`0A00` / `0800`), not a plain integer
+- **Write to activate summer ventilation:** set property `48` to `0A00`
+- **Write to deactivate summer ventilation:** set property `48` to `0800` (default/restore value)
 - No per-fan targeting needed — a single write to property 48 affects the whole system
 - Should be exposed as a global entity in the `group_settings` web server sorting group, not attached to any fan group
 

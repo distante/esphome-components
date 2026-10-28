@@ -52,6 +52,25 @@ The same but without the 3.3v connection. 😬
 |GPIO 17 | RX (2nd from the left)| 
 |GPIO 16 | TX (3rd from the left)|
 
+Pin numbers count from the **left, looking straight at the "PC" port**. RX and TX are named from the SEC-Touch's side, so they cross over: the ESP's TX goes to the SEC-Touch's RX, and the other way round.
+
+```
+            SEC-Touch "PC" port (front view)
+      ┌──────────┬──────────┬──────────┬──────────┐
+      │    1     │    2     │    3     │    4     │
+      │   GND    │    RX    │    TX    │  3.3 V   │
+      └────┬─────┴────┬─────┴────┬─────┴────┬─────┘
+           │          │          │          │
+           │          │          │          ╳  not connected
+           │          │          │             (external power)
+          GND      GPIO17     GPIO16
+                  (ESP TX)   (ESP RX)
+                    ESP32
+```
+
+> [!TIP]
+> If you get no answer at all, check the counting direction first. Counted from the right, pin 2 is the SEC-Touch's **TX**, which swaps RX and TX. The port talks at **28800 baud** (8N1), so a sniffer set to any other speed shows garbage.
+
 ### ESP8266 connection
 <div class="text-center">
   <img src="https://github.com/Manuel-Siekmann/VentilationSystem/raw/main/doc/sketch.jpg" alt="https://github.com/Manuel-Siekmann/VentilationSystem/raw/main/doc/sketch.jpg" />

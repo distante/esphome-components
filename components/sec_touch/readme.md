@@ -695,7 +695,7 @@ Stored on `FAN_LABEL_IDS` array as:
 | 1 | Date | `DD.MM.YY` |
 | 2 | Clock | `HH:MM:SS` |
 
-Not used by the component yet. A plain SET in the same format worked in a test (the seconds were dropped). See [RAW_VALUES.md](RAW_VALUES.md).
+Read by `clock_drift` and written by `sync_clock`, see [Panel Clock](#panel-clock). The controller drops the seconds on write. Details in [RAW_VALUES.md](RAW_VALUES.md).
 
 ## Global Settings
 Stored on `GLOBAL_SETTING_IDS` array as:

@@ -649,6 +649,15 @@ Stored on `FAN_LABEL_IDS` array as:
 78, 79, 80, 81, 82, 83
 ```
 
+## Date and Clock
+
+| ID | Description | Format |
+|----|-------------|--------|
+| 1 | Date | `DD.MM.YY` |
+| 2 | Clock | `HH:MM:SS` |
+
+Not used by the component yet. A plain SET in the same format worked in a test (the seconds were dropped). See [RAW_VALUES.md](RAW_VALUES.md).
+
 ## Global Settings
 Stored on `GLOBAL_SETTING_IDS` array as:
 
@@ -659,15 +668,6 @@ Stored on `GLOBAL_SETTING_IDS` array as:
 | ID | Description | ON value | OFF value |
 |----|-------------|----------|-----------|
 | 48 | Summer Ventilation | `0` | `800` |
-
-## Date and Clock
-
-| ID | Description | Format |
-|----|-------------|--------|
-| 1 | Date | `DD.MM.YY` |
-| 2 | Clock | `HH:MM:SS` |
-
-Writable with a plain SET in the same format. The controller resets seconds to `00` on every write. See [RAW_VALUES.md](RAW_VALUES.md).
 
 ---
 ### ⚠️ ID Mapping to Hardware Fan Pair

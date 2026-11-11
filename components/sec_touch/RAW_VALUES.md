@@ -35,18 +35,19 @@ and winter time by itself is unknown.
 
 ### Writing date and clock
 
-**Both are writable** with a plain SET in the same format (tested 2026-11-11):
+**Both are writable** with a plain SET in the same format (tested 2026-11-11 with a
+temporary build that allowed IDs 1/2 in `SetDataTask` and enlarged its value buffer,
+see [Implementation Notes](#implementation-notes)):
 
-| Sent                            | Answer | Read back right after |
-|---------------------------------|--------|-----------------------|
-| `32<TAB>2<TAB>13:47:40`         | ACK    | `13:47:00`            |
-| `32<TAB>1<TAB>12.11.26`         | ACK    | `12.11.26`            |
+| Sent                       | Answer | Read back right after |
+|----------------------------|--------|-----------------------|
+| `32[TAB]2[TAB]13:47:40`    | ACK    | `13:47:00`            |
+| `32[TAB]1[TAB]12.11.26`    | ACK    | `12.11.26`            |
 
-- The controller only takes hours and minutes: seconds are reset to `00` on every
-  write. To sync to the second, send `HH:MM:00` exactly on the minute boundary.
+- The controller dropped the seconds: `13:47:40` became `13:47:00`. This is a single
+  observation (the other test writes all had `00` seconds), but it suggests that only
+  hours and minutes are taken.
 - The clock keeps running normally after a write (`13:47:00` → `13:47:23` 23 s later).
-- `SetDataTask` currently can't send these: it only accepts known IDs, and its
-  `char value[8]` holds 7 characters, so `13:47:00` would go out as `13:47:0`.
 
 ---
 
@@ -59,21 +60,31 @@ Hypotheses from the raw strings, unverified unless noted:
 | 3        | `SWZ0021E21H`                   | Software version                                                                                  |
 | 10       | `ETA0032E23G`                   | Hardware / device version                                                                         |
 | 13, 16   | `-----------`                   | Empty text fields of the same width as 3 and 10                                                   |
-| 20, 21   | `00.00.00`, `00:00:00`          | A second date/time pair, unset (last error? filter change?)                                       |
+| 20, 21   | `00.00.00`, `00:00:00`          | A second date/time pair (last error? filter change?). Unset on this controller, set on the upstream one (`20=6, 21=16` after `atoi`) |
 | 55       | `0.360.00:00`                   | Unknown composite value                                                                           |
-| 101–152  | `03`, `09:00:00`, `22:00:00`, … | Time programs ("Automatik Zeit"): blocks of 11 IDs starting at 101, 112, 123, 134, 145, each with switching times `HH:MM:SS` |
+| 101–155  | `03`, `09:00:00`, `22:00:00`, … | Time programs ("Automatik Zeit"): blocks of 11 IDs starting at 101, 112, 123, 134, 145, each with switching times `HH:MM:SS`. 153–155 are missing from this scan, so the last block and whether more follow are unconfirmed |
 | 99, 100  | `-50.0`, `50.0`                 | Decimal values (a range, maybe temperature)                                                       |
 
-Values with leading zeros (`5=0100`, `7=01`, `85=00`) are strings as well. A SET must
-presumably reproduce them verbatim, like `0A00` / `0800` for summer ventilation
-(see [SUMMER_VENTILATION.md](SUMMER_VENTILATION.md)).
+Values with leading zeros (`5=0100`, `7=01`, `85=00`) are strings as well.
+
+---
+
+## Implementation Notes
+
+- `SetDataTask` can't send date and clock yet: it only accepts known IDs, and its
+  `char value[8]` holds 7 characters, so `13:47:00` would go out as `13:47:0`.
+- To sync the clock to the second, send `HH:MM:00` exactly on the minute boundary
+  (the controller seems to drop the seconds, see above).
+- String values presumably have to be sent verbatim, like `0A00` / `0800` for summer
+  ventilation (see [SUMMER_VENTILATION.md](SUMMER_VENTILATION.md)).
 
 ---
 
 ## Raw values
 
-Not in the list: registered listeners (48, 78–82, 173–178), IDs whose log lines were
-dropped by the API log stream (31, 32, 153–172, 179–185, 190–192) and IDs 209–255,
+Not in the list: registered listeners (48, 78–82, 173–177; the device has 5 fan pairs),
+IDs whose log lines were dropped by the API log stream (31, 32, 153–172, 178–185,
+190–192) and IDs 209–255,
 which never answered. ID 193, which timed out in the upstream scan, answered this time.
 
 <details>
@@ -90,10 +101,10 @@ which never answered. ID 193, which timed out in the upstream scan, answered thi
 ## How to reproduce
 
 The sniffer text sensor only sees the `atoi` result. The raw string is in the `DEBUG` log
-of `sec_touch`:
+of `sec_touch` (control characters written as in [UART Messages](readme.md#uart-messages)):
 
 ```log
-[D][sec_touch:453]:   [process_data] buffer: \x0232\t2\t13:32:08\t<crc>
+[D][sec_touch:453]:   [process_data] buffer: [STX]32[TAB]2[TAB]13:32:08[TAB]<crc>
 ```
 
 Enable the sniffer with an active scan (see [readme](readme.md#full-example-with-active-scan)),

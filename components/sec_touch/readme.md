@@ -351,6 +351,8 @@ Scan performed over IDs 1–208. IDs 78–83 (fan labels) and 173–178 (fan lev
 
 **If you recognize a pattern or know what an ID controls, please open a PR or issue.**
 
+> **Note:** the values below went through `atoi` and are truncated at the first non-digit. Many IDs carry strings (dates, times, versions, hex flags). See [RAW_VALUES.md](RAW_VALUES.md) for the raw strings and the decoded IDs.
+
 <details>
 <summary>Raw sniffer output (copy-paste ready)</summary>
 
@@ -367,16 +369,16 @@ Scan performed over IDs 1–208. IDs 78–83 (fan labels) and 173–178 (fan lev
 
 | ID | Value | Hypothesis | Confidence |
 |----|-------|------------|------------|
-| 1 | 23 | | |
-| 2 | 16 | | |
-| 3 | 0 | | |
+| 1 | 23 | Date `DD.MM.YY`, see [RAW_VALUES.md](RAW_VALUES.md) | High |
+| 2 | 16 | Clock `HH:MM:SS`, see [RAW_VALUES.md](RAW_VALUES.md) | High |
+| 3 | 0 | Software version (`SWZ…`) | Medium |
 | 4 | 0 | | |
 | 5 | 100 | | |
 | 6 | 1 | | |
 | 7 | 1 | | |
 | 8 | 1 | | |
 | 9 | 0 | | |
-| 10 | 0 | | |
+| 10 | 0 | Hardware / device version (`ETA…`) | Medium |
 | 11 | 0 | | |
 | 12 | 0 | | |
 | 13 | 0 | | |
@@ -657,6 +659,15 @@ Stored on `GLOBAL_SETTING_IDS` array as:
 | ID | Description | ON value | OFF value |
 |----|-------------|----------|-----------|
 | 48 | Summer Ventilation | `0` | `800` |
+
+## Date and Clock
+
+| ID | Description | Format |
+|----|-------------|--------|
+| 1 | Date | `DD.MM.YY` |
+| 2 | Clock | `HH:MM:SS` |
+
+Read-only so far, writing is untested. See [RAW_VALUES.md](RAW_VALUES.md).
 
 ---
 ### ⚠️ ID Mapping to Hardware Fan Pair

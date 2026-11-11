@@ -33,8 +33,20 @@ At the time of the scan, the controller clock was within a few seconds of local 
 (CET, after the switch from summer time). Whether the controller switches between summer
 and winter time by itself is unknown.
 
-Whether a SET on `1` / `2` is accepted (i.e. whether the clock can be synced from
-ESPHome) is **not tested yet**.
+### Writing date and clock
+
+**Both are writable** with a plain SET in the same format (tested 2026-11-11):
+
+| Sent                            | Answer | Read back right after |
+|---------------------------------|--------|-----------------------|
+| `32<TAB>2<TAB>13:47:40`         | ACK    | `13:47:00`            |
+| `32<TAB>1<TAB>12.11.26`         | ACK    | `12.11.26`            |
+
+- The controller only takes hours and minutes: seconds are reset to `00` on every
+  write. To sync to the second, send `HH:MM:00` exactly on the minute boundary.
+- The clock keeps running normally after a write (`13:47:00` → `13:47:23` 23 s later).
+- `SetDataTask` currently can't send these: it only accepts known IDs, and its
+  `char value[8]` holds 7 characters, so `13:47:00` would go out as `13:47:0`.
 
 ---
 

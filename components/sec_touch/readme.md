@@ -667,7 +667,7 @@ Stored on `GLOBAL_SETTING_IDS` array as:
 | 1 | Date | `DD.MM.YY` |
 | 2 | Clock | `HH:MM:SS` |
 
-Read-only so far, writing is untested. See [RAW_VALUES.md](RAW_VALUES.md).
+Writable with a plain SET in the same format. The controller resets seconds to `00` on every write. See [RAW_VALUES.md](RAW_VALUES.md).
 
 ---
 ### ⚠️ ID Mapping to Hardware Fan Pair

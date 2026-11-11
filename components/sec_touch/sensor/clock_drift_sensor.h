@@ -23,7 +23,7 @@ class SecTouchClockDriftSensor : public sensor::Sensor, public Component, public
   void on_panel_clock_(const std::string &clock);
 
   time::RealTimeClock *time_{nullptr};
-  // the poll reads the date right before the clock, see setup()
+  // the poll reads the date right before the clock, see setup(); consumed by on_panel_clock_()
   std::string panel_date_;
 };
 

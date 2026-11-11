@@ -26,11 +26,24 @@ void SecTouchClockDriftSensor::on_panel_clock_(const std::string &clock) {
     return;
   }
 
+  // Use each date reading once: if it timed out, a stale date must not be paired with a fresh clock.
+  std::string date = std::move(this->panel_date_);
+  this->panel_date_.clear();
+  if (date.empty()) {
+    ESP_LOGD(TAG, "No panel date for this clock reading, skipping drift");
+    return;
+  }
+
   int day, month, year, hour, minute, second;
-  if (sscanf(this->panel_date_.c_str(), "%2d.%2d.%2d", &day, &month, &year) != 3 ||
+  if (sscanf(date.c_str(), "%2d.%2d.%2d", &day, &month, &year) != 3 ||
       sscanf(clock.c_str(), "%2d:%2d:%2d", &hour, &minute, &second) != 3) {
-    ESP_LOGW(TAG, "Unexpected panel date/clock '%s' '%s'", this->panel_date_.c_str(), clock.c_str());
+    ESP_LOGW(TAG, "Unexpected panel date/clock '%s' '%s'", date.c_str(), clock.c_str());
     this->publish_state(NAN);
+    return;
+  }
+  // The date is read just before the clock, so right after midnight it may still be yesterday's.
+  if (hour == 0 && minute == 0 && second < 5) {
+    ESP_LOGD(TAG, "Panel clock just passed midnight, skipping drift");
     return;
   }
 
@@ -43,7 +56,7 @@ void SecTouchClockDriftSensor::on_panel_clock_(const std::string &clock) {
   panel.second = second;
   panel.recalc_timestamp_local();
   if (panel.timestamp == -1) {
-    ESP_LOGW(TAG, "Invalid panel date/clock '%s' '%s'", this->panel_date_.c_str(), clock.c_str());
+    ESP_LOGW(TAG, "Invalid panel date/clock '%s' '%s'", date.c_str(), clock.c_str());
     this->publish_state(NAN);
     return;
   }

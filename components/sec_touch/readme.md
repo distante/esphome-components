@@ -193,12 +193,15 @@ switch:
     web_server:
       sorting_group_id: group_settings
 
+time: # only needed for sync_clock / clock_drift, see "Panel Clock" below
+  - platform: homeassistant
+
 button:
   - platform: sec_touch
     program_text_update:
       name: "Program Labels Update"
       icon: "mdi:book-refresh"
-    sync_clock: # optional, needs a time source, see "Panel Clock" below
+    sync_clock:
       name: "Sync Panel Clock"
   - platform: restart
     name: "Restart"
@@ -301,9 +304,10 @@ sensor:
 
 - **`clock_drift`**: seconds the panel clock is ahead of the time source (negative: behind).
   The panel date and clock are read on every global settings poll (`global_settings_update_interval`).
-- **`sync_clock`**: sets the panel date and clock from the time source. The panel resets the
-  seconds to `00` on every write, so the write waits for the next full minute (up to 60 s
-  after the press). There is no automatic sync: trigger the button from a Home Assistant
+  In the repeated hour when daylight saving time ends, the panel's local time is read as
+  standard time, so even a correct panel shows +3600 s for that hour.
+- **`sync_clock`**: sets the panel date and clock from the time source. The panel drops the
+  seconds on write, so the write waits for the next full minute (up to 60 s after the press). There is no automatic sync: trigger the button from a Home Assistant
   automation, e.g. when the drift sensor exceeds a threshold or after a daylight saving change.
 
 ## Logging
@@ -686,8 +690,10 @@ Stored on `FAN_LABEL_IDS` array as:
 Stored on `GLOBAL_SETTING_IDS` array as:
 
 ```
-48
+48, 1, 2
 ```
+
+`1` and `2` are the panel date and clock, see [Panel Clock](#panel-clock). They are only polled when `clock_drift` is configured.
 
 | ID | Description | ON value | OFF value |
 |----|-------------|----------|-----------|

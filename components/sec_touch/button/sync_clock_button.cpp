@@ -15,7 +15,6 @@ void SecTouchSyncClockButton::press_action() {
     return;
   }
   // The panel resets the seconds to 00 on every write, so write on the next minute boundary.
-  // ponytail: the time source has second resolution, so the write lands up to ~1 s late.
   this->set_timeout("sync_clock", (60 - now.second) * 1000, [this]() { this->write_clock_(); });
 }
 

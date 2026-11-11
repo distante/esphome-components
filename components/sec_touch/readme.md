@@ -277,7 +277,7 @@ Notice that the fans numbers are ordered so:
 
 ## Panel Clock
 
-The SEC-Touch keeps its own date and clock (used by the "Automatik Zeit" programs). It
+The SEC-Touch keeps its own date and clock (shown on the touch screen and used by the "Automatik Zeit" programs). It
 drifts, and whether it handles daylight saving time by itself is unknown. With a [time source](https://esphome.io/components/time/)
 in your config, the component can show the drift and set the panel clock:
 

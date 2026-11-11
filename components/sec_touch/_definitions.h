@@ -22,7 +22,10 @@ constexpr const int COMMANDID_GET = 32800;
 constexpr const std::array<int, 6> FAN_LEVEL_IDS = {173, 174, 175, 176, 177, 178};
 constexpr const std::array<int, 6> FAN_LABEL_IDS = {78, 79, 80, 81, 82, 83};
 constexpr const int SUMMER_VENTILATION_PROPERTY_ID = 48;
-constexpr const std::array<int, 1> GLOBAL_SETTING_IDS = {SUMMER_VENTILATION_PROPERTY_ID};
+constexpr const int DATE_PROPERTY_ID = 1;   // "DD.MM.YY"
+constexpr const int CLOCK_PROPERTY_ID = 2;  // "HH:MM:SS"
+constexpr const std::array<int, 3> GLOBAL_SETTING_IDS = {SUMMER_VENTILATION_PROPERTY_ID, DATE_PROPERTY_ID,
+                                                         CLOCK_PROPERTY_ID};
 constexpr const int NAME_MAPPING_COUNT = 69;
 constexpr const char *NAME_MAPPING[NAME_MAPPING_COUNT] = {
     "-",                // 0 do NOT use an empty string since the text sensor will crash :)
@@ -107,6 +110,10 @@ using UpdateCallbackListener = std::function<void(int property_id, int new_value
 // a data response (command_id=32) or, if the hardware ever sends unsolicited messages
 // with a different command_id, distinguish those as well.
 using RawMessageCallbackListener = std::function<void(int command_id, int property_id, int new_value)>;
+
+// For properties whose value is not an integer on the wire (dates, clock), which the
+// int listeners only see truncated by atoi.
+using StringUpdateCallbackListener = std::function<void(int property_id, const std::string &raw_value)>;
 
 // Called when the task queue is empty and no task is awaiting a response
 using QueueEmptyListener = std::function<void()>;
@@ -225,7 +232,8 @@ struct BaseTask {
 };
 
 struct SetDataTask : public BaseTask {
-  char value[8];
+  // fits date and clock strings like "13:47:00"
+  char value[16];
 
   static std::unique_ptr<SetDataTask> create(TaskTargetType targetType, int property_id, const char *value) {
     if ((targetType == TaskTargetType::LEVEL && contains(FAN_LEVEL_IDS, property_id)) ||

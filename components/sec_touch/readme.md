@@ -198,6 +198,8 @@ button:
     program_text_update:
       name: "Program Labels Update"
       icon: "mdi:book-refresh"
+    sync_clock: # optional, needs a time source, see "Panel Clock" below
+      name: "Sync Panel Clock"
   - platform: restart
     name: "Restart"
     
@@ -273,6 +275,37 @@ Notice that the fans numbers are ordered so:
 | Pair 2 | Pair 4 | Pair 6 | ⚙️  |
 
 
+## Panel Clock
+
+The SEC-Touch keeps its own date and clock (used by the "Automatik Zeit" programs). It
+drifts, and whether it handles daylight saving time by itself is unknown. With a [time source](https://esphome.io/components/time/)
+in your config, the component can show the drift and set the panel clock:
+
+```yaml
+time:
+  - platform: homeassistant
+    id: ha_time
+
+button:
+  - platform: sec_touch
+    sync_clock:
+      name: "Sync Panel Clock"
+      # time_id: ha_time  # only needed with more than one time source
+
+sensor:
+  - platform: sec_touch
+    clock_drift:
+      name: "Panel Clock Drift"
+      # time_id: ha_time
+```
+
+- **`clock_drift`**: seconds the panel clock is ahead of the time source (negative: behind).
+  The panel date and clock are read on every global settings poll (`global_settings_update_interval`).
+- **`sync_clock`**: sets the panel date and clock from the time source. The panel resets the
+  seconds to `00` on every write, so the write waits for the next full minute (up to 60 s
+  after the press). There is no automatic sync: trigger the button from a Home Assistant
+  automation, e.g. when the drift sensor exceeds a threshold or after a daylight saving change.
+
 ## Logging
 
 Each component uses a distinct log tag. You can suppress noisy tags without hiding everything by adding a `logger` block to your YAML:
@@ -286,6 +319,7 @@ logger:
     sec_touch.fan: WARN       # fan entity state changes and control calls
     sec_touch.mode_select: WARN  # mode select entity
     sec_touch.switch: WARN  # summer ventilation switch
+    sec_touch.clock: WARN   # panel clock sync and drift
     sec_touch_sniffer: DEBUG  # sniffer discoveries and scan progress
 ```
 
@@ -297,6 +331,7 @@ logger:
 | `sec_touch.fan` | Fan entity | Moderate |
 | `sec_touch.mode_select` | Mode select entity | Low |
 | `sec_touch.switch` | Summer ventilation and other global switches | Low |
+| `sec_touch.clock` | Panel clock sync and drift | Low |
 | `sec_touch_sniffer` | Sniffer (passive + active scan) | Moderate |
 
 > **Tip:** When using the sniffer and you only want to see discovery output, set `sec_touch` and `sec_touch.uart` to `WARN` and `sec_touch_sniffer` to `INFO` or `DEBUG`.

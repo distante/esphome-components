@@ -30,8 +30,9 @@ The upstream dump (`1=23, 2=16`) fits the same pattern: day 23, hour 16.
 | 2  | `HH:MM:SS` | `13:32:08` |
 
 At the time of the scan, the controller clock was within a few seconds of local time
-(CET, after the switch from summer time). Whether the controller switches between summer
-and winter time by itself is unknown.
+(CET, after the switch from summer time). The panel has no daylight saving setting: the
+clock is plain local time as set on the display (here it had been set by hand after the
+switch).
 
 ### Writing date and clock
 

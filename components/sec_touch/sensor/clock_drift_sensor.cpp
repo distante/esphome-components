@@ -1,6 +1,9 @@
 #include "clock_drift_sensor.h"
+#ifdef USE_TIME
+
 #include <cmath>
 #include <cstdio>
+#include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 
 namespace esphome {
@@ -12,7 +15,10 @@ void SecTouchClockDriftSensor::setup() {
   // Global settings are polled in registration order, so the date always arrives
   // right before the clock it belongs to.
   this->parent_->register_global_setting_string_listener(
-      DATE_PROPERTY_ID, [this](int, const std::string &date) { this->panel_date_ = date; });
+      DATE_PROPERTY_ID, [this](int, const std::string &date) {
+        this->panel_date_ = date;
+        this->panel_date_ms_ = millis();
+      });
   this->parent_->register_global_setting_string_listener(
       CLOCK_PROPERTY_ID, [this](int, const std::string &clock) { this->on_panel_clock_(clock); });
 }
@@ -41,8 +47,10 @@ void SecTouchClockDriftSensor::on_panel_clock_(const std::string &clock) {
     this->publish_state(NAN);
     return;
   }
-  // The date is read just before the clock, so right after midnight it may still be yesterday's.
-  if (hour == 0 && minute == 0 && second < 5) {
+  // If the panel passed midnight since the date was read, that date is still yesterday's.
+  // Rounded up, so a reading right at the boundary is skipped too.
+  uint32_t since_date_s = (millis() - this->panel_date_ms_) / 1000 + 1;
+  if (static_cast<uint32_t>(hour * 3600 + minute * 60 + second) < since_date_s) {
     ESP_LOGD(TAG, "Panel clock just passed midnight, skipping drift");
     return;
   }
@@ -66,3 +74,5 @@ void SecTouchClockDriftSensor::on_panel_clock_(const std::string &clock) {
 
 }  // namespace sec_touch
 }  // namespace esphome
+
+#endif  // USE_TIME

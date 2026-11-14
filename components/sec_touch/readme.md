@@ -302,6 +302,9 @@ sensor:
       # time_id: ha_time
 ```
 
+`platform: homeassistant` only has a time while Home Assistant is reachable. Without Home Assistant (e.g. the
+[web server fallback](examples/webserver-fallback.yaml)), use `platform: sntp` instead.
+
 - **`clock_drift`**: seconds the panel clock is ahead of the time source (negative: behind).
   The panel date and clock are read on every global settings poll (`global_settings_update_interval`).
   In the repeated hour when daylight saving time ends, the panel's local time is read as

@@ -15,6 +15,7 @@ void SecTouchSyncClockButton::press_action() {
     return;
   }
   // The panel drops the seconds on write, so write on the next minute boundary.
+  ESP_LOGI(TAG, "Setting panel clock in %d s (next full minute)", 60 - now.second);
   this->set_timeout("sync_clock", (60 - now.second) * 1000, [this]() { this->write_clock_(); });
 }
 

@@ -1,5 +1,8 @@
 #pragma once
 
+#include "esphome/core/defines.h"
+#ifdef USE_TIME
+
 #include <string>
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/time/real_time_clock.h"
@@ -25,7 +28,10 @@ class SecTouchClockDriftSensor : public sensor::Sensor, public Component, public
   time::RealTimeClock *time_{nullptr};
   // the poll reads the date right before the clock, see setup(); consumed by on_panel_clock_()
   std::string panel_date_;
+  uint32_t panel_date_ms_{0};
 };
 
 }  // namespace sec_touch
 }  // namespace esphome
+
+#endif  // USE_TIME

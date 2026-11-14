@@ -3,6 +3,7 @@ from esphome.components import sensor, time
 import esphome.config_validation as cv
 from esphome.const import (
     CONF_TIME_ID,
+    DEVICE_CLASS_DURATION,
     ENTITY_CATEGORY_DIAGNOSTIC,
     STATE_CLASS_MEASUREMENT,
     UNIT_SECOND,
@@ -10,7 +11,7 @@ from esphome.const import (
 
 from .. import CONF_SEC_TOUCH_ID, SECTouchComponent, sec_touch_ns
 
-DEPENDENCIES = ["sec_touch", "time"]
+DEPENDENCIES = ["sec_touch"]
 
 SecTouchClockDriftSensor = sec_touch_ns.class_(
     "SecTouchClockDriftSensor", sensor.Sensor, cg.Component
@@ -23,6 +24,7 @@ CONFIG_SCHEMA = {
         SecTouchClockDriftSensor,
         unit_of_measurement=UNIT_SECOND,
         accuracy_decimals=0,
+        device_class=DEVICE_CLASS_DURATION,
         state_class=STATE_CLASS_MEASUREMENT,
         entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
         icon="mdi:clock-alert-outline",

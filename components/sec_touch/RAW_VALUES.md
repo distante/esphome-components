@@ -30,8 +30,9 @@ The upstream dump (`1=23, 2=16`) fits the same pattern: day 23, hour 16.
 | 2  | `HH:MM:SS` | `13:32:08` |
 
 At the time of the scan, the controller clock was within a few seconds of local time
-(CET, after the switch from summer time). Whether the controller switches between summer
-and winter time by itself is unknown.
+(CET, after the switch from summer time). The panel has no daylight saving setting: the
+clock is plain local time as set on the display (here it had been set by hand after the
+switch).
 
 ### Writing date and clock
 
@@ -71,8 +72,9 @@ Values with leading zeros (`5=0100`, `7=01`, `85=00`) are strings as well.
 
 ## Implementation Notes
 
-- `SetDataTask` can't send date and clock yet: it only accepts known IDs, and its
-  `char value[8]` holds 7 characters, so `13:47:00` would go out as `13:47:0`.
+- Date and clock are read by `clock_drift` and written by `sync_clock` (see
+  [Panel Clock](readme.md#panel-clock)). For that, IDs 1/2 are in `GLOBAL_SETTING_IDS`
+  and `SetDataTask`'s value buffer fits `HH:MM:SS` (it used to hold only 7 characters).
 - To sync the clock to the second, send `HH:MM:00` exactly on the minute boundary
   (the controller seems to drop the seconds, see above).
 - String values presumably have to be sent verbatim, like `0A00` / `0800` for summer

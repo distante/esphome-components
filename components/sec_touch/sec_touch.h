@@ -45,6 +45,12 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
    */
   void register_global_setting_recursive_listener(int property_id, UpdateCallbackListener listener);
 
+  /**
+   * Same polling cadence as `register_global_setting_recursive_listener`, but the
+   * listener gets the raw value string instead of its atoi result.
+   */
+  void register_global_setting_string_listener(int property_id, StringUpdateCallbackListener listener);
+
   void register_raw_message_listener(RawMessageCallbackListener listener);
   void register_queue_empty_listener(QueueEmptyListener listener);
   void add_discovery_get_task(int property_id);
@@ -54,7 +60,8 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   bool get_last_scan_task_timed_out() const { return last_scan_task_timed_out_; }
   bool is_property_registered(int property_id) const {
     return this->recursive_update_listeners.count(property_id) > 0 ||
-           this->manual_update_listeners.count(property_id) > 0;
+           this->manual_update_listeners.count(property_id) > 0 ||
+           this->string_update_listeners.count(property_id) > 0;
   }
 
   void set_inter_task_delay(uint32_t ms) { inter_task_delay_ms_ = ms; }
@@ -83,6 +90,8 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
 
   std::vector<int> global_setting_property_ids_;
 
+  std::map<int, StringUpdateCallbackListener> string_update_listeners;
+
   std::vector<RawMessageCallbackListener> raw_message_listeners;
   std::vector<QueueEmptyListener> queue_empty_listeners;
   bool scan_mode_active_{false};
@@ -91,7 +100,7 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   std::map<int, text_sensor::TextSensor *> text_sensors;
   std::map<int, SecTouchFan *> fans_;
 
-  void notify_update_listeners(int command_id, int property_id, int new_value);
+  void notify_update_listeners(int command_id, int property_id, int new_value, const std::string &raw_value);
   TaskType current_running_task_type = TaskType::NONE;
 
   void process_task_queue();
@@ -117,7 +126,7 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   bool optional_crc_{false};
   void process_data_of_current_incoming_message();
   bool validate_message_tabs(const char *buf, int len, int tab1, int tab2, int tab3);
-  int parse_value_field(const char *buf, int len, int tab2, int tab3);
+  std::string extract_value_field(const char *buf, int len, int tab2, int tab3);
   void log_not_enough_tabs_error(const char *buf, int len, int tab1, int tab2);
   void format_hex_dump(const uint8_t *buf, int len, char *out, size_t out_size);
 };

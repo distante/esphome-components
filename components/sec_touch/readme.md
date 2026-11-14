@@ -193,11 +193,16 @@ switch:
     web_server:
       sorting_group_id: group_settings
 
+time: # only needed for sync_clock / clock_drift, see "Panel Clock" below
+  - platform: homeassistant
+
 button:
   - platform: sec_touch
     program_text_update:
       name: "Program Labels Update"
       icon: "mdi:book-refresh"
+    sync_clock:
+      name: "Sync Panel Clock"
   - platform: restart
     name: "Restart"
     
@@ -273,6 +278,41 @@ Notice that the fans numbers are ordered so:
 | Pair 2 | Pair 4 | Pair 6 | ⚙️  |
 
 
+## Panel Clock
+
+The SEC-Touch keeps its own date and clock (shown on the touch screen and used by the "Automatik Zeit" programs). It
+drifts, and it has no daylight saving setting, so it needs setting at every switch. With a [time source](https://esphome.io/components/time/)
+in your config, the component can show the drift and set the panel clock:
+
+```yaml
+time:
+  - platform: homeassistant
+    id: ha_time
+
+button:
+  - platform: sec_touch
+    sync_clock:
+      name: "Sync Panel Clock"
+      # time_id: ha_time  # only needed with more than one time source
+
+sensor:
+  - platform: sec_touch
+    clock_drift:
+      name: "Panel Clock Drift"
+      # time_id: ha_time
+```
+
+`platform: homeassistant` only has a time while Home Assistant is reachable. Without Home Assistant (e.g. the
+[web server fallback](examples/webserver-fallback.yaml)), use `platform: sntp` instead.
+
+- **`clock_drift`**: seconds the panel clock is ahead of the time source (negative: behind).
+  The panel date and clock are read on every global settings poll (`global_settings_update_interval`).
+  In the repeated hour when daylight saving time ends, the panel's local time is read as
+  standard time, so even a correct panel shows +3600 s for that hour.
+- **`sync_clock`**: sets the panel date and clock from the time source. The panel drops the
+  seconds on write, so the write waits for the next full minute (up to 60 s after the press). There is no automatic sync: trigger the button from a Home Assistant
+  automation, e.g. when the drift sensor exceeds a threshold or after a daylight saving change.
+
 ## Logging
 
 Each component uses a distinct log tag. You can suppress noisy tags without hiding everything by adding a `logger` block to your YAML:
@@ -286,6 +326,7 @@ logger:
     sec_touch.fan: WARN       # fan entity state changes and control calls
     sec_touch.mode_select: WARN  # mode select entity
     sec_touch.switch: WARN  # summer ventilation switch
+    sec_touch.clock: WARN   # panel clock sync and drift
     sec_touch_sniffer: DEBUG  # sniffer discoveries and scan progress
 ```
 
@@ -297,6 +338,7 @@ logger:
 | `sec_touch.fan` | Fan entity | Moderate |
 | `sec_touch.mode_select` | Mode select entity | Low |
 | `sec_touch.switch` | Summer ventilation and other global switches | Low |
+| `sec_touch.clock` | Panel clock sync and drift | Low |
 | `sec_touch_sniffer` | Sniffer (passive + active scan) | Moderate |
 
 > **Tip:** When using the sniffer and you only want to see discovery output, set `sec_touch` and `sec_touch.uart` to `WARN` and `sec_touch_sniffer` to `INFO` or `DEBUG`.
@@ -656,14 +698,16 @@ Stored on `FAN_LABEL_IDS` array as:
 | 1 | Date | `DD.MM.YY` |
 | 2 | Clock | `HH:MM:SS` |
 
-Not used by the component yet. A plain SET in the same format worked in a test (the seconds were dropped). See [RAW_VALUES.md](RAW_VALUES.md).
+Read by `clock_drift` and written by `sync_clock`, see [Panel Clock](#panel-clock). The controller drops the seconds on write. Details in [RAW_VALUES.md](RAW_VALUES.md).
 
 ## Global Settings
 Stored on `GLOBAL_SETTING_IDS` array as:
 
 ```
-48
+48, 1, 2
 ```
+
+`1` and `2` are the panel date and clock, see [Panel Clock](#panel-clock). They are only polled when `clock_drift` is configured.
 
 | ID | Description | ON value | OFF value |
 |----|-------------|----------|-----------|

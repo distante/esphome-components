@@ -172,7 +172,8 @@ esphome::optional<SecTouchFan *> SECTouchComponent::get_fan(int level_id) {
   return esphome::optional<SecTouchFan *>{};
 }
 
-void SECTouchComponent::notify_update_listeners(int command_id, int property_id, int new_value) {
+void SECTouchComponent::notify_update_listeners(int command_id, int property_id, int new_value,
+                                                const std::string &raw_value) {
   ESP_LOGV(TAG, "notify_update_listeners command_id=%d property_id=%d", command_id, property_id);
 
   if (this->scan_mode_active_) {
@@ -184,6 +185,11 @@ void SECTouchComponent::notify_update_listeners(int command_id, int property_id,
 
   auto recursive_listener = this->recursive_update_listeners.find(property_id);
   auto manual_listener = this->manual_update_listeners.find(property_id);
+  auto string_listener = this->string_update_listeners.find(property_id);
+
+  if (string_listener != this->string_update_listeners.end()) {
+    string_listener->second(property_id, raw_value);
+  }
 
   if (recursive_listener != this->recursive_update_listeners.end()) {
     ESP_LOGV(TAG, "recursive_update_listener found for property_id %d", property_id);
@@ -196,7 +202,8 @@ void SECTouchComponent::notify_update_listeners(int command_id, int property_id,
   }
 
   if (recursive_listener == this->recursive_update_listeners.end() &&
-      manual_listener == this->manual_update_listeners.end()) {
+      manual_listener == this->manual_update_listeners.end() &&
+      string_listener == this->string_update_listeners.end()) {
     if (this->raw_message_listeners.empty()) {
       ESP_LOGW(TAG, "No listener for property_id %d (value %d)", property_id, new_value);
       return;
@@ -307,6 +314,13 @@ void SECTouchComponent::register_manual_update_listener(int property_id, UpdateC
 void SECTouchComponent::register_global_setting_recursive_listener(int property_id, UpdateCallbackListener listener) {
   ESP_LOGD(TAG, "register_global_setting_recursive_listener for property_id %d", property_id);
   this->recursive_update_listeners[property_id] = std::move(listener);
+  this->global_setting_property_ids_.push_back(property_id);
+}
+
+void SECTouchComponent::register_global_setting_string_listener(int property_id,
+                                                                StringUpdateCallbackListener listener) {
+  ESP_LOGD(TAG, "register_global_setting_string_listener for property_id %d", property_id);
+  this->string_update_listeners[property_id] = std::move(listener);
   this->global_setting_property_ids_.push_back(property_id);
 }
 
@@ -442,11 +456,11 @@ bool SECTouchComponent::validate_message_tabs(const char *buf, int len, int tab1
   return true;
 }
 
-int SECTouchComponent::parse_value_field(const char *buf, int len, int tab2, int tab3) {
+std::string SECTouchComponent::extract_value_field(const char *buf, int len, int tab2, int tab3) {
   if (tab3 != -1) {
-    return atoi(std::string(&buf[tab2 + 1], tab3 - tab2 - 1).c_str());
+    return std::string(&buf[tab2 + 1], tab3 - tab2 - 1);
   }
-  return atoi(std::string(&buf[tab2 + 1], len - tab2 - 2).c_str());  // -2 to skip ETX
+  return std::string(&buf[tab2 + 1], len - tab2 - 2);  // -2 to skip ETX
 }
 
 void SECTouchComponent::process_data_of_current_incoming_message() {
@@ -533,16 +547,17 @@ where:
   // Extract command id, property id, value, crc
   int command_id  = atoi(std::string(&buf[1], tab1 - 1).c_str());
   int property_id = atoi(std::string(&buf[tab1 + 1], tab2 - tab1 - 1).c_str());
-  int value       = this->parse_value_field(buf, len, tab2, tab3);
+  std::string raw_value = this->extract_value_field(buf, len, tab2, tab3);
+  int value       = atoi(raw_value.c_str());
   int crc         = (tab3 != -1) ? atoi(std::string(&buf[tab3 + 1], len - tab3 - 2).c_str()) : -1;
 
-  ESP_LOGD(TAG, "  [process_data] command_id: %d, property_id: %d, value: %d, crc: %d", command_id, property_id, value,
-           crc);
+  ESP_LOGD(TAG, "  [process_data] command_id: %d, property_id: %d, value: %d (raw '%s'), crc: %d", command_id,
+           property_id, value, raw_value.c_str(), crc);
 
   // Optionally: validate CRC here if needed
 
   // Notify listeners
-  this->notify_update_listeners(command_id, property_id, value);
+  this->notify_update_listeners(command_id, property_id, value, raw_value);
 
   this->cleanup_after_task_complete();
   this->send_ack_message();  // Send ACK back

@@ -1,0 +1,356 @@
+<!doctype html>
+<!--
+  PROTOTYPE — throwaway. Wayfinder ticket "What should the sniffer HTML page look like and do?" (#26).
+  Three variants of the sniffer page, switchable via ?variant=A|B|C, against a fake in-page device.
+  Open by double-clicking. Browser storage key: PROTOTYPE-sniffer-wipe-me.
+  The fake device JSON shape is a guess, NOT the device/page contract (that is ticket #27).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEC-Touch sniffer (PROTOTYPE)</title>
+<style>
+  :root { --bg:#fafafa; --fg:#1d1d1f; --mute:#6e6e73; --line:#ddd; --hi:#fff6d6; --acc:#0a66c2; --bad:#c0392b; --ok:#1e8449; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:13px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--fg); padding:0 12px 80px; }
+  h1 { font-size:15px; margin:10px 0; }
+  button { font:inherit; padding:3px 9px; cursor:pointer; }
+  input, select, textarea { font:inherit; }
+  code, .mono { font-family:ui-monospace, Menlo, monospace; }
+  .mute { color:var(--mute); }
+  .badge { display:inline-block; padding:0 5px; border-radius:3px; font-size:11px; border:1px solid var(--line); background:#fff; }
+  .t-int{background:#e8f1fb} .t-decimal{background:#e6f6ee} .t-date{background:#fbeee6} .t-time{background:#f4e9fb} .t-text{background:#f2f2f2} .t-padded{background:#d3e4f7} .t-hex{background:#fde7f1} .t-text-or-hex{background:#f6e6ee} .t-empty{background:#fff;color:#999;border-style:dashed}
+  .s-nak{color:var(--bad)} .s-timeout{color:#b9770e} .s-ok{color:var(--ok)} .s-unqueried{color:#999}
+  .stale { opacity:.55; font-style:italic; }
+  .flash { animation:flash 2s; } @keyframes flash { from{background:#ffe58a} to{background:transparent} }
+  .bar { height:8px; background:#e5e5e5; border-radius:4px; overflow:hidden; } .bar > i { display:block; height:100%; background:var(--acc); }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  table { border-collapse:collapse; width:100%; background:#fff; }
+  th, td { border-bottom:1px solid var(--line); padding:3px 6px; text-align:left; vertical-align:top; white-space:nowrap; }
+  th { position:sticky; top:0; background:#f0f0f0; cursor:pointer; user-select:none; }
+  tr.sel td { background:#eef4fb; }
+  .hist { font-family:ui-monospace,Menlo,monospace; font-size:12px; }
+  textarea { width:100%; min-height:60px; }
+  /* prototype chrome — deliberately loud, not part of the design */
+  #switcher { position:fixed; left:50%; bottom:14px; transform:translateX(-50%); background:#111; color:#fff; border-radius:999px; padding:6px 10px; display:flex; gap:10px; align-items:center; box-shadow:0 4px 16px #0005; z-index:99; }
+  #switcher button { background:#333; color:#fff; border:0; border-radius:999px; }
+  #dev { position:fixed; right:10px; bottom:60px; width:330px; max-height:70vh; overflow:auto; background:#2b2b2b; color:#eee; border:2px dashed #f39c12; border-radius:6px; padding:8px; z-index:98; font-size:12px; }
+  #dev button { margin:2px 0; } #dev table { background:#333; color:#eee; } #dev td { border-color:#444; padding:1px 4px; }
+  #dev.closed > :not(summary) { display:none; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="switcher"></div>
+<div id="dev"></div>
+<script>
+'use strict';
+// ───────────────────────── fixtures (RAW_VALUES.md, scan of 2026-11-11) ─────────────────────────
+const FIXTURE = '1=11.11.26, 2=13:32:08, 3=SWZ0021E21H, 4=00, 5=0100, 6=1, 7=01, 8=01, 9=00, 10=ETA0032E23G, 11=00, 12=00, 13=-----------, 14=00, 15=00, 16=-----------, 17=00, 18=00, 19=00, 20=00.00.00, 21=00:00:00, 22=40, 23=32, 24=28, 25=25, 26=21, 27=0, 28=61, 29=70, 30=74, 33=100, 34=50, 35=50, 36=50, 37=50, 38=50, 39=50, 40=50, 41=50, 42=50, 43=50, 44=50, 45=50, 46=50, 47=75, 49=1200, 50=400, 51=20, 52=70, 53=10, 54=20, 55=0.360.00:00, 56=120, 57=0, 58=1, 59=95, 60=7, 61=7, 62=7, 63=7, 64=7, 65=0, 66=1, 67=2, 68=3, 69=4, 70=5, 71=6, 72=0, 73=0, 74=0, 75=0, 76=0, 77=0, 83=0, 84=0, 85=00               , 86=0, 87=00, 88=0, 89=00, 90=0, 91=0, 92=100, 93=0, 94=6, 95=0, 96=100, 97=250, 98=2000, 99=-50.0, 100=50.0, 101=03, 102=09:30:00, 103=09:00:00, 104=15:00:00, 105=20:00:00, 106=22:00:00, 107=3, 108=7, 109=0, 110=0, 111=0, 112=03, 113=09:00:00, 114=09:30:00, 115=15:00:00, 116=20:00:00, 117=22:00:00, 118=7, 119=3, 120=0, 121=0, 122=0, 123=03, 124=09:00:00, 125=09:30:00, 126=15:00:00, 127=20:00:00, 128=23:00:00, 129=7, 130=3, 131=0, 132=0, 133=2, 134=03, 135=09:00:00, 136=09:30:00, 137=15:00:00, 138=20:00:00, 139=22:00:00, 140=7, 141=3, 142=0, 143=0, 144=3, 145=03, 146=09:00:00, 147=09:30:00, 148=15:00:00, 149=20:00:00, 150=22:00:00, 151=7, 152=3, 186=31, 187=27, 188=18, 189=10, 193=74, 194=85, 195=100, 196=0, 197=36, 198=31, 199=27, 200=23, 201=18, 202=10, 203=64, 204=70, 205=74, 206=80, 207=85, 208=100';
+const WIRE = {};
+FIXTURE.split(/, (?=\d+=)/).forEach(p => { const i = p.indexOf('='); WIRE[+p.slice(0, i)] = p.slice(i + 1); });
+// Registered on this device: date/clock (GLOBAL_SETTING_IDS), summer vent 48, fan pairs 78–82 / 173–177.
+const REGISTERED = new Set([1, 2, 48, 78, 79, 80, 81, 82, 173, 174, 175, 176, 177]);
+const REG_VALUES = { 48: '0A00', 78: '2', 79: '2', 80: '3', 81: '2', 82: '2', 173: '1', 174: '1', 175: '1', 176: '1', 177: '1' };
+const NAK_IDS = new Set([31, 32, 153, 154, 155]); // invented, to show the status
+const SCAN_START = 1, SCAN_END = 255; // from YAML, read-only on the page
+
+// ───────────────────────── type guessing (runs in the browser) ─────────────────────────
+// Per value: first matching rule wins. Trailing/leading space padding is ignored.
+const TYPE_RULES = [
+  ['empty',       s => s === '' || /^-+$/.test(s)],
+  ['date',        s => /^\d\d\.\d\d\.\d\d$/.test(s)],
+  ['time',        s => /^\d\d:\d\d(:\d\d)?$/.test(s)],
+  ['decimal',     s => /^-?\d+\.\d+$/.test(s)],
+  ['padded int',  s => /^0\d+$/.test(s)],
+  ['int',         s => /^-?\d+$/.test(s)],
+  ['text or hex', s => /^[0-9A-Fa-f]+$/.test(s)],
+  ['text',        s => true],
+];
+function guessType(raw) {
+  if (raw == null) { return null; }
+  const s = raw.trim();
+  return TYPE_RULES.find(([, f]) => f(s))[0];
+}
+// Per ID: settle the type across every value in its history (ring), ignoring empties.
+function guessTypeId(values) {
+  const vs = values.filter(v => v != null && guessType(v) !== 'empty');
+  if (!vs.length) { return values.some(v => v != null) ? 'empty' : null; }
+  const ts = new Set(vs.map(guessType));
+  if (ts.size === 1) { return [...ts][0]; }
+  const allHexDigits = vs.every(v => /^[0-9A-Fa-f]+$/.test(v.trim()));
+  if (allHexDigits && ts.has('text or hex')) { return 'hex'; } // e.g. 0A00 + 0800
+  if (ts.has('text') || ts.has('text or hex')) { return 'text'; }
+  if ([...ts].every(t => t === 'int' || t === 'padded int')) { return 'padded int'; } // e.g. 0100 + 80
+  return 'text'; // conflicting shapes (e.g. date + time): treat as text
+}
+const TYPES = ['int', 'padded int', 'decimal', 'date', 'time', 'hex', 'text or hex', 'text', 'empty'];
+
+// ───────────────────────── fake device (stands in for the ESP) ─────────────────────────
+const dev = { bootWall: Date.now() - 3 * 3600e3, recs: {}, scan: { active: false, cur: 209, done: false } }; // an earlier scan was stopped at 209
+const up = () => Date.now() - dev.bootWall;
+function devRec(id) {
+  return dev.recs[id] ??= { id, cmd: 32, raw: null, first_seen: null, last_seen: null, last_changed: null, change_count: 0, status: 'unqueried', status_at: null, history: [] };
+}
+function devMsg(id, raw, t = up()) {
+  const r = devRec(id);
+  r.last_seen = t; r.cmd = 32;
+  if (r.raw === null) { r.first_seen = t; r.last_changed = t; r.raw = raw; r.history.push({ raw, t }); return; }
+  if (r.raw === raw) { return; }
+  r.raw = raw; r.last_changed = t; r.change_count++;
+  r.history.push({ raw, t });
+  if (r.history.length > 8) { r.history.shift(); }
+}
+function devStatus(id, s, t = up()) { const r = devRec(id); r.status = s; r.status_at = t; }
+function seedDevice() {
+  dev.recs = {};
+  const scanT = up() - 2.5 * 3600e3;
+  for (let id = SCAN_START; id <= 208; id++) {
+    if (REGISTERED.has(id)) { continue; }
+    if (NAK_IDS.has(id)) { devStatus(id, 'nak', scanT + id * 300); continue; }
+    if (WIRE[id] === undefined) { devStatus(id, 'timeout', scanT + id * 300); continue; }
+    devMsg(id, WIRE[id], scanT + id * 300); devStatus(id, 'ok', scanT + id * 300);
+  }
+  // some history so the page has something to show
+  [[186, ['29', '30', '31']], [99, ['-50.0']], [5, ['0100', '0080', '0100']], [197, ['34', '35', '36']]].forEach(([id, vals], k) => {
+    vals.forEach((v, i) => devMsg(id, v, up() - (3 - i) * 1800e3 + k * 1000));
+  });
+  // registered IDs, seen via polling
+  for (const id of REGISTERED) {
+    const v = id === 1 ? '15.11.26' : id === 2 ? clockStr() : REG_VALUES[id];
+    devMsg(id, v, up() - 3 * 3600e3 + 5000);
+  }
+}
+function clockStr() { return new Date().toTimeString().slice(0, 8); }
+seedDevice();
+let passiveRate = 1; // ticks per second scale
+setInterval(() => {
+  if (!dev.scan.active) {
+    devMsg(2, clockStr()); // polled clock changes every tick
+    if (Math.random() < 0.15 * passiveRate) { const id = 186 + Math.floor(Math.random() * 4); devMsg(id, String(20 + Math.floor(Math.random() * 15))); }
+    if (Math.random() < 0.05 * passiveRate) { devMsg(78 + Math.floor(Math.random() * 5), String(1 + Math.floor(Math.random() * 4))); }
+  }
+  pullFromDevice();
+}, 1000);
+let scanTimer = null;
+function scanStep() {
+  const s = dev.scan;
+  while (s.cur <= SCAN_END && REGISTERED.has(s.cur)) { s.cur++; }
+  if (s.cur > SCAN_END) { s.active = false; s.done = true; clearInterval(scanTimer); pullFromDevice(); return; }
+  const id = s.cur++;
+  if (NAK_IDS.has(id)) { devStatus(id, 'nak'); }
+  else if (WIRE[id] === undefined && id >= 209) { devStatus(id, 'timeout'); }
+  else { devMsg(id, WIRE[id] ?? String(Math.floor(Math.random() * 100))); devStatus(id, 'ok'); }
+}
+function scanToggle() {
+  const s = dev.scan;
+  if (s.active) { s.active = false; clearInterval(scanTimer); pullFromDevice(); return; }
+  if (s.done) { s.cur = SCAN_START; s.done = false; }
+  s.active = true; scanTimer = setInterval(scanStep, 120); pullFromDevice();
+}
+function deviceJSON() { // what GET /sniffer.json might return — a guess
+  return JSON.parse(JSON.stringify({
+    uptime_ms: up(),
+    scan: { active: dev.scan.active, start: SCAN_START, end: SCAN_END, next_id: dev.scan.cur, done: dev.scan.done },
+    records: Object.values(dev.recs).map(r => ({ ...r, registered: REGISTERED.has(r.id) })),
+  }));
+}
+
+// ───────────────────────── page model: device data + browser copy + notes ─────────────────────────
+const LS = 'PROTOTYPE-sniffer-wipe-me';
+let store = load();
+function load() { try { return JSON.parse(localStorage.getItem(LS)) || { records: {}, notes: {} }; } catch { return { records: {}, notes: {} }; } }
+function save() { try { localStorage.setItem(LS, JSON.stringify(store)); } catch {} }
+let live = null; // latest device JSON
+let flashUntil = {}; // id -> wall time
+const wall = t => t == null ? null : Date.now() - (live.uptime_ms - t);
+function pullFromDevice() {
+  const prev = live;
+  live = deviceJSON();
+  // Merge rule (to judge): the device wins for every ID it has; the browser copy keeps IDs the device lost (e.g. after a reboot), marked stale.
+  for (const r of live.records) {
+    const w = { ...r, w_first: wall(r.first_seen), w_seen: wall(r.last_seen), w_changed: wall(r.last_changed), w_status: wall(r.status_at), history: r.history.map(h => ({ raw: h.raw, w: wall(h.t) })) };
+    const old = store.records[r.id];
+    if (old && old.raw !== w.raw && prev) { flashUntil[r.id] = Date.now() + 2000; }
+    store.records[r.id] = w;
+  }
+  store.liveIds = live.records.map(r => r.id);
+  save();
+  render();
+}
+function rows() {
+  const liveIds = new Set(store.liveIds || []);
+  return Object.values(store.records).map(r => ({ ...r, stale: !liveIds.has(r.id), type: guessTypeId(r.history.length ? r.history.map(h => h.raw) : [r.raw]), muted: !!(store.muted || {})[r.id], note: store.notes[r.id] || '' }));
+}
+function toggleMute(id) { store.muted ??= {}; if (store.muted[id]) { delete store.muted[id]; } else { store.muted[id] = true; } save(); render(); }
+function setNote(id, text) { if (text) { store.notes[id] = text; } else { delete store.notes[id]; } save(); }
+
+// ───────────────────────── shared helpers ─────────────────────────
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const shown = raw => raw == null ? '<span class="mute">—</span>' : `<code>${esc(raw.trim())}</code>${raw !== raw.trim() ? ' <span class="mute" title="padded on the wire">␣</span>' : ''}`;
+function ago(w) {
+  if (w == null) { return '—'; }
+  const s = Math.round((Date.now() - w) / 1000);
+  if (s < 60) { return s + 's ago'; } if (s < 3600) { return Math.round(s / 60) + 'm ago'; } return (s / 3600).toFixed(1) + 'h ago';
+}
+const clock = w => w == null ? '—' : new Date(w).toLocaleTimeString();
+const tcls = t => t === 'padded int' ? 'padded' : t.replace(/ /g, '-');
+const typeBadge = t => t ? `<span class="badge t-${tcls(t)}">${t}</span>` : '';
+const statusTxt = s => `<span class="s-${s}">${s}</span>`;
+const regBadge = r => r.registered ? '<span class="badge" title="registered: read-only, polled by the hub">REG</span>' : '';
+function scanBlock(compact) {
+  const s = live.scan;
+  const pct = Math.round(100 * (Math.min(s.next_id, s.end + 1) - s.start) / (s.end - s.start + 1));
+  const label = s.active ? `Scanning ID ${s.next_id} of ${s.start}–${s.end}` : s.done ? `Last scan complete (${s.start}–${s.end})` : `Scan stopped at ID ${s.next_id} (${s.start}–${s.end}) — resumes there`;
+  return `<div class="row"><button onclick="scanToggle()">${s.active ? '■ Stop scan' : '▶ Start scan'}</button>
+    <div style="flex:${compact ? '0 0 120px' : '1'}"><div class="bar"><i style="width:${pct}%"></i></div></div><span class="mute">${label}</span></div>`;
+}
+const filt = { q: '', types: new Set(TYPES), hideReg: false, recent: 0, status: 'all', sort: 'id', dir: 1 };
+function applyFilters(list) {
+  const q = filt.q.trim().toLowerCase();
+  return list.filter(r =>
+    (r.type ? filt.types.has(r.type) : true) &&
+    (!filt.hideReg || !r.registered) &&
+    (filt.status === 'all' || r.status === filt.status) &&
+    (!filt.recent || (r.w_changed && Date.now() - r.w_changed < filt.recent * 60e3 && r.change_count > 0)) &&
+    (!q || String(r.id) === q || (r.raw || '').toLowerCase().includes(q) || r.note.toLowerCase().includes(q))
+  ).sort((a, b) => {
+    const k = filt.sort, va = a[k] ?? -Infinity, vb = b[k] ?? -Infinity;
+    return (va > vb ? 1 : va < vb ? -1 : a.id - b.id) * filt.dir;
+  });
+}
+function filterBar() {
+  return `<div class="row">
+    <input data-k="q" placeholder="ID, value or note…" value="${esc(filt.q)}" oninput="filt.q=this.value;render()" style="width:170px">
+    ${TYPES.map(t => `<label class="badge t-${tcls(t)}"><input type="checkbox" ${filt.types.has(t) ? 'checked' : ''} onchange="filt.types.has('${t}')?filt.types.delete('${t}'):filt.types.add('${t}');render()">${t}</label>`).join('')}
+    <select onchange="filt.status=this.value;render()">${['all', 'ok', 'nak', 'timeout', 'unqueried'].map(s => `<option ${filt.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
+    <label><input type="checkbox" ${filt.hideReg ? 'checked' : ''} onchange="filt.hideReg=this.checked;render()"> hide registered</label>
+    <select onchange="filt.recent=+this.value;render()">${[[0, 'any time'], [5, 'changed < 5 min'], [60, 'changed < 1 h']].map(([v, l]) => `<option value="${v}" ${filt.recent === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+  </div>`;
+}
+function exportBtns() { return `<button onclick="exportJSON()">Export JSON</button> <button onclick="exportCSV()">Export CSV</button>`; }
+function download(name, text, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); }
+function exportJSON() {
+  download('sec_touch_sniffer.json', JSON.stringify({ exported_at: new Date().toISOString(), device_uptime_ms: live.uptime_ms, scan: live.scan,
+    records: rows().map(r => ({ id: r.id, cmd: r.cmd, raw: r.raw, guessed_type: r.type, registered: r.registered, status: r.status, change_count: r.change_count,
+      first_seen: { uptime_ms: r.first_seen, wall: r.w_first && new Date(r.w_first).toISOString() }, last_changed: { uptime_ms: r.last_changed, wall: r.w_changed && new Date(r.w_changed).toISOString() },
+      history: r.history.map(h => ({ raw: h.raw, wall: new Date(h.w).toISOString() })), stale: r.stale, note: r.note })) }, null, 2), 'application/json');
+}
+function exportCSV() {
+  const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = [['id', 'raw', 'guessed_type', 'registered', 'status', 'change_count', 'first_seen', 'last_changed', 'note'].join(',')];
+  rows().sort((a, b) => a.id - b.id).forEach(r => lines.push([r.id, q(r.raw), r.type ?? '', r.registered, r.status, r.change_count, r.w_first ? new Date(r.w_first).toISOString() : '', r.w_changed ? new Date(r.w_changed).toISOString() : '', q(r.note)].join(',')));
+  download('sec_touch_sniffer.csv', lines.join('\n'), 'text/csv');
+}
+function histList(r) {
+  if (!r.history.length) { return '<span class="mute">no values</span>'; }
+  return r.history.slice().reverse().map((h, i) => `<div class="hist">${clock(h.w)} <span class="mute">(${ago(h.w)})</span> ${shown(h.raw)}${i === 0 ? ' <span class="mute">← current</span>' : ''}</div>`).join('');
+}
+function noteArea(r) { return `<textarea data-k="note-${r.id}" placeholder="Note for ID ${r.id} (browser only, in the export)" oninput="setNote(${r.id}, this.value)">${esc(r.note)}</textarea>`; }
+const fl = r => (flashUntil[r.id] || 0) > Date.now() ? 'flash' : '';
+
+// ───────────────────────── Variant A: one dense table ─────────────────────────
+let openA = new Set();
+function VariantA(list) {
+  const cols = [['id', 'ID'], ['raw', 'Raw value'], ['type', 'Type'], ['registered', 'Reg'], ['status', 'Scan'], ['w_changed', 'Last change'], ['change_count', 'Changes'], ['note', 'Note']];
+  const head = cols.map(([k, l]) => `<th onclick="filt.sort==='${k}'?filt.dir*=-1:(filt.sort='${k}',filt.dir=1);render()">${l}${filt.sort === k ? (filt.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('');
+  const body = list.map(r => `
+    <tr class="${r.stale ? 'stale' : ''} ${openA.has(r.id) ? 'sel' : ''}" onclick="openA.has(${r.id})?openA.delete(${r.id}):openA.add(${r.id});render()">
+      <td><b>${r.id}</b></td><td class="${fl(r)}">${shown(r.raw)}</td><td>${typeBadge(r.type)}</td><td>${regBadge(r)}</td><td>${statusTxt(r.status)}</td>
+      <td title="${clock(r.w_changed)}">${r.change_count ? ago(r.w_changed) : '<span class="mute">never</span>'}</td><td>${r.change_count}</td>
+      <td style="white-space:normal;max-width:260px">${esc(r.note) || '<span class="mute">+ note</span>'}</td></tr>
+    ${openA.has(r.id) ? `<tr class="sel"><td></td><td colspan="4">${histList(r)}<div class="mute">cmd ${r.cmd} · first seen ${clock(r.w_first)} · last seen ${ago(r.w_seen)}${r.status_at ? ' · scan ' + r.status + ' ' + ago(r.w_status) : ''}${r.stale ? ' · <b>from browser copy, not on device</b>' : ''}</div></td>
+      <td colspan="3" onclick="event.stopPropagation()">${noteArea(r)}</td></tr>` : ''}`).join('');
+  return `<h1>SEC-Touch sniffer <span class="mute">· ${list.length} of ${rows().length} IDs</span></h1>
+    ${scanBlock()}<div style="margin:8px 0" class="row">${filterBar()}<span style="flex:1"></span>${exportBtns()}</div>
+    <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+// ───────────────────────── Variant B: master list + detail pane ─────────────────────────
+let selB = 55;
+function VariantB(list) {
+  const all = rows(); const r = all.find(x => x.id === selB) || list[0];
+  const item = x => `<div onclick="selB=${x.id};render()" class="${x.stale ? 'stale' : ''} ${fl(x)}" style="display:flex;gap:6px;padding:3px 6px;cursor:pointer;border-bottom:1px solid var(--line);${x.id === r?.id ? 'background:#eef4fb' : ''}">
+      <b style="width:30px">${x.id}</b><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${shown(x.raw)}</span>${x.note ? '✎' : ''}${x.registered ? '<span class="mute">R</span>' : ''}${x.status === 'ok' || x.status === 'unqueried' ? '' : statusTxt(x.status[0].toUpperCase())}</div>`;
+  const detail = !r ? '<p class="mute">Nothing selected.</p>' : `
+    <div class="row"><h1 style="margin:0">ID ${r.id}</h1>${typeBadge(r.type)}${regBadge(r)}${r.stale ? '<span class="badge">browser copy only</span>' : ''}</div>
+    <div style="font-size:28px;margin:10px 0" class="${fl(r)}">${shown(r.raw)}</div>
+    ${r.raw != null && r.raw !== r.raw.trim() ? `<div class="mute">On the wire: <code>"${esc(r.raw)}"</code></div>` : ''}
+    <table style="width:auto;margin:10px 0"><tr><td class="mute">Changes</td><td>${r.change_count}</td></tr><tr><td class="mute">Last change</td><td>${clock(r.w_changed)} (${ago(r.w_changed)})</td></tr>
+      <tr><td class="mute">First / last seen</td><td>${clock(r.w_first)} / ${ago(r.w_seen)}</td></tr><tr><td class="mute">Scan status</td><td>${statusTxt(r.status)} ${r.w_status ? ago(r.w_status) : ''}</td></tr><tr><td class="mute">Command id</td><td>${r.cmd}</td></tr></table>
+    <h3>History</h3>${histList(r)}<h3>Notes</h3>${noteArea(r)}`;
+  return `<div style="display:flex;gap:12px;height:calc(100vh - 110px);margin-top:10px">
+      <div style="width:290px;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line)">
+        <div style="padding:6px;border-bottom:1px solid var(--line)"><b>SEC-Touch sniffer</b> <span class="mute">${list.length}/${all.length}</span>
+          <details><summary class="mute">Filters &amp; sort</summary>${filterBar()}<div class="row">Sort <select onchange="filt.sort=this.value;render()">${[['id', 'ID'], ['w_changed', 'Last change'], ['change_count', 'Changes']].map(([k, l]) => `<option value="${k}" ${filt.sort === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+          <button onclick="filt.dir*=-1;render()">${filt.dir > 0 ? '▲' : '▼'}</button></div></details></div>
+        <div data-scroll="bl" style="overflow:auto;flex:1">${list.map(item).join('')}</div></div>
+      <div data-scroll="bd" style="flex:1;overflow:auto;padding:4px 10px">${detail}</div></div>
+    <div style="position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:6px 12px 6px" class="row">${scanBlock(true)}<span style="flex:1"></span>${exportBtns()}<span style="width:260px"></span></div>`;
+}
+
+// ───────────────────────── Variant C: 256-cell ID map + change feed ─────────────────────────
+let selC = null; let colourBy = 'type';
+const TYPE_COL = { int: '#9cc3ea', 'padded int': '#6fa3d8', decimal: '#8fd4ae', date: '#f0b48a', time: '#c9a2e6', hex: '#f39ac2', 'text or hex': '#f2c4d8', text: '#bbb', empty: '#fff' };
+const STAT_COL = { ok: '#8fd4ae', nak: '#e88b80', timeout: '#f5cf74', unqueried: '#eee' };
+function VariantC(list) {
+  const all = rows(); const vis = new Set(list.map(r => r.id)); const byId = Object.fromEntries(all.map(r => [r.id, r]));
+  let cells = '';
+  for (let id = 0; id < 256; id++) {
+    const r = byId[id]; const scanning = live.scan.active && live.scan.next_id === id;
+    const bg = !r ? '#f7f7f7' : colourBy === 'type' ? (r.type ? TYPE_COL[r.type] : STAT_COL[r.status]) : STAT_COL[r.status];
+    cells += `<div onclick="selC=${id};render()" title="${id}${r ? ' = ' + esc(r.raw ?? r.status) : ''}" class="${r ? fl(r) : ''}" style="aspect-ratio:1;font-size:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;
+      background:${bg};opacity:${r && !vis.has(id) ? .15 : r?.stale ? .5 : 1};border:${r?.registered ? '2px solid #333' : '1px solid #e2e2e2'};${scanning ? 'outline:3px solid var(--acc);' : ''}${selC === id ? 'outline:2px solid red;' : ''}">
+      <span class="mute">${id}</span><span class="mono" style="font-size:10px;overflow:hidden;max-width:100%;white-space:nowrap">${r?.raw != null ? esc(r.raw.trim().slice(0, 6)) : ''}</span>${r?.note ? '<span>✎</span>' : ''}</div>`;
+  }
+  const feed = all.flatMap(r => r.history.slice(1).map((h, i) => ({ id: r.id, raw: h.raw, from: r.history[i].raw, w: h.w })))
+    .filter(e => vis.has(e.id) && !byId[e.id].muted).sort((a, b) => b.w - a.w).slice(0, 40)
+    .map(e => `<div onclick="selC=${e.id};render()" style="cursor:pointer;border-bottom:1px solid var(--line);padding:2px 0"><span class="mute">${clock(e.w)}</span> <b>${e.id}</b> <code>${esc(e.from.trim())}</code> → <code>${esc(e.raw.trim())}</code></div>`).join('');
+  const r = byId[selC];
+  const drawer = selC == null ? '' : `<div style="background:#fff;border:1px solid var(--line);padding:8px;margin-bottom:10px">
+      <div class="row"><b>ID ${selC}</b>${r ? typeBadge(r.type) + regBadge(r) + statusTxt(r.status) : '<span class="mute">never seen</span>'}<span style="flex:1"></span>${r ? `<button onclick="toggleMute(${selC})">${r.muted ? 'Unmute in feed' : 'Mute in feed'}</button>` : ''}<button onclick="selC=null;render()">×</button></div>
+      ${r ? `<div style="font-size:20px;margin:6px 0">${shown(r.raw)}</div><div class="mute">${r.change_count} changes · last ${ago(r.w_changed)}</div>${histList(r)}${noteArea(r)}` : ''}</div>`;
+  const legend = (colourBy === 'type' ? Object.entries(TYPE_COL) : Object.entries(STAT_COL)).map(([k, c]) => `<span class="badge" style="background:${c}">${k}</span>`).join(' ');
+  return `<h1>SEC-Touch sniffer</h1>${scanBlock()}
+    <div class="row" style="margin:8px 0">${filterBar()} Colour by <select onchange="colourBy=this.value;render()"><option ${colourBy === 'type' ? 'selected' : ''}>type</option><option ${colourBy === 'status' ? 'selected' : ''}>status</option></select> ${legend} <span class="badge" style="border:2px solid #333">registered</span><span style="flex:1"></span>${exportBtns()}</div>
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="flex:1;display:grid;grid-template-columns:repeat(16,1fr);gap:2px;max-width:900px">${cells}</div>
+      <div style="width:330px">${drawer}<b>Changes</b> <span class="mute">(newest first)</span><div data-scroll="cf" style="max-height:55vh;overflow:auto">${feed || '<span class="mute">none yet</span>'}</div></div></div>`;
+}
+
+// ───────────────────────── switcher, dev panel, render ─────────────────────────
+const VARIANTS = [['A', 'Dense table', VariantA], ['B', 'List + detail', VariantB], ['C', 'ID map + change feed', VariantC]];
+let vi = Math.max(0, VARIANTS.findIndex(v => v[0] === new URLSearchParams(location.search).get('variant')));
+function go(d) { vi = (vi + d + VARIANTS.length) % VARIANTS.length; history.replaceState(null, '', '?variant=' + VARIANTS[vi][0]); render(); }
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input,textarea,select,[contenteditable]')) { return; }
+  if (e.key === 'ArrowLeft') { go(-1); } if (e.key === 'ArrowRight') { go(1); }
+});
+let devOpen = true;
+function renderDev() {
+  const fx = ['11.11.26', '13:32:08', 'SWZ0021E21H', '0100', '-----------', '00.00.00', '0.360.00:00', '-50.0', '00               ', '0A00', '1200', ''];
+  document.getElementById('dev').innerHTML = `<details ${devOpen ? 'open' : ''} ontoggle="devOpen=this.open"><summary><b>PROTOTYPE controls</b> (fake device)</summary>
+    <div>uptime ${(live.uptime_ms / 3600e3).toFixed(2)} h · ${live.records.length} records on device · ${Object.keys(store.records).length} in browser copy · ${Object.keys(store.notes).length} notes</div>
+    <button onclick="dev.bootWall=Date.now();dev.scan={active:false,cur:SCAN_START,done:false};clearInterval(scanTimer);dev.recs={};for(const id of REGISTERED){devMsg(id,id===1?'15.11.26':id===2?clockStr():REG_VALUES[id])}pullFromDevice()">Simulate device reboot (RAM lost)</button><br>
+    <button onclick="passiveRate=passiveRate===1?8:1;render()">Passive changes: ${passiveRate === 1 ? 'normal' : 'busy'}</button><br>
+    <button onclick="localStorage.removeItem(LS);store={records:{},notes:{}};pullFromDevice()">Clear browser copy + notes</button>
+    <p><b>Type guess on fixtures</b> (per value)</p><table>${fx.map(s => `<tr><td><code>"${esc(s)}"</code></td><td>${guessType(s)}</td></tr>`).join('')}</table>
+    <p><b>Per ID, across history</b></p><table>${[['0A00'], ['0A00', '0800'], ['0100', '0080'], ['0A00', 'ZZ'], ['00.00.00', '11.11.26'], ['-----------']].map(h => `<tr><td><code>${esc(h.join(' → '))}</code></td><td>${guessTypeId(h)}</td></tr>`).join('')}</table>
+    <p class="mute">Merge rule shown: device wins per ID; IDs only in the browser copy stay, greyed as stale. Notes are browser-only and keyed by ID.</p></details>`;
+}
+function render() {
+  if (!live) { return; }
+  const a = document.activeElement, k = a?.dataset?.k, ss = a?.selectionStart, se = a?.selectionEnd;
+  if (a?.tagName === 'SELECT') { return; }
+  const scroll = {}; document.querySelectorAll('[data-scroll]').forEach(n => { scroll[n.dataset.scroll] = n.scrollTop; });
+  document.getElementById('app').innerHTML = VARIANTS[vi][2](applyFilters(rows()));
+  document.querySelectorAll('[data-scroll]').forEach(n => { n.scrollTop = scroll[n.dataset.scroll] ?? 0; });
+  if (k) { const n = document.querySelector(`[data-k="${k}"]`); if (n) { n.focus(); try { n.setSelectionRange(ss, se); } catch {} } }
+  document.getElementById('switcher').innerHTML = `<button onclick="go(-1)">◀</button><span>${VARIANTS[vi][0]} (${VARIANTS[vi][1]})</span><button onclick="go(1)">▶</button>`;
+  renderDev();
+}
+pullFromDevice();
+</script>
+</body>
+</html>

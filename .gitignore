@@ -146,7 +146,7 @@ CTestTestfile.cmake
 .clang_complete
 .gcc-flags.json
 
-config/
+/config/
 tests/build/
 tests/.esphome/
 /.temp-clang-tidy.cpp

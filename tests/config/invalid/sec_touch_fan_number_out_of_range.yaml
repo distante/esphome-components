@@ -1,4 +1,4 @@
-# expect-error: Unknown value '7'
+# expect-error: Unknown value '7', valid options are '1', '2', '3', '4', '5', '6'.
 
 esphome:
   name: sec-touch-bad-fan-number

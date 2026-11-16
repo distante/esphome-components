@@ -1,5 +1,6 @@
 # Components
 - [SEC-Touch Ventilation System](/components/sec_touch)
+
 # Tests
 
 All three layers run in CI ([.github/workflows/tests.yml](.github/workflows/tests.yml)) on every PR and push to `main`.

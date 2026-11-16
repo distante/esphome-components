@@ -30,6 +30,24 @@ jobs:
       - run: pip install -r requirements_test.txt
       - run: pio test -e native
 
+  host:
+    name: Host component tests (ESPHome host + GoogleTest)
+    # Same runner ESPHome's own cpp-unit-tests job uses; its preinstalled gcc ships ASan/UBSan.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements_test.txt
+            esphome/requirements.txt
+      - run: pip install -r requirements_test.txt
+      - run: python tests/host/run.py
+
   config:
     name: Config validation (esphome config)
     runs-on: ubuntu-latest

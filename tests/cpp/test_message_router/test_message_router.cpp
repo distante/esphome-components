@@ -62,7 +62,10 @@ TEST(MessageRouter, WarnsOnlyWhenNoListenerAndNoTap) {
 
   EXPECT_EQ(router.dispatch(32, 5, "0100", /*scan_mode=*/false, /*has_entity_listener=*/false),
             Route::WARN_NO_LISTENER);
-  EXPECT_EQ(router.dispatch(32, 173, "3", /*scan_mode=*/false, /*has_entity_listener=*/true), Route::DELIVER);
+
+  router.add_tap([](int, int, const std::string &) {});
+
+  EXPECT_EQ(router.dispatch(32, 5, "0100", /*scan_mode=*/false, /*has_entity_listener=*/false), Route::DROP);
 }
 
 TEST(MessageRouter, EveryTapSeesEveryMessage) {

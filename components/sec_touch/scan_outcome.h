@@ -44,9 +44,13 @@ class ScanOutcomeTracker {
         return ScanOutcome::SCAN_OUTCOME_OK;
       case TaskEnd::TASK_END_NAK:
         return ScanOutcome::SCAN_OUTCOME_NAK;
-      default:
+      case TaskEnd::TASK_END_MALFORMED:
+        // No usable answer: retried like a timeout.
+        return ScanOutcome::SCAN_OUTCOME_TIMEOUT;
+      case TaskEnd::TASK_END_TIMEOUT:
         return ScanOutcome::SCAN_OUTCOME_TIMEOUT;
     }
+    return ScanOutcome::SCAN_OUTCOME_TIMEOUT;
   }
 
   ScanOutcome last_{ScanOutcome::SCAN_OUTCOME_OK};

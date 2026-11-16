@@ -1,0 +1,40 @@
+# From components/sec_touch/examples/split-mode.yaml, made standalone:
+# an esp32 board, and local external_components instead of the git source.
+
+esphome:
+  name: sec-touch-split-mode
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+
+fan:
+  - platform: sec_touch
+    fan_number: 1
+    name: "Fan 1"
+    split_special_modes: true
+  - platform: sec_touch
+    fan_number: 2
+    name: "Fan 2"
+
+text_sensor:
+  - platform: sec_touch
+    fan_number: 1
+    mode_text:
+      name: "Fan 1 Mode"
+    label_text:
+      name: "Fan 1 Label"

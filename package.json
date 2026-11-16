@@ -1,0 +1,12 @@
+{
+  "name": "esphome-components",
+  "private": true,
+  "description": "Scripts only: runs the device page JS tests. No runtime dependencies.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test \"components/**/*.test.mjs\""
+  }
+}

@@ -43,7 +43,8 @@ class FakeUART : public uart::UARTComponent {
   void check_logger_conflict() override {}
 };
 
-/// Re-exports the hub internals the tests steer.
+/// Re-exports the hub internals the tests steer. task_start_time_ lets a test age a task past the watchdog,
+/// since the host platform's millis() is the real clock.
 class TestableSECTouch : public SECTouchComponent {
  public:
   using SECTouchComponent::task_start_time_;

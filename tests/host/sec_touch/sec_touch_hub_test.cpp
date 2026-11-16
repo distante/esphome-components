@@ -40,8 +40,9 @@ class SECTouchHubTest : public ::testing::Test {
 
 TEST_F(SECTouchHubTest, DataFrameReachesTapByteExactAndIsAcked) {
   std::vector<std::string> seen;
-  this->hub_.register_message_tap(
-      [&seen](int, int property_id, const std::string &raw) { seen.push_back(std::to_string(property_id) + "=" + raw); });
+  this->hub_.register_message_tap([&seen](int, int property_id, const std::string &raw) {
+    seen.push_back(std::to_string(property_id) + "=" + raw);
+  });
 
   this->uart_.push_rx(data_frame(DATE_PROPERTY_ID, "16.11.26"));
   this->loop_times(3);
@@ -65,7 +66,7 @@ TEST_F(SECTouchHubTest, EnteringScanModeClearsStaleTimeoutOutcome) {
   this->hub_.loop();  // dispatches the GET
   ASSERT_FALSE(this->uart_.tx.empty());
 
-  // Age the running task past the 2 s watchdog instead of sleeping.
+  // Host millis() is the real clock: age the task past the hub's 2000 ms TASK_TIMEOUT_MS instead of sleeping.
   this->hub_.task_start_time_ = millis() - 2001;
   this->hub_.loop();
   ASSERT_EQ(this->hub_.get_last_scan_outcome(), ScanOutcome::SCAN_OUTCOME_TIMEOUT);

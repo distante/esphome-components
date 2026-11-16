@@ -54,7 +54,7 @@ class SecTouchSniffer : public Component, public text_sensor::TextSensor {
   bool scan_retry_pending_{false};
 
   void update_scan_switch_();
-  void on_raw_message_(int command_id, int property_id, int new_value);
+  void on_message_(int command_id, int property_id, const std::string &raw_value);
   void on_queue_empty_();
   std::string get_timestamp_() const;
   std::string build_state_string_() const;

@@ -7,6 +7,8 @@
 #include "esphome/components/uart/uart.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "_definitions.h"
+#include "message_router.h"
+#include "scan_outcome.h"
 
 #include "esphome/components/button/button.h"
 #include <typeinfo>
@@ -51,13 +53,18 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
    */
   void register_global_setting_string_listener(int property_id, StringUpdateCallbackListener listener);
 
-  void register_raw_message_listener(RawMessageCallbackListener listener);
+  /**
+   * Sees every data message with its raw value, in every mode, before entity listeners.
+   * Registered and unregistered property IDs alike.
+   */
+  void register_message_tap(MessageTap tap);
   void register_queue_empty_listener(QueueEmptyListener listener);
   void add_discovery_get_task(int property_id);
 
   void enter_scan_mode();
   void exit_scan_mode();
-  bool get_last_scan_task_timed_out() const { return last_scan_task_timed_out_; }
+  /// Outcome of the latest task that ended in scan mode.
+  ScanOutcome get_last_scan_outcome() const { return this->scan_outcome_.last(); }
   bool is_property_registered(int property_id) const {
     return this->recursive_update_listeners.count(property_id) > 0 ||
            this->manual_update_listeners.count(property_id) > 0 ||
@@ -92,7 +99,7 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
 
   std::map<int, StringUpdateCallbackListener> string_update_listeners;
 
-  std::vector<RawMessageCallbackListener> raw_message_listeners;
+  MessageRouter message_router_;
   std::vector<QueueEmptyListener> queue_empty_listeners;
   bool scan_mode_active_{false};
   bool queue_was_idle_{false};
@@ -113,7 +120,7 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
    * Returns the index of the last byte stored in the buffer
    */
   int store_data_to_incoming_message(uint8_t data);
-  void cleanup_after_task_complete(bool failed = false, bool is_timeout = false);
+  void cleanup_after_task_complete(TaskEnd end);
   void send_ack_message();
 
   unsigned long task_start_time_ = 0;
@@ -122,7 +129,7 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   uint32_t global_settings_update_interval_ms_ = 30000;
   unsigned long last_global_settings_update_ms_ = 0;
   int current_running_task_property_id_ = -1;
-  bool last_scan_task_timed_out_ = false;
+  ScanOutcomeTracker scan_outcome_;
   bool optional_crc_{false};
   void process_data_of_current_incoming_message();
   bool validate_message_tabs(const char *buf, int len, int tab1, int tab2, int tab3);

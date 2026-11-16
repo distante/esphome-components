@@ -10,8 +10,8 @@ const char *const SecTouchSniffer::TAG = "sec_touch_sniffer";
 SecTouchSniffer::SecTouchSniffer(SECTouchComponent *parent) : parent_(parent) {}
 
 void SecTouchSniffer::setup() {
-  this->parent_->register_raw_message_listener([this](int command_id, int property_id, int new_value) {
-    this->on_raw_message_(command_id, property_id, new_value);
+  this->parent_->register_message_tap([this](int command_id, int property_id, const std::string &raw_value) {
+    this->on_message_(command_id, property_id, raw_value);
   });
 
   this->parent_->register_queue_empty_listener([this]() { this->on_queue_empty_(); });
@@ -85,7 +85,7 @@ void SecTouchSniffer::on_queue_empty_() {
     return;
   }
 
-  if (this->parent_->get_last_scan_task_timed_out()) {
+  if (this->parent_->get_last_scan_outcome() == ScanOutcome::SCAN_OUTCOME_TIMEOUT) {
     int failed_id = this->current_scan_id_ - 1;
     if (this->scan_retry_pending_) {
       ESP_LOGW(TAG, "Scan: property_id %d timed out again, skipping", failed_id);
@@ -130,7 +130,13 @@ void SecTouchSniffer::on_queue_empty_() {
   });
 }
 
-void SecTouchSniffer::on_raw_message_(int command_id, int property_id, int new_value) {
+void SecTouchSniffer::on_message_(int command_id, int property_id, const std::string &raw_value) {
+  // The tap also sees registered IDs; this sniffer still records only unregistered ones.
+  if (this->parent_->is_property_registered(property_id)) {
+    return;
+  }
+
+  int new_value = atoi(raw_value.c_str());
   auto it = this->discovered_ids_.find(property_id);
   bool is_new = (it == this->discovered_ids_.end());
   bool changed = is_new || (it->second.value != new_value || it->second.command_id != command_id);

@@ -81,7 +81,7 @@ void SECTouchComponent::loop() {
         ESP_LOGW(TAG, "[watchdog] Task of type %s for property_id %d timed out — no response received",
                  EnumToString::TaskType(this->current_running_task_type), this->current_running_task_property_id_);
       }
-      this->cleanup_after_task_complete(true, true);
+      this->cleanup_after_task_complete(TaskEnd::TASK_END_TIMEOUT);
     }
 
     if (this->data_task_queue.empty()) {
@@ -176,41 +176,31 @@ void SECTouchComponent::notify_update_listeners(int command_id, int property_id,
                                                 const std::string &raw_value) {
   ESP_LOGV(TAG, "notify_update_listeners command_id=%d property_id=%d", command_id, property_id);
 
-  if (this->scan_mode_active_) {
-    for (auto &cb : this->raw_message_listeners) {
-      cb(command_id, property_id, new_value);
-    }
+  Route route = this->message_router_.dispatch(command_id, property_id, raw_value, this->scan_mode_active_,
+                                               this->is_property_registered(property_id));
+  if (route == Route::WARN_NO_LISTENER) {
+    ESP_LOGW(TAG, "No listener for property_id %d (raw '%s')", property_id, raw_value.c_str());
+    return;
+  }
+  if (route != Route::DELIVER) {
     return;
   }
 
-  auto recursive_listener = this->recursive_update_listeners.find(property_id);
-  auto manual_listener = this->manual_update_listeners.find(property_id);
   auto string_listener = this->string_update_listeners.find(property_id);
-
   if (string_listener != this->string_update_listeners.end()) {
     string_listener->second(property_id, raw_value);
   }
 
+  auto recursive_listener = this->recursive_update_listeners.find(property_id);
   if (recursive_listener != this->recursive_update_listeners.end()) {
     ESP_LOGV(TAG, "recursive_update_listener found for property_id %d", property_id);
     recursive_listener->second(property_id, new_value);
   }
 
+  auto manual_listener = this->manual_update_listeners.find(property_id);
   if (manual_listener != this->manual_update_listeners.end()) {
     ESP_LOGD(TAG, "manual_update_listener found for property_id %d", property_id);
     manual_listener->second(property_id, new_value);
-  }
-
-  if (recursive_listener == this->recursive_update_listeners.end() &&
-      manual_listener == this->manual_update_listeners.end() &&
-      string_listener == this->string_update_listeners.end()) {
-    if (this->raw_message_listeners.empty()) {
-      ESP_LOGW(TAG, "No listener for property_id %d (value %d)", property_id, new_value);
-      return;
-    }
-    for (auto &cb : this->raw_message_listeners) {
-      cb(command_id, property_id, new_value);
-    }
   }
 }
 
@@ -324,9 +314,7 @@ void SECTouchComponent::register_global_setting_string_listener(int property_id,
   this->global_setting_property_ids_.push_back(property_id);
 }
 
-void SECTouchComponent::register_raw_message_listener(RawMessageCallbackListener listener) {
-  this->raw_message_listeners.push_back(std::move(listener));
-}
+void SECTouchComponent::register_message_tap(MessageTap tap) { this->message_router_.add_tap(std::move(tap)); }
 
 void SECTouchComponent::register_queue_empty_listener(QueueEmptyListener listener) {
   this->queue_empty_listeners.push_back(std::move(listener));
@@ -346,6 +334,7 @@ void SECTouchComponent::enter_scan_mode() {
   this->current_running_task_type = TaskType::NONE;
   this->task_start_time_ = 0;
   this->queue_was_idle_ = false;  // Force queue-empty callback to fire so scan tasks get queued
+  this->scan_outcome_.begin_scan();
   this->scan_mode_active_ = true;
 }
 
@@ -484,7 +473,7 @@ Now, we need to extract the parts of the message. It can be either:
       this->incoming_message.reset();
     } else {
       // SET: ACK is the complete response — task is done.
-      this->cleanup_after_task_complete();
+      this->cleanup_after_task_complete(TaskEnd::TASK_END_ANSWERED);
     }
     return;
   }
@@ -493,7 +482,7 @@ Now, we need to extract the parts of the message. It can be either:
   if (this->incoming_message.buffer[0] == STX && this->incoming_message.buffer[1] == NAK &&
       this->incoming_message.buffer[this->incoming_message.buffer_index] == ETX) {
     ESP_LOGW(TAG, "  Received NAK — property_id not supported by device");
-    this->cleanup_after_task_complete(true);
+    this->cleanup_after_task_complete(TaskEnd::TASK_END_NAK);
     return;
   }
 
@@ -522,7 +511,7 @@ where:
     ESP_LOGE(TAG_UART, "  [process_data] Invalid message format (task=%s property_id=%d len=%d hex: %s). Task Failed",
              EnumToString::TaskType(this->current_running_task_type), this->current_running_task_property_id_, len,
              hex_buf);
-    this->cleanup_after_task_complete(true);
+    this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
     return;
   }
 
@@ -540,7 +529,7 @@ where:
     }
   }
   if (!this->validate_message_tabs(buf, len, tab1, tab2, tab3)) {
-    this->cleanup_after_task_complete(true);
+    this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
     return;
   }
 
@@ -559,16 +548,16 @@ where:
   // Notify listeners
   this->notify_update_listeners(command_id, property_id, value, raw_value);
 
-  this->cleanup_after_task_complete();
+  this->cleanup_after_task_complete(TaskEnd::TASK_END_ANSWERED);
   this->send_ack_message();  // Send ACK back
 }
 
-void SECTouchComponent::cleanup_after_task_complete(bool failed, bool is_timeout) {
-  ESP_LOGD(TAG, "cleanup_after_task_complete called, failed: %s", failed ? "true" : "false");
+void SECTouchComponent::cleanup_after_task_complete(TaskEnd end) {
+  ESP_LOGD(TAG, "cleanup_after_task_complete called, failed: %s", end == TaskEnd::TASK_END_ANSWERED ? "false" : "true");
   this->incoming_message.reset();
   this->current_running_task_type = TaskType::NONE;
   this->task_start_time_ = 0;
-  this->last_scan_task_timed_out_ = is_timeout && this->scan_mode_active_;
+  this->scan_outcome_.record(end, this->scan_mode_active_);
   this->task_ready_at_ms_ = millis() + this->inter_task_delay_ms_;
 }
 }  // namespace sec_touch

@@ -106,11 +106,6 @@ constexpr const char *NAME_MAPPING[NAME_MAPPING_COUNT] = {
  */
 using UpdateCallbackListener = std::function<void(int property_id, int new_value)>;
 
-// Includes command_id so the sniffer can record whether the device message was
-// a data response (command_id=32) or, if the hardware ever sends unsolicited messages
-// with a different command_id, distinguish those as well.
-using RawMessageCallbackListener = std::function<void(int command_id, int property_id, int new_value)>;
-
 // For properties whose value is not an integer on the wire (dates, clock), which the
 // int listeners only see truncated by atoi.
 using StringUpdateCallbackListener = std::function<void(int property_id, const std::string &raw_value)>;

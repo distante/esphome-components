@@ -21,6 +21,21 @@ enum class TaskEnd : uint8_t {
   TASK_END_TIMEOUT,
 };
 
+/// Lowercase name of a TaskEnd, for logs.
+inline const char *task_end_name(TaskEnd end) {
+  switch (end) {
+    case TaskEnd::TASK_END_ANSWERED:
+      return "answered";
+    case TaskEnd::TASK_END_NAK:
+      return "nak";
+    case TaskEnd::TASK_END_MALFORMED:
+      return "malformed";
+    case TaskEnd::TASK_END_TIMEOUT:
+      return "timeout";
+  }
+  return "unknown";
+}
+
 /// The outcome of the latest scan query, as the sniffer records it in a property's query status.
 enum class ScanOutcome : uint8_t { SCAN_OUTCOME_OK, SCAN_OUTCOME_NAK, SCAN_OUTCOME_TIMEOUT };
 

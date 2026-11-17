@@ -5,6 +5,7 @@
 using esphome::sec_touch::ScanOutcome;
 using esphome::sec_touch::ScanOutcomeTracker;
 using esphome::sec_touch::TaskEnd;
+using esphome::sec_touch::task_end_name;
 
 TEST(ScanOutcomeTracker, NakDuringAScanIsNak) {
   ScanOutcomeTracker tracker;
@@ -58,6 +59,14 @@ TEST(ScanOutcomeTracker, StartingAScanForgetsThePreviousScansOutcome) {
   tracker.begin_scan();
 
   EXPECT_EQ(tracker.last(), ScanOutcome::SCAN_OUTCOME_OK);
+}
+
+// The hub logs why a task ended; each end gets its own name.
+TEST(TaskEndName, NamesEveryTaskEnd) {
+  EXPECT_STREQ(task_end_name(TaskEnd::TASK_END_ANSWERED), "answered");
+  EXPECT_STREQ(task_end_name(TaskEnd::TASK_END_NAK), "nak");
+  EXPECT_STREQ(task_end_name(TaskEnd::TASK_END_MALFORMED), "malformed");
+  EXPECT_STREQ(task_end_name(TaskEnd::TASK_END_TIMEOUT), "timeout");
 }
 
 int main(int argc, char **argv) {

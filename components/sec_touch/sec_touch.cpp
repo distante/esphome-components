@@ -553,7 +553,7 @@ where:
 }
 
 void SECTouchComponent::cleanup_after_task_complete(TaskEnd end) {
-  ESP_LOGD(TAG, "cleanup_after_task_complete called, failed: %s", end == TaskEnd::TASK_END_ANSWERED ? "false" : "true");
+  ESP_LOGD(TAG, "cleanup_after_task_complete called, end: %s", task_end_name(end));
   this->incoming_message.reset();
   this->current_running_task_type = TaskType::NONE;
   this->task_start_time_ = 0;

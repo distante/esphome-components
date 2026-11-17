@@ -24,13 +24,13 @@ Invalid config fixtures start with `# expect-error: <text>`; the test checks tha
 ## TDD With teeth.
 
 We Follow TDD With teeth.
-1. We define the test, (if a new API is needed, we define it with an skeleton)
-2. We see the test go read due a real assertion (not build problem)
+1. We define the test, (if a new API is needed, we define it with a skeleton)
+2. We see the test go red due to a real assertion (not build problem)
 3. We implement the fix and see the test go green
 4. We remove the implementation and the test should go red again with the correct assertion error.
 5. We restore the implementation.
 
-# Pull Requests Rules
+## Pull Requests Rules
 - We should explain with a TL/DR what was done.
 - We include a technical overview of the changes.
-- We try do use visual explanations when possible (Mermaid)
+- We try to use visual explanations when possible (Mermaid)

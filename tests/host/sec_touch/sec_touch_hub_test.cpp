@@ -69,23 +69,35 @@ TEST_F(SECTouchHubTest, DataFrameReachesTapByteExactAndIsAcked) {
   EXPECT_EQ(this->uart_.tx, (std::vector<uint8_t>{STX, ACK, ETX}));
 }
 
-TEST_F(SECTouchHubTest, FrameWithBadCrcNeverReachesTapAndIsNotAcked) {
+// A dropped data frame is still ACKed: without the ACK the panel ignores the next request until
+// the 2 s watchdog fires. It never resends a frame, so the ACK gives nothing up (PR #45, live device).
+TEST_F(SECTouchHubTest, FrameWithBadCrcNeverReachesTapButIsAcked) {
   const auto &seen = this->record_taps();
 
   this->uart_.push_rx(bad_crc_frame());
   this->loop_times(3);
 
   EXPECT_TRUE(seen.empty());
-  EXPECT_TRUE(this->uart_.tx.empty());
+  EXPECT_EQ(this->uart_.tx, (std::vector<uint8_t>{STX, ACK, ETX}));
 }
 
-TEST_F(SECTouchHubTest, FrameWithoutCrcIsDroppedByDefault) {
+TEST_F(SECTouchHubTest, FrameWithoutCrcIsDroppedByDefaultButAcked) {
   const auto &seen = this->record_taps();
 
   this->uart_.push_rx(frame("32" + tab + "173" + tab + "10"));
   this->loop_times(3);
 
   EXPECT_TRUE(seen.empty());
+  EXPECT_EQ(this->uart_.tx, (std::vector<uint8_t>{STX, ACK, ETX}));
+}
+
+// A frame too short to be data may be the panel's own ACK with a flipped bit, sent before the data
+// frame. ACKing it would answer a frame that has not arrived yet.
+TEST_F(SECTouchHubTest, FrameTooShortForDataIsNotAcked) {
+  this->uart_.push_rx(frame(std::string(1, static_cast<char>(ACK ^ 0x01))));
+  this->loop_times(2);
+
+  EXPECT_TRUE(this->uart_.tx.empty());
 }
 
 TEST_F(SECTouchHubTest, FrameWithoutCrcReachesTapWithOptionalCrc) {

@@ -122,6 +122,7 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   int store_data_to_incoming_message(uint8_t data);
   void cleanup_after_task_complete(TaskEnd end);
   void send_ack_message();
+  void drop_data_message();
 
   unsigned long task_start_time_ = 0;
   unsigned long task_ready_at_ms_ = 0;

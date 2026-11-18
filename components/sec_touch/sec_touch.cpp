@@ -509,14 +509,14 @@ where:
     char context[384];
     this->describe_dropped_message(buf, len, details, context, sizeof(context));
     ESP_LOGE(TAG_UART, "  [process_data] %s (%s). Task Failed", data_message_check_reason(check), context);
-    this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
+    this->drop_data_message();
     return;
   }
   if (check == DataMessageCheck::DATA_CRC_MISMATCH || check == DataMessageCheck::DATA_CRC_NOT_A_NUMBER) {
     char context[384];
     this->describe_dropped_message(buf, len, "", context, sizeof(context));
     ESP_LOGW(TAG_UART, "  [process_data] %s (%s). Task Failed", data_message_check_reason(check), context);
-    this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
+    this->drop_data_message();
     return;
   }
   if (check == DataMessageCheck::DATA_ROUTE_UNCHECKED) {
@@ -538,6 +538,13 @@ where:
 
   this->cleanup_after_task_complete(TaskEnd::TASK_END_ANSWERED);
   this->send_ack_message();  // Send ACK back
+}
+
+// A dropped data frame is still ACKed. Without the ACK the panel ignores the next request until the
+// watchdog fires, and it never resends a frame, so the ACK gives nothing up.
+void SECTouchComponent::drop_data_message() {
+  this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
+  this->send_ack_message();
 }
 
 void SECTouchComponent::cleanup_after_task_complete(TaskEnd end) {

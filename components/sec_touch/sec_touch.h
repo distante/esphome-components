@@ -7,6 +7,7 @@
 #include "esphome/components/uart/uart.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "_definitions.h"
+#include "data_message.h"
 #include "message_router.h"
 #include "scan_outcome.h"
 
@@ -131,8 +132,9 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   ScanOutcomeTracker scan_outcome_;
   bool optional_crc_{false};
   void process_data_of_current_incoming_message();
-  std::string extract_value_field(const char *buf, int len, int tab2, int tab3);
-  void log_not_enough_tabs_error(const char *buf, int len, int tab1, int tab2);
+  std::string extract_value_field(const char *buf, int len, const DataMessageTabs &tabs);
+  void describe_missing_fields(const char *buf, const DataMessageTabs &tabs, char *out, size_t out_size);
+  void log_malformed_and_fail(int level, const char *reason, const char *details, const char *buf, int len);
   void format_hex_dump(const uint8_t *buf, int len, char *out, size_t out_size);
 };
 }  // namespace sec_touch

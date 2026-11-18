@@ -402,39 +402,44 @@ void SECTouchComponent::format_hex_dump(const uint8_t *buf, int len, char *out, 
   }
 }
 
-void SECTouchComponent::log_not_enough_tabs_error(const char *buf, int len, int tab1, int tab2) {
-  char hex_buf[128];
-  this->format_hex_dump(reinterpret_cast<const uint8_t *>(buf), len, hex_buf, sizeof(hex_buf));
-
+void SECTouchComponent::describe_missing_fields(const char *buf, const DataMessageTabs &tabs, char *out,
+                                                size_t out_size) {
   char parsed_buf[96];
   int parsed_pos = 0;
   parsed_buf[0] = '\0';
-  if (tab1 != -1) {
-    int cmd = atoi(std::string(&buf[1], tab1 - 1).c_str());
+  if (tabs.tab1 != -1) {
+    int cmd = atoi(std::string(&buf[1], tabs.tab1 - 1).c_str());
     parsed_pos += snprintf(parsed_buf + parsed_pos, sizeof(parsed_buf) - parsed_pos, "command_id=%d", cmd);
   }
-  if (tab1 != -1 && tab2 != -1) {
-    int prop = atoi(std::string(&buf[tab1 + 1], tab2 - tab1 - 1).c_str());
+  if (tabs.tab1 != -1 && tabs.tab2 != -1) {
+    int prop = atoi(std::string(&buf[tabs.tab1 + 1], tabs.tab2 - tabs.tab1 - 1).c_str());
     parsed_pos += snprintf(parsed_buf + parsed_pos, sizeof(parsed_buf) - parsed_pos, " property_id=%d", prop);
   }
 
   // TABs are discovered left-to-right, so tabN == -1 implies tab(N+1)... == -1.
-  const char *missing = (tab1 == -1)   ? "command_id, property_id, value, crc"
-                        : (tab2 == -1) ? "property_id, value, crc"
-                                       : "value, crc";
+  const char *missing = (tabs.tab1 == -1)   ? "command_id, property_id, value, crc"
+                        : (tabs.tab2 == -1) ? "property_id, value, crc"
+                                            : "value, crc";
 
-  ESP_LOGE(TAG_UART,
-           "  [process_data] Not enough TABs in message (task=%s property_id=%d len=%d parsed: [%s] missing: [%s] "
-           "hex: %s). Task Failed",
-           EnumToString::TaskType(this->current_running_task_type), this->current_running_task_property_id_, len,
-           parsed_buf, missing, hex_buf);
+  snprintf(out, out_size, "parsed: [%s] missing: [%s] ", parsed_buf, missing);
 }
 
-std::string SECTouchComponent::extract_value_field(const char *buf, int len, int tab2, int tab3) {
-  if (tab3 != -1) {
-    return std::string(&buf[tab2 + 1], tab3 - tab2 - 1);
+void SECTouchComponent::log_malformed_and_fail(int level, const char *reason, const char *details, const char *buf,
+                                               int len) {
+  char hex_buf[128];
+  this->format_hex_dump(reinterpret_cast<const uint8_t *>(buf), len, hex_buf, sizeof(hex_buf));
+  esp_log_printf_(level, TAG_UART, __LINE__,
+                  "  [process_data] %s (task=%s property_id=%d len=%d %shex: %s). Task Failed", reason,
+                  EnumToString::TaskType(this->current_running_task_type), this->current_running_task_property_id_, len,
+                  details, hex_buf);
+  this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
+}
+
+std::string SECTouchComponent::extract_value_field(const char *buf, int len, const DataMessageTabs &tabs) {
+  if (tabs.tab3 != -1) {
+    return std::string(&buf[tabs.tab2 + 1], tabs.tab3 - tabs.tab2 - 1);
   }
-  return std::string(&buf[tab2 + 1], len - tab2 - 2);  // -2 to skip ETX
+  return std::string(&buf[tabs.tab2 + 1], len - tabs.tab2 - 2);  // -2 to skip ETX
 }
 
 void SECTouchComponent::process_data_of_current_incoming_message() {
@@ -491,31 +496,20 @@ where:
 
   // Defensive: ensure message starts with STX and ends with ETX
   if (len < 7 || static_cast<uint8_t>(buf[0]) != STX || static_cast<uint8_t>(buf[len - 1]) != ETX) {
-    char hex_buf[128];
-    this->format_hex_dump(reinterpret_cast<const uint8_t *>(buf), len, hex_buf, sizeof(hex_buf));
-    ESP_LOGE(TAG_UART, "  [process_data] Invalid message format (task=%s property_id=%d len=%d hex: %s). Task Failed",
-             EnumToString::TaskType(this->current_running_task_type), this->current_running_task_property_id_, len,
-             hex_buf);
-    this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
+    this->log_malformed_and_fail(ESPHOME_LOG_LEVEL_ERROR, "Invalid message format", "", buf, len);
     return;
   }
 
   DataMessageTabs tabs = find_data_message_tabs(buf, len);
-  int tab1 = tabs.tab1, tab2 = tabs.tab2, tab3 = tabs.tab3;
   DataMessageCheck check = check_data_message(buf, len, tabs, this->optional_crc_);
   if (check == DataMessageCheck::DATA_MISSING_FIELDS) {
-    this->log_not_enough_tabs_error(buf, len, tab1, tab2);
-    this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
+    char details[160];
+    this->describe_missing_fields(buf, tabs, details, sizeof(details));
+    this->log_malformed_and_fail(ESPHOME_LOG_LEVEL_ERROR, data_message_check_reason(check), details, buf, len);
     return;
   }
   if (check == DataMessageCheck::DATA_CRC_MISMATCH || check == DataMessageCheck::DATA_CRC_NOT_A_NUMBER) {
-    char hex_buf[128];
-    this->format_hex_dump(reinterpret_cast<const uint8_t *>(buf), len, hex_buf, sizeof(hex_buf));
-    ESP_LOGW(TAG_UART, "  [process_data] %s (task=%s property_id=%d len=%d hex: %s). Task Failed",
-             check == DataMessageCheck::DATA_CRC_MISMATCH ? "CRC mismatch" : "CRC field is not a number",
-             EnumToString::TaskType(this->current_running_task_type), this->current_running_task_property_id_, len,
-             hex_buf);
-    this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
+    this->log_malformed_and_fail(ESPHOME_LOG_LEVEL_WARN, data_message_check_reason(check), "", buf, len);
     return;
   }
   if (check == DataMessageCheck::DATA_ROUTE_UNCHECKED) {
@@ -523,11 +517,11 @@ where:
   }
 
   // Extract command id, property id, value, crc
-  int command_id  = atoi(std::string(&buf[1], tab1 - 1).c_str());
-  int property_id = atoi(std::string(&buf[tab1 + 1], tab2 - tab1 - 1).c_str());
-  std::string raw_value = this->extract_value_field(buf, len, tab2, tab3);
+  int command_id  = atoi(std::string(&buf[1], tabs.tab1 - 1).c_str());
+  int property_id = atoi(std::string(&buf[tabs.tab1 + 1], tabs.tab2 - tabs.tab1 - 1).c_str());
+  std::string raw_value = this->extract_value_field(buf, len, tabs);
   int value       = atoi(raw_value.c_str());
-  int crc         = (tab3 != -1) ? atoi(std::string(&buf[tab3 + 1], len - tab3 - 2).c_str()) : -1;
+  int crc         = (tabs.tab3 != -1) ? atoi(std::string(&buf[tabs.tab3 + 1], len - tabs.tab3 - 2).c_str()) : -1;
 
   ESP_LOGD(TAG, "  [process_data] command_id: %d, property_id: %d, value: %d (raw '%s'), crc: %d", command_id,
            property_id, value, raw_value.c_str(), crc);

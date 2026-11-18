@@ -2,19 +2,14 @@
 
 #include <string>
 
+#include "../common/wire_message.h"
 #include "sec_touch/message_crc.h"
 
 using esphome::sec_touch::check_message_crc;
 using esphome::sec_touch::CrcCheck;
+using sec_touch_test::wire_message;
 
 namespace {
-
-// Wire bytes, as in sec_touch/_definitions.h.
-constexpr char STX = 0x02;
-constexpr char ETX = 0x0A;
-
-// Builds [STX]body[ETX], where body uses '\t' for TAB.
-std::string message(const std::string &body) { return std::string(1, STX) + body + std::string(1, ETX); }
 
 // Index of the TAB before the CRC field: the third TAB.
 int crc_tab(const std::string &msg) {
@@ -26,7 +21,7 @@ int crc_tab(const std::string &msg) {
 }
 
 CrcCheck check(const std::string &body) {
-  std::string msg = message(body);
+  std::string msg = wire_message(body);
   return check_message_crc(msg.data(), static_cast<int>(msg.size()), crc_tab(msg));
 }
 
@@ -47,11 +42,6 @@ TEST(MessageCrc, RejectsSignedCrcField) { EXPECT_EQ(check("32\t173\t10\t-4269"),
 TEST(MessageCrc, RejectsCrcFieldAbove16Bits) {
   // 42696 + 65536: atoi-and-truncate would wrap this to a match.
   EXPECT_EQ(check("32\t173\t10\t108232"), CrcCheck::CRC_NOT_A_NUMBER);
-}
-
-TEST(MessageCrc, ReportsMessageWithoutCrcField) {
-  std::string msg = message("32\t173\t10");
-  EXPECT_EQ(check_message_crc(msg.data(), static_cast<int>(msg.size()), -1), CrcCheck::CRC_NO_FIELD);
 }
 
 int main(int argc, char **argv) {

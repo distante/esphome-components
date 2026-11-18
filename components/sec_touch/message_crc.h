@@ -17,19 +17,14 @@ enum class CrcCheck : uint8_t {
   CRC_MISMATCH,
   /// The CRC field is empty, not decimal digits, or above 65535.
   CRC_NOT_A_NUMBER,
-  /// The message has no CRC field (`crc_tab` is -1): nothing to check.
-  CRC_NO_FIELD,
 };
 
 /// Checks the CRC field of a data message `[STX]cmd[TAB]prop[TAB]value[TAB]crc[ETX]`.
 ///
 /// `buf` holds the whole message, from STX at `buf[0]` to ETX at `buf[len - 1]`. `crc_tab` is the index of the TAB
-/// before the CRC field. The CRC covers STX up to and including that TAB, the same rule as outgoing messages.
+/// before the CRC field and must be found (>= 0): a message without a CRC field has nothing to check, and the caller
+/// decides what to do with it. The CRC covers STX up to and including that TAB, the same rule as outgoing messages.
 inline CrcCheck check_message_crc(const char *buf, int len, int crc_tab) {
-  if (crc_tab < 0) {
-    return CrcCheck::CRC_NO_FIELD;
-  }
-
   // The field runs from after the TAB up to, not including, the ETX.
   const int field_start = crc_tab + 1;
   const int field_end = len - 1;

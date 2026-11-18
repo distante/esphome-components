@@ -134,7 +134,7 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   void process_data_of_current_incoming_message();
   std::string extract_value_field(const char *buf, int len, const DataMessageTabs &tabs);
   void describe_missing_fields(const char *buf, const DataMessageTabs &tabs, char *out, size_t out_size);
-  void log_malformed_and_fail(int level, const char *reason, const char *details, const char *buf, int len);
+  void describe_dropped_message(const char *buf, int len, const char *details, char *out, size_t out_size);
   void format_hex_dump(const uint8_t *buf, int len, char *out, size_t out_size);
 };
 }  // namespace sec_touch

@@ -424,15 +424,13 @@ void SECTouchComponent::describe_missing_fields(const char *buf, const DataMessa
   snprintf(out, out_size, "parsed: [%s] missing: [%s] ", parsed_buf, missing);
 }
 
-void SECTouchComponent::log_malformed_and_fail(int level, const char *reason, const char *details, const char *buf,
-                                               int len) {
+void SECTouchComponent::describe_dropped_message(const char *buf, int len, const char *details, char *out,
+                                                 size_t out_size) {
   char hex_buf[128];
   this->format_hex_dump(reinterpret_cast<const uint8_t *>(buf), len, hex_buf, sizeof(hex_buf));
-  esp_log_printf_(level, TAG_UART, __LINE__,
-                  "  [process_data] %s (task=%s property_id=%d len=%d %shex: %s). Task Failed", reason,
-                  EnumToString::TaskType(this->current_running_task_type), this->current_running_task_property_id_, len,
-                  details, hex_buf);
-  this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
+  snprintf(out, out_size, "task=%s property_id=%d len=%d %shex: %s",
+           EnumToString::TaskType(this->current_running_task_type), this->current_running_task_property_id_, len,
+           details, hex_buf);
 }
 
 std::string SECTouchComponent::extract_value_field(const char *buf, int len, const DataMessageTabs &tabs) {
@@ -496,7 +494,10 @@ where:
 
   // Defensive: ensure message starts with STX and ends with ETX
   if (len < 7 || static_cast<uint8_t>(buf[0]) != STX || static_cast<uint8_t>(buf[len - 1]) != ETX) {
-    this->log_malformed_and_fail(ESPHOME_LOG_LEVEL_ERROR, "Invalid message format", "", buf, len);
+    char context[384];
+    this->describe_dropped_message(buf, len, "", context, sizeof(context));
+    ESP_LOGE(TAG_UART, "  [process_data] Invalid message format (%s). Task Failed", context);
+    this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
     return;
   }
 
@@ -505,11 +506,17 @@ where:
   if (check == DataMessageCheck::DATA_MISSING_FIELDS) {
     char details[160];
     this->describe_missing_fields(buf, tabs, details, sizeof(details));
-    this->log_malformed_and_fail(ESPHOME_LOG_LEVEL_ERROR, data_message_check_reason(check), details, buf, len);
+    char context[384];
+    this->describe_dropped_message(buf, len, details, context, sizeof(context));
+    ESP_LOGE(TAG_UART, "  [process_data] %s (%s). Task Failed", data_message_check_reason(check), context);
+    this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
     return;
   }
   if (check == DataMessageCheck::DATA_CRC_MISMATCH || check == DataMessageCheck::DATA_CRC_NOT_A_NUMBER) {
-    this->log_malformed_and_fail(ESPHOME_LOG_LEVEL_WARN, data_message_check_reason(check), "", buf, len);
+    char context[384];
+    this->describe_dropped_message(buf, len, "", context, sizeof(context));
+    ESP_LOGW(TAG_UART, "  [process_data] %s (%s). Task Failed", data_message_check_reason(check), context);
+    this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
     return;
   }
   if (check == DataMessageCheck::DATA_ROUTE_UNCHECKED) {

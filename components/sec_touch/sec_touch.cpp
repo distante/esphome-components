@@ -1,6 +1,6 @@
 #include "sec_touch.h"
 #include "XModemCRC.h"
-#include "message_crc.h"
+#include "data_message.h"
 #include "esphome/core/log.h"
 #include "_definitions.h"
 
@@ -430,21 +430,6 @@ void SECTouchComponent::log_not_enough_tabs_error(const char *buf, int len, int 
            parsed_buf, missing, hex_buf);
 }
 
-bool SECTouchComponent::validate_message_tabs(const char *buf, int len, int tab1, int tab2, int tab3) {
-  if (tab1 == -1 || tab2 == -1) {
-    this->log_not_enough_tabs_error(buf, len, tab1, tab2);
-    return false;
-  }
-  if (tab3 == -1) {
-    if (!this->optional_crc_) {
-      this->log_not_enough_tabs_error(buf, len, tab1, tab2);
-      return false;
-    }
-    ESP_LOGD(TAG, "  [process_data] No CRC field in message (optional_crc=true), continuing");
-  }
-  return true;
-}
-
 std::string SECTouchComponent::extract_value_field(const char *buf, int len, int tab2, int tab3) {
   if (tab3 != -1) {
     return std::string(&buf[tab2 + 1], tab3 - tab2 - 1);
@@ -515,22 +500,26 @@ where:
     return;
   }
 
-  // Find TABs
-  int tab1 = -1, tab2 = -1, tab3 = -1;
-  for (int i = 0, tabs = 0; i < len; ++i) {
-    if (buf[i] == TAB) {
-      if (tabs == 0)
-        tab1 = i;
-      else if (tabs == 1)
-        tab2 = i;
-      else if (tabs == 2)
-        tab3 = i;
-      ++tabs;
-    }
-  }
-  if (!this->validate_message_tabs(buf, len, tab1, tab2, tab3)) {
+  DataMessageTabs tabs = find_data_message_tabs(buf, len);
+  int tab1 = tabs.tab1, tab2 = tabs.tab2, tab3 = tabs.tab3;
+  DataMessageCheck check = check_data_message(buf, len, tabs, this->optional_crc_);
+  if (check == DataMessageCheck::DATA_MISSING_FIELDS) {
+    this->log_not_enough_tabs_error(buf, len, tab1, tab2);
     this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
     return;
+  }
+  if (check == DataMessageCheck::DATA_CRC_MISMATCH || check == DataMessageCheck::DATA_CRC_NOT_A_NUMBER) {
+    char hex_buf[128];
+    this->format_hex_dump(reinterpret_cast<const uint8_t *>(buf), len, hex_buf, sizeof(hex_buf));
+    ESP_LOGW(TAG_UART, "  [process_data] %s (task=%s property_id=%d len=%d hex: %s). Task Failed",
+             check == DataMessageCheck::DATA_CRC_MISMATCH ? "CRC mismatch" : "CRC field is not a number",
+             EnumToString::TaskType(this->current_running_task_type), this->current_running_task_property_id_, len,
+             hex_buf);
+    this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
+    return;
+  }
+  if (check == DataMessageCheck::DATA_ROUTE_UNCHECKED) {
+    ESP_LOGD(TAG, "  [process_data] No CRC field in message (optional_crc=true), continuing");
   }
 
   // Extract command id, property id, value, crc
@@ -542,19 +531,6 @@ where:
 
   ESP_LOGD(TAG, "  [process_data] command_id: %d, property_id: %d, value: %d (raw '%s'), crc: %d", command_id,
            property_id, value, raw_value.c_str(), crc);
-
-  // A message without a CRC field only gets here with optional_crc: true, and can't be checked.
-  CrcCheck crc_check = check_message_crc(buf, len, tab3);
-  if (crc_check == CrcCheck::CRC_MISMATCH || crc_check == CrcCheck::CRC_NOT_A_NUMBER) {
-    char hex_buf[128];
-    this->format_hex_dump(reinterpret_cast<const uint8_t *>(buf), len, hex_buf, sizeof(hex_buf));
-    ESP_LOGW(TAG_UART, "  [process_data] %s (task=%s property_id=%d len=%d hex: %s). Task Failed",
-             crc_check == CrcCheck::CRC_MISMATCH ? "CRC mismatch" : "CRC field is not a number",
-             EnumToString::TaskType(this->current_running_task_type), this->current_running_task_property_id_, len,
-             hex_buf);
-    this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
-    return;
-  }
 
   // Notify listeners
   this->notify_update_listeners(command_id, property_id, value, raw_value);

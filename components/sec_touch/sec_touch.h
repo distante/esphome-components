@@ -131,7 +131,6 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   ScanOutcomeTracker scan_outcome_;
   bool optional_crc_{false};
   void process_data_of_current_incoming_message();
-  bool validate_message_tabs(const char *buf, int len, int tab1, int tab2, int tab3);
   std::string extract_value_field(const char *buf, int len, int tab2, int tab3);
   void log_not_enough_tabs_error(const char *buf, int len, int tab1, int tab2);
   void format_hex_dump(const uint8_t *buf, int len, char *out, size_t out_size);

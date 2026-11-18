@@ -149,6 +149,8 @@ CTestTestfile.cmake
 /config/
 tests/build/
 tests/.esphome/
+# ESPHome writes a .gitignore next to every config it compiles
+tests/config/*/.gitignore
 /.temp-clang-tidy.cpp
 /.temp/
 .pio/

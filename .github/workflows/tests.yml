@@ -65,6 +65,30 @@ jobs:
       - run: pip install -r requirements_test.txt
       - run: pytest tests/config
 
+  compile:
+    name: Config compile (esphome compile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements_test.txt
+            esphome/requirements.txt
+      # ESP-IDF and the toolchains are large; key on the vendored ESPHome commit so every bump refreshes them.
+      - id: esphome
+        run: echo "sha=$(git rev-parse HEAD:esphome)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: platformio-esp32-${{ runner.os }}-${{ steps.esphome.outputs.sha }}
+      - run: pip install -r requirements_test.txt
+      - run: pytest tests/config --compile -m compile
+
   js:
     name: Page JS tests (node --test)
     runs-on: ubuntu-latest

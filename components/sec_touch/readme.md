@@ -653,6 +653,8 @@ By default, every response from the SEC-Touch is expected to contain four TAB-de
 
 The CRC is always checked when the field is there. A message whose CRC doesn't match (a bit flipped on the wire) is logged as a `CRC mismatch` warning and discarded, the same as any other malformed message. The next poll reads the value again.
 
+The panels seen so far always send a CRC, so `false` (the default) is the safe choice. Leave it there unless your logs show the symptom below.
+
 Some firmware versions or configurations of the SEC-Touch appear to omit the CRC field, sending only `[STX]command_id[TAB]property_id[TAB]value[ETX]`. If you see repeated `Not enough TABs in message … missing: [value, crc]` errors in your logs but the parsed `command_id` and `property_id` look correct, enable this flag:
 
 ```yaml

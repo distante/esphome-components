@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "common.h"
+#include "esphome/components/sec_touch/XModemCRC.h"
 
 namespace esphome::sec_touch::testing {
 
@@ -16,10 +17,17 @@ std::vector<uint8_t> frame(const std::string &body) {
   return bytes;
 }
 
-/// `[STX]32[TAB]<id>[TAB]<value>[TAB]<crc>[ETX]`, the data half of a GET reply.
-std::vector<uint8_t> data_frame(int property_id, const std::string &value) {
+/// `32[TAB]<id>[TAB]<value>[TAB]`: the part of a data message the CRC covers, after STX.
+std::string data_head(int property_id, const std::string &value) {
   std::string tab(1, static_cast<char>(TAB));
-  return frame("32" + tab + std::to_string(property_id) + tab + value + tab + "12345");
+  return "32" + tab + std::to_string(property_id) + tab + value + tab;
+}
+
+/// `[STX]32[TAB]<id>[TAB]<value>[TAB]<crc>[ETX]`, the data half of a GET reply, with its real XModem CRC.
+std::vector<uint8_t> data_frame(int property_id, const std::string &value) {
+  std::string covered = std::string(1, static_cast<char>(STX)) + data_head(property_id, value);
+  unsigned short crc = GetXModemCRC(covered.data(), covered.size());
+  return frame(data_head(property_id, value) + std::to_string(crc));
 }
 
 class SECTouchHubTest : public ::testing::Test {
@@ -49,6 +57,47 @@ TEST_F(SECTouchHubTest, DataFrameReachesTapByteExactAndIsAcked) {
 
   EXPECT_EQ(seen, std::vector<std::string>{"1=16.11.26"});
   EXPECT_EQ(this->uart_.tx, (std::vector<uint8_t>{STX, ACK, ETX}));
+}
+
+// The reply for 173 with one bit flipped ('7' -> '3'), captured on the installed controller (issue #43).
+TEST_F(SECTouchHubTest, FrameWithBadCrcNeverReachesTapAndIsNotAcked) {
+  std::vector<std::string> seen;
+  this->hub_.register_message_tap([&seen](int, int property_id, const std::string &raw) {
+    seen.push_back(std::to_string(property_id) + "=" + raw);
+  });
+
+  this->uart_.push_rx(frame(data_head(133, "10") + "42696"));
+  this->loop_times(3);
+
+  EXPECT_TRUE(seen.empty());
+  EXPECT_TRUE(this->uart_.tx.empty());
+}
+
+TEST_F(SECTouchHubTest, FrameWithoutCrcIsDroppedByDefault) {
+  std::vector<std::string> seen;
+  this->hub_.register_message_tap([&seen](int, int property_id, const std::string &raw) {
+    seen.push_back(std::to_string(property_id) + "=" + raw);
+  });
+
+  std::string tab(1, static_cast<char>(TAB));
+  this->uart_.push_rx(frame("32" + tab + "173" + tab + "10"));
+  this->loop_times(3);
+
+  EXPECT_TRUE(seen.empty());
+}
+
+TEST_F(SECTouchHubTest, FrameWithoutCrcReachesTapWithOptionalCrc) {
+  this->hub_.set_optional_crc(true);
+  std::vector<std::string> seen;
+  this->hub_.register_message_tap([&seen](int, int property_id, const std::string &raw) {
+    seen.push_back(std::to_string(property_id) + "=" + raw);
+  });
+
+  std::string tab(1, static_cast<char>(TAB));
+  this->uart_.push_rx(frame("32" + tab + "173" + tab + "10"));
+  this->loop_times(3);
+
+  EXPECT_EQ(seen, std::vector<std::string>{"173=10"});
 }
 
 TEST_F(SECTouchHubTest, NakDuringScanRecordsNakOutcome) {

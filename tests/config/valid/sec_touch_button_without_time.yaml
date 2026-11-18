@@ -1,0 +1,30 @@
+# The button platform with only program_text_update and no time: section.
+# sync_clock needs time, so its code sits behind #ifdef USE_TIME; this build
+# fails if that guard goes. The sensor platform's clock_drift has the same
+# guard, but the sensor platform has nothing to configure without time.
+
+esphome:
+  name: sec-touch-button-without-time
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+
+button:
+  - platform: sec_touch
+    program_text_update:
+      name: "Program Labels Update"

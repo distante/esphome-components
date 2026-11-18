@@ -1,0 +1,86 @@
+# Every sec_touch platform in one build: fan, text_sensor, switch, select,
+# button (both buttons) and sensor, with a time source for the clock entities.
+# The web_server setup follows components/sec_touch/examples/webserver-fallback.yaml,
+# with sntp as the readme suggests when there is no Home Assistant.
+# The wifi credentials are placeholders: the build never connects.
+
+esphome:
+  name: sec-touch-all-platforms
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+wifi:
+  ssid: "fixture"
+  password: "fixture-password"
+
+web_server:
+  version: 3
+  port: 80
+  sorting_groups:
+    - id: sg_fans
+      name: "Fans"
+
+time:
+  - platform: sntp
+    id: sntp_time
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+
+fan:
+  - platform: sec_touch
+    fan_number: 1
+    name: "Fan 1"
+    split_special_modes: true
+    web_server:
+      sorting_group_id: sg_fans
+  - platform: sec_touch
+    fan_number: 2
+    name: "Fan 2"
+
+text_sensor:
+  - platform: sec_touch
+    fan_number: 1
+    mode_text:
+      name: "Fan 1 Mode"
+    label_text:
+      name: "Fan 1 Label"
+
+switch:
+  - platform: sec_touch
+    name: "Summer Ventilation"
+
+select:
+  - platform: sec_touch
+    fan_number: 1
+    mode_select:
+      name: "Fan 1 Mode Select"
+  - platform: sec_touch
+    fan_number: 2
+    mode_select:
+      name: "Fan 2 Mode Select"
+
+button:
+  - platform: sec_touch
+    program_text_update:
+      name: "Program Labels Update"
+    sync_clock:
+      name: "Sync Panel Clock"
+
+sensor:
+  - platform: sec_touch
+    clock_drift:
+      name: "Panel Clock Drift"

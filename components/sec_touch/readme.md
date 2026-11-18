@@ -651,6 +651,8 @@ With the flag enabled:
 
 By default, every response from the SEC-Touch is expected to contain four TAB-delimited fields: `command_id`, `property_id`, `value`, and `crc`. If the CRC field is absent the component logs an error and discards the message.
 
+The CRC is always checked when the field is there. A message whose CRC doesn't match (a bit flipped on the wire) is logged as a `CRC mismatch` warning and discarded, the same as any other malformed message. The next poll reads the value again.
+
 Some firmware versions or configurations of the SEC-Touch appear to omit the CRC field, sending only `[STX]command_id[TAB]property_id[TAB]value[ETX]`. If you see repeated `Not enough TABs in message … missing: [value, crc]` errors in your logs but the parsed `command_id` and `property_id` look correct, enable this flag:
 
 ```yaml
@@ -660,6 +662,8 @@ sec_touch:
 ```
 
 When enabled, a message with a missing CRC field is still processed normally. A `[D]` debug log is emitted so you can confirm the behavior. Messages that are missing `command_id` or `property_id` are still rejected as malformed regardless of this setting.
+
+Only enable it if your device really omits the CRC. A message without a CRC can't be checked, so with `true` a corrupted message that lost a TAB on the wire is accepted as real data. For example, `32[TAB]176[TAB]0[TAB]58673` arriving as `32176[TAB]0[TAB]58673` gets read as property `0` with value `58673`. With `false` it is rejected for missing a field.
 
 # Web Server preview
 

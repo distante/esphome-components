@@ -2,7 +2,6 @@
 #include "XModemCRC.h"
 #include "esphome/core/log.h"
 #include "_definitions.h"
-#include "fan/sec_touch_fan.h"
 
 namespace esphome {
 namespace sec_touch {

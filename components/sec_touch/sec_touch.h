@@ -10,7 +10,6 @@
 #include "message_router.h"
 #include "scan_outcome.h"
 
-#include "esphome/components/button/button.h"
 #include <typeinfo>
 namespace esphome {
 namespace sec_touch {

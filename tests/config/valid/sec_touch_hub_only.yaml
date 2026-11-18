@@ -1,0 +1,23 @@
+# The hub with no sec_touch platforms at all: no fan:, text_sensor:, button:,
+# sensor:, switch: or select:. The hub must not need any platform's headers.
+
+esphome:
+  name: sec-touch-hub-only
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart

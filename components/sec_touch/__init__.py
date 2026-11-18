@@ -4,6 +4,9 @@ from esphome.components import uart
 from esphome.const import CONF_ID
 
 DEPENDENCIES = ["uart"]
+# The hub's public interface uses text_sensor::TextSensor, so it must be in
+# the build even when the config has no text_sensor: section.
+AUTO_LOAD = ["text_sensor"]
 
 sec_touch_ns = cg.esphome_ns.namespace("sec_touch")
 SECTouchComponent = sec_touch_ns.class_(

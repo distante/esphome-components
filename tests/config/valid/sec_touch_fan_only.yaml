@@ -1,0 +1,28 @@
+# The hub with only the fan platform: no text_sensor:, no button:.
+# The hub uses text_sensor itself, so it must pull it into the build.
+
+esphome:
+  name: sec-touch-fan-only
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+
+fan:
+  - platform: sec_touch
+    fan_number: 1
+    name: "Fan 1"

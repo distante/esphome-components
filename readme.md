@@ -21,7 +21,7 @@ pip install -r requirements_test.txt
 | Config compile (`esphome compile` + pytest, opt-in) | `pytest tests/config --compile -m compile` | `tests/config/valid/*.yaml` | Include and `AUTO_LOAD` bugs: a header that needs a component the config left out. |
 | Page JS (`node --test`, Node 22, no dependencies) | `npm test` | `components/<component>/web/*.test.mjs` | Page logic in DOM-free ES modules. |
 
-The host layer reuses ESPHome's own C++ unit test runner (`esphome/script/cpp_unit_test.py`, an internal API that may change on an ESPHome bump), so it needs the editable ESPHome install from the setup above and a C++ compiler with AddressSanitizer (clang on macOS, gcc on Linux). The first run downloads GoogleTest. A `<domain>/` subfolder such as `tests/host/sec_touch/fan/` pulls that platform into the build.
+The host layer reuses ESPHome's own C++ unit test runner (`esphome/script/cpp_unit_test.py`, an internal API that may change on an ESPHome bump), so it needs the editable ESPHome install from the setup above and a C++ compiler with AddressSanitizer (clang on macOS, gcc on Linux). The first run downloads GoogleTest. When a test needs a platform, a `<domain>/` subfolder such as `tests/host/sec_touch/fan/` pulls it into the build.
 
 Invalid config fixtures start with `# expect-error: <text>`; the test checks that `esphome config` fails and prints that text.
 

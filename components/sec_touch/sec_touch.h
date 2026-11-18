@@ -7,6 +7,7 @@
 #include "esphome/components/uart/uart.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "_definitions.h"
+#include "data_message.h"
 #include "message_router.h"
 #include "scan_outcome.h"
 
@@ -121,6 +122,7 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   int store_data_to_incoming_message(uint8_t data);
   void cleanup_after_task_complete(TaskEnd end);
   void send_ack_message();
+  void drop_data_message();
 
   unsigned long task_start_time_ = 0;
   unsigned long task_ready_at_ms_ = 0;
@@ -131,9 +133,9 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   ScanOutcomeTracker scan_outcome_;
   bool optional_crc_{false};
   void process_data_of_current_incoming_message();
-  bool validate_message_tabs(const char *buf, int len, int tab1, int tab2, int tab3);
-  std::string extract_value_field(const char *buf, int len, int tab2, int tab3);
-  void log_not_enough_tabs_error(const char *buf, int len, int tab1, int tab2);
+  std::string extract_value_field(const char *buf, int len, const DataMessageTabs &tabs);
+  void describe_missing_fields(const char *buf, const DataMessageTabs &tabs, char *out, size_t out_size);
+  void describe_dropped_message(const char *buf, int len, const char *details, char *out, size_t out_size);
   void format_hex_dump(const uint8_t *buf, int len, char *out, size_t out_size);
 };
 }  // namespace sec_touch

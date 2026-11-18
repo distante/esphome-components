@@ -25,5 +25,5 @@ def pytest_collection_modifyitems(
         return
     skip = pytest.mark.skip(reason="needs --compile")
     for item in items:
-        if "compile" in item.keywords:
+        if item.get_closest_marker("compile"):
             item.add_marker(skip)

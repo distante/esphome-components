@@ -8,15 +8,15 @@ from pathlib import Path
 
 import pytest
 
-from esphome_run import esphome, fixtures
+from esphome_run import each_fixture, run_esphome
 
 OUTPUT_TAIL_LINES = 60
 
 
 @pytest.mark.compile
-@pytest.mark.parametrize("fixture", fixtures("valid"), ids=lambda p: p.stem)
+@each_fixture("valid")
 def test_valid_config_compiles(fixture: Path) -> None:
-    result = esphome("compile", fixture)
+    result = run_esphome("compile", fixture)
 
     output = (result.stdout + result.stderr).splitlines()
     # The compiler error sits far above the end of a ninja log; show it first.

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from esphome_run import esphome, fixtures
+from esphome_run import each_fixture, run_esphome
 
 EXPECT_ERROR_PREFIX = "# expect-error:"
 
@@ -21,19 +21,19 @@ def expected_error(fixture: Path) -> str:
     pytest.fail(f"{fixture.name} has no '{EXPECT_ERROR_PREFIX} <text>' line")
 
 
-@pytest.mark.parametrize("fixture", fixtures("valid"), ids=lambda p: p.stem)
+@each_fixture("valid")
 def test_valid_config_passes(fixture: Path) -> None:
-    result = esphome("config", fixture)
+    result = run_esphome("config", fixture)
 
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-@pytest.mark.parametrize("fixture", fixtures("invalid"), ids=lambda p: p.stem)
+@each_fixture("invalid")
 def test_invalid_config_fails_with_expected_error(fixture: Path) -> None:
     error = expected_error(fixture)
 
-    result = esphome("config", fixture)
+    result = run_esphome("config", fixture)
 
-    output =result.stdout + result.stderr
+    output = result.stdout + result.stderr
     assert result.returncode != 0, output
     assert error in output, output

@@ -37,7 +37,7 @@ if not (ESPHOME_ROOT / "script" / "build_helpers.py").is_file():
 sys.path.insert(0, str(ESPHOME_ROOT / "script"))
 try:
     from build_helpers import build_and_run, load_test_manifest_overrides  # noqa: E402
-    from cpp_unit_test import BUILD_FLAGS, PLATFORMIO_GOOGLE_TEST_LIB  # noqa: E402
+    from cpp_unit_test import BUILD_FLAGS, PLATFORMIO_GOOGLE_TEST_LIB, sanitizer_flags  # noqa: E402
     import tests.testing_helpers  # noqa: E402
 except ImportError as e:
     _fail(f"ESPHome's C++ unit test runner API changed ({e}); update tests/host/run.py for this ESPHome version")
@@ -51,6 +51,9 @@ from esphome import loader  # noqa: E402
 loader.install_meta_finder(REPO_ROOT / "components")
 
 
+TEST_HELPERS_FROM = {"sec_touch_sniffer": ["sec_touch"]}
+
+
 def main() -> int:
     available = sorted(p.name for p in TESTS_DIR.iterdir() if p.is_dir() and not p.name.startswith((".", "_")))
     parser = argparse.ArgumentParser(description="Run the host-platform component tests in tests/host.")
@@ -58,6 +61,8 @@ def main() -> int:
     components = parser.parse_args().components or available
     if unknown := sorted(set(components) - set(available)):
         parser.error(f"no tests/host folder for: {', '.join(unknown)}")
+    # A suite may include another suite's helpers (sec_touch/common.h); only selected folders reach the build.
+    components = sorted({*components, *(n for c in components for n in TEST_HELPERS_FROM.get(c, []))})
 
     os.environ["ASAN_OPTIONS"] = "detect_leaks=0:allocator_may_return_null=1"
     return build_and_run(
@@ -67,7 +72,8 @@ def main() -> int:
         config_prefix="hosttests",
         friendly_name="Host Unit Tests",
         libraries=PLATFORMIO_GOOGLE_TEST_LIB,
-        build_flags=BUILD_FLAGS,
+        # A 64-bit host has size_t = unsigned long, so a %d for a size() fails here even where ESP32 is quiet.
+        build_flags=BUILD_FLAGS + sanitizer_flags() + ["-Werror=format"],
         main_entry=str(ESPHOME_ROOT / "tests" / "components" / "main.cpp"),
         label="host tests",
     )

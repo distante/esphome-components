@@ -158,8 +158,8 @@ void SecTouchSniffer::on_message_(int command_id, int property_id, const std::st
   entry.last_seen_at[sizeof(entry.last_seen_at) - 1] = '\0';
 
   if (is_new) {
-    ESP_LOGI(TAG, "NEW property_id %d (cmd=%d value=%d at=%s) total=%d", property_id, command_id, new_value, ts.c_str(),
-             this->discovered_ids_.size());
+    ESP_LOGI(TAG, "NEW property_id %d (cmd=%d value=%d at=%s) total=%zu", property_id, command_id, new_value,
+             ts.c_str(), this->discovered_ids_.size());
   } else {
     ESP_LOGW(TAG, "property_id %d updated (cmd=%d value=%d->%d at=%s)", property_id, command_id, old_value, new_value,
              ts.c_str());

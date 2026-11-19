@@ -79,13 +79,14 @@ jobs:
           cache-dependency-path: |
             requirements_test.txt
             esphome/requirements.txt
-      # ESP-IDF and the toolchains are large; key on the vendored ESPHome commit so every bump refreshes them.
+      # ESPHome builds ESP32 with native ESP-IDF, installed with its toolchains under ~/.cache/esphome/idf.
+      # They are large; key on the vendored ESPHome commit so every bump refreshes them.
       - id: esphome
         run: echo "sha=$(git rev-parse HEAD:esphome)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
         with:
-          path: ~/.platformio
-          key: platformio-esp32-${{ runner.os }}-${{ steps.esphome.outputs.sha }}
+          path: ~/.cache/esphome/idf
+          key: esp-idf-${{ runner.os }}-${{ steps.esphome.outputs.sha }}
       - run: pip install -r requirements_test.txt
       - run: pytest tests/config --compile -m compile
 

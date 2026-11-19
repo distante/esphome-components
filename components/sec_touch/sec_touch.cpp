@@ -27,7 +27,7 @@ void SECTouchComponent::setup() {
 
 void SECTouchComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "SEC-Touch:");
-  ESP_LOGCONFIG(TAG, "  total_register_fans: %d", this->fan_level_property_ids_.size());
+  ESP_LOGCONFIG(TAG, "  total_register_fans: %zu", this->fan_level_property_ids_.size());
 
   // Iterate through the map and log each property_id
   for (const auto &pair : this->recursive_update_listeners) {
@@ -36,7 +36,7 @@ void SECTouchComponent::dump_config() {
   for (const auto &pair : this->manual_update_listeners) {
     ESP_LOGCONFIG(TAG, "  - Manual Update Property ID: %d", pair.first);  // Log the property_id
   }
-  ESP_LOGCONFIG(TAG, "  global_settings_update_interval_ms: %u", this->global_settings_update_interval_ms_);
+  ESP_LOGCONFIG(TAG, "  global_settings_update_interval_ms: %" PRIu32, this->global_settings_update_interval_ms_);
   for (int id : this->global_setting_property_ids_) {
     ESP_LOGCONFIG(TAG, "  - Global Setting Property ID: %d", id);
   }
@@ -106,7 +106,7 @@ void SECTouchComponent::loop() {
     return;
   }
 
-  ESP_LOGD(TAG, "[loop] Data available (Current buffer size: %d, Task queue size: %d)",
+  ESP_LOGD(TAG, "[loop] Data available (Current buffer size: %d, Task queue size: %zu)",
            this->incoming_message.buffer_index + 1, this->data_task_queue.size());
 
   uint8_t peakedData;
@@ -213,7 +213,7 @@ void SECTouchComponent::process_task_queue() {
   }
   auto &task_ptr = data_task_queue.front();
   BaseTask *task = task_ptr.get();
-  ESP_LOGD(TAG, "Processing one task of %d -  type: %s", data_task_queue.size(),
+  ESP_LOGD(TAG, "Processing one task of %zu -  type: %s", data_task_queue.size(),
            EnumToString::TaskType(task->get_task_type()));
 
   this->current_running_task_type = task->get_task_type();
@@ -327,7 +327,7 @@ void SECTouchComponent::add_discovery_get_task(int property_id) {
 void SECTouchComponent::enter_scan_mode() {
   ESP_LOGI(TAG, "Entering scan mode — pausing regular polling");
   if (!this->data_task_queue.empty()) {
-    ESP_LOGW(TAG, "Entering scan mode — discarding %d pending task(s)", this->data_task_queue.size());
+    ESP_LOGW(TAG, "Entering scan mode — discarding %zu pending task(s)", this->data_task_queue.size());
   }
   this->data_task_queue.clear();
   this->incoming_message.reset();

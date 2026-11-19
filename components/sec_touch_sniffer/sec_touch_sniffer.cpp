@@ -113,7 +113,7 @@ void SecTouchSniffer::on_queue_empty_() {
   }
 
   if (this->current_scan_id_ > this->scan_end_) {
-    ESP_LOGI(TAG, "Scan complete. %d unique IDs discovered.", this->discovered_ids_.size());
+    ESP_LOGI(TAG, "Scan complete. %zu unique IDs discovered.", this->discovered_ids_.size());
     this->is_scanning_ = false;
     this->update_scan_switch_();
     this->publish_state(this->build_state_string_());

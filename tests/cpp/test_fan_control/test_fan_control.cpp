@@ -153,6 +153,81 @@ TEST(DecideFanControl, APresetCommandLeavesThePresetAlone) {
   EXPECT_FALSE(decide_fan_control(FanCommand{{}, {}, BURST_LEVEL}, ON_AT_4, SPLIT).reset_preset_to_normal);
 }
 
+TEST(DecideFanControl, SplitOnWithASpeedStartsAnOffFanAtThatSpeed) {
+  FanControl result = decide_fan_control(FanCommand{true, 2, {}}, OFF_AT_3, SPLIT);
+
+  EXPECT_EQ(result.level, 2);
+  EXPECT_TRUE(result.on);
+  EXPECT_EQ(result.speed, 2);
+  EXPECT_TRUE(result.reset_preset_to_normal);
+}
+
+TEST(DecideFanControl, SplitSpeedWithoutAPresetMovesTheSlider) {
+  FanControl result = decide_fan_control(FanCommand{{}, 5, {}}, ON_AT_4, SPLIT);
+
+  EXPECT_EQ(result.level, 5);
+  EXPECT_TRUE(result.on);
+  EXPECT_EQ(result.speed, 5);
+  EXPECT_TRUE(result.reset_preset_to_normal);
+}
+
+// The preset's level wins over the speed that rides along.
+TEST(DecideFanControl, OnWithASpeedAndASpecialPresetWritesThePresetLevel) {
+  FanControl result = decide_fan_control(FanCommand{true, 2, BURST_LEVEL}, OFF_AT_3, NOT_SPLIT);
+
+  EXPECT_EQ(result.level, BURST_LEVEL);
+  EXPECT_TRUE(result.on);
+  EXPECT_EQ(result.speed, BURST_LEVEL);
+  EXPECT_FALSE(result.reset_preset_to_normal);
+}
+
+TEST(DecideFanControl, SplitOnWithASpeedAndSleepKeepsTheSpeedOnTheSlider) {
+  FanControl result = decide_fan_control(FanCommand{true, 3, SLEEP_LEVEL}, FanStatus{false, 2}, SPLIT);
+
+  EXPECT_EQ(result.level, SLEEP_LEVEL);
+  EXPECT_TRUE(result.on);
+  EXPECT_EQ(result.speed, 3);
+}
+
+TEST(DecideFanControl, ASpeedWithTheNormalPresetRestartsAtLevelOne) {
+  FanControl result = decide_fan_control(FanCommand{{}, 5, NORMAL_PRESET_LEVEL}, ON_AT_4, NOT_SPLIT);
+
+  EXPECT_EQ(result.level, MIN_NORMAL_LEVEL);
+  EXPECT_EQ(result.speed, MIN_NORMAL_LEVEL);
+}
+
+TEST(DecideFanControl, SplitSpeedWithTheNormalPresetKeepsThatSpeed) {
+  FanControl result = decide_fan_control(FanCommand{{}, 5, NORMAL_PRESET_LEVEL}, ON_AT_4, SPLIT);
+
+  EXPECT_EQ(result.level, 5);
+  EXPECT_EQ(result.speed, 5);
+}
+
+// The mode select turns a fan on with a preset and no speed.
+TEST(DecideFanControl, SplitOnWithBurstStartsAFanWithNoStoredSpeedWithTheSliderAtMax) {
+  FanControl result = decide_fan_control(FanCommand{true, {}, BURST_LEVEL}, FanStatus{false, 0}, SPLIT);
+
+  EXPECT_EQ(result.level, BURST_LEVEL);
+  EXPECT_TRUE(result.on);
+  EXPECT_EQ(result.speed, MAX_NORMAL_LEVEL);
+}
+
+TEST(DecideFanControl, SplitOnWithSleepStartsAFanWithNoStoredSpeedWithTheSliderAtOne) {
+  FanControl result = decide_fan_control(FanCommand{true, {}, SLEEP_LEVEL}, FanStatus{false, 0}, SPLIT);
+
+  EXPECT_EQ(result.level, SLEEP_LEVEL);
+  EXPECT_TRUE(result.on);
+  EXPECT_EQ(result.speed, MIN_NORMAL_LEVEL);
+}
+
+TEST(DecideFanControl, OnWithTheNormalPresetStartsAnOffFanAtLevelOne) {
+  FanControl result = decide_fan_control(FanCommand{true, {}, NORMAL_PRESET_LEVEL}, OFF_AT_3, NOT_SPLIT);
+
+  EXPECT_EQ(result.level, MIN_NORMAL_LEVEL);
+  EXPECT_TRUE(result.on);
+  EXPECT_EQ(result.speed, MIN_NORMAL_LEVEL);
+}
+
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

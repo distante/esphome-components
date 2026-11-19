@@ -30,8 +30,8 @@ struct FanControl {
   /// State and speed to publish.
   bool on;
   int speed;
-  /// A normal level was set without a preset, so the preset should read Normal again.
-  bool preset_is_normal;
+  /// A normal level was set without a preset: put a special preset back to Normal.
+  bool reset_preset_to_normal;
 };
 
 /// Decides what a fan call writes to the panel and publishes.

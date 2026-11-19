@@ -112,13 +112,13 @@ TEST(DecideFanControl, SplitNormalPresetPullsAnOutOfRangeSliderBackToOne) {
   EXPECT_EQ(result.speed, MIN_NORMAL_LEVEL);
 }
 
-TEST(DecideFanControl, ASpeedWithoutAPresetSetsTheLevelAndMarksThePresetNormal) {
+TEST(DecideFanControl, ASpeedWithoutAPresetSetsTheLevelAndResetsThePresetToNormal) {
   FanControl result = decide_fan_control(FanCommand{{}, 5, {}}, ON_AT_4, NOT_SPLIT);
 
   EXPECT_EQ(result.level, 5);
   EXPECT_TRUE(result.on);
   EXPECT_EQ(result.speed, 5);
-  EXPECT_TRUE(result.preset_is_normal);
+  EXPECT_TRUE(result.reset_preset_to_normal);
 }
 
 TEST(DecideFanControl, OnWithASpeedStartsAnOffFanAtThatSpeed) {
@@ -127,7 +127,7 @@ TEST(DecideFanControl, OnWithASpeedStartsAnOffFanAtThatSpeed) {
   EXPECT_EQ(result.level, 2);
   EXPECT_TRUE(result.on);
   EXPECT_EQ(result.speed, 2);
-  EXPECT_TRUE(result.preset_is_normal);
+  EXPECT_TRUE(result.reset_preset_to_normal);
 }
 
 TEST(DecideFanControl, OnWithoutASpeedResumesTheStoredSpeed) {
@@ -139,17 +139,18 @@ TEST(DecideFanControl, OnWithoutASpeedResumesTheStoredSpeed) {
 }
 
 // A special level from the panel is left alone: only normal levels mean Normal.
-TEST(DecideFanControl, ResendingASpecialLevelDoesNotMarkThePresetNormal) {
+TEST(DecideFanControl, ResendingASpecialLevelDoesNotResetThePreset) {
   FanControl result = decide_fan_control(FanCommand{true, {}, {}}, FanStatus{true, AUTOMATIC_CO2_LEVEL}, NOT_SPLIT);
 
   EXPECT_EQ(result.level, AUTOMATIC_CO2_LEVEL);
-  EXPECT_FALSE(result.preset_is_normal);
+  EXPECT_FALSE(result.reset_preset_to_normal);
 }
 
 // The hub already stored the preset the command picked.
 TEST(DecideFanControl, APresetCommandLeavesThePresetAlone) {
-  EXPECT_FALSE(decide_fan_control(FanCommand{{}, {}, NORMAL_PRESET_LEVEL}, ON_AT_4, NOT_SPLIT).preset_is_normal);
-  EXPECT_FALSE(decide_fan_control(FanCommand{{}, {}, BURST_LEVEL}, ON_AT_4, SPLIT).preset_is_normal);
+  EXPECT_FALSE(
+      decide_fan_control(FanCommand{{}, {}, NORMAL_PRESET_LEVEL}, ON_AT_4, NOT_SPLIT).reset_preset_to_normal);
+  EXPECT_FALSE(decide_fan_control(FanCommand{{}, {}, BURST_LEVEL}, ON_AT_4, SPLIT).reset_preset_to_normal);
 }
 
 int main(int argc, char **argv) {

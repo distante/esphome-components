@@ -181,7 +181,7 @@ void SecTouchFan::control(const fan::FanCall &call) {
 
   // Clear a stale special-mode preset immediately so the UI stays consistent
   // without waiting for the device echo (which may arrive seconds later).
-  if (decision.preset_is_normal) {
+  if (decision.reset_preset_to_normal) {
     auto current = this->get_preset_mode();
     std::string_view cur_sv = current.empty() ? std::string_view("") : std::string_view(current.c_str(), current.size());
     auto cur_mode = FanModeEnum::from_string(cur_sv).value_or(FanModeEnum::FanMode::NORMAL);

@@ -493,9 +493,17 @@ where:
   int len = this->incoming_message.buffer_index + 1;
 
   // Defensive: ensure message starts with STX and ends with ETX
-  if (len < 7 || static_cast<uint8_t>(buf[0]) != STX || static_cast<uint8_t>(buf[len - 1]) != ETX) {
+  if (len < DATA_MESSAGE_MIN_LEN || static_cast<uint8_t>(buf[0]) != STX ||
+      static_cast<uint8_t>(buf[len - 1]) != ETX) {
     char context[384];
     this->describe_dropped_message(buf, len, "", context, sizeof(context));
+    // During a GET, a frame too short for data is most likely the panel's ACK with a flipped bit, and the data
+    // frame is still on the way. Leave the GET open: that frame or the watchdog ends it. Not ACKed (issue #50).
+    if (len < DATA_MESSAGE_MIN_LEN && this->current_running_task_type == TaskType::GET_DATA) {
+      ESP_LOGW(TAG_UART, "  [process_data] Frame too short for data (%s). Waiting for the data frame", context);
+      this->incoming_message.reset();
+      return;
+    }
     ESP_LOGE(TAG_UART, "  [process_data] Invalid message format (%s). Task Failed", context);
     this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
     return;

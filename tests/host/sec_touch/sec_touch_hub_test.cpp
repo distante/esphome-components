@@ -12,6 +12,9 @@ namespace {
 /// The reply for 173 with one bit flipped ('7' -> '3'), captured on the installed controller (issue #43).
 std::vector<uint8_t> bad_crc_frame() { return frame(data_head(133, "10") + "42696"); }
 
+/// The panel's ACK with one bit flipped (issue #50): `02 07 0A`, too short to be a data frame.
+std::vector<uint8_t> corrupted_ack() { return frame(std::string(1, static_cast<char>(ACK ^ 0x01))); }
+
 class SECTouchHubTest : public ::testing::Test {
  protected:
   void SetUp() override { this->hub_.set_uart_parent(&this->uart_); }
@@ -72,7 +75,7 @@ TEST_F(SECTouchHubTest, FrameWithoutCrcIsDroppedByDefaultButAcked) {
 // A frame too short to be data may be the panel's own ACK with a flipped bit, sent before the data
 // frame. ACKing it would answer a frame that has not arrived yet.
 TEST_F(SECTouchHubTest, FrameTooShortForDataIsNotAcked) {
-  this->uart_.push_rx(frame(std::string(1, static_cast<char>(ACK ^ 0x01))));
+  this->uart_.push_rx(corrupted_ack());
   this->loop_times(2);
 
   EXPECT_TRUE(this->uart_.tx.empty());
@@ -121,6 +124,78 @@ TEST_F(SECTouchHubTest, EnteringScanModeClearsStaleTimeoutOutcome) {
   this->hub_.enter_scan_mode();
 
   EXPECT_EQ(this->hub_.get_last_scan_outcome(), ScanOutcome::SCAN_OUTCOME_OK);
+}
+
+// A corrupted ACK during a GET leaves the GET open: the data frame that follows answers it (issue #50).
+TEST_F(SECTouchHubTest, CorruptedAckKeepsGetOpenUntilItsDataFrame) {
+  const auto &seen = this->record_taps();
+  this->hub_.add_discovery_get_task(173);
+  this->hub_.loop();  // dispatches the GET
+  this->uart_.tx.clear();
+
+  this->uart_.push_rx(corrupted_ack());
+  this->loop_times(2);
+
+  EXPECT_EQ(this->hub_.current_running_task_type, TaskType::GET_DATA);
+  EXPECT_TRUE(this->uart_.tx.empty());
+
+  this->uart_.push_rx(data_frame(173, "10"));
+  this->loop_times(2);
+
+  EXPECT_EQ(seen, std::vector<std::string>{"173=10"});
+  EXPECT_EQ(this->hub_.current_running_task_type, TaskType::NONE);
+  EXPECT_EQ(this->uart_.tx, (std::vector<uint8_t>{STX, ACK, ETX}));
+}
+
+// The panel answered the scanned property, so the scan records it as answered, not as a timeout to retry.
+// A scan reads the outcome when the queue empties, so the test reads it there too.
+TEST_F(SECTouchHubTest, CorruptedAckDuringScanStillRecordsTheAnswer) {
+  std::vector<ScanOutcome> outcomes;
+  this->hub_.register_queue_empty_listener(
+      [this, &outcomes]() { outcomes.push_back(this->hub_.get_last_scan_outcome()); });
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(173);
+  this->hub_.loop();  // dispatches the GET
+
+  this->uart_.push_rx(corrupted_ack());
+  this->loop_times(2);
+  this->uart_.push_rx(data_frame(173, "10"));
+  this->loop_times(2);
+
+  EXPECT_EQ(outcomes, std::vector<ScanOutcome>{ScanOutcome::SCAN_OUTCOME_OK});
+}
+
+TEST_F(SECTouchHubTest, CorruptedAckWithoutDataFrameEndsGetAtTheWatchdog) {
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(173);
+  this->hub_.loop();  // dispatches the GET
+
+  this->uart_.push_rx(corrupted_ack());
+  this->loop_times(2);
+  ASSERT_EQ(this->hub_.current_running_task_type, TaskType::GET_DATA);
+
+  // Host millis() is the real clock: age the task past the hub's 2000 ms TASK_TIMEOUT_MS instead of sleeping.
+  this->hub_.task_start_time_ = millis() - 2001;
+  this->hub_.loop();
+
+  EXPECT_EQ(this->hub_.current_running_task_type, TaskType::NONE);
+  EXPECT_EQ(this->hub_.get_last_scan_outcome(), ScanOutcome::SCAN_OUTCOME_TIMEOUT);
+}
+
+// A SET has no data frame to wait for: its ACK is the whole answer, so a corrupted one ends it as malformed.
+TEST_F(SECTouchHubTest, CorruptedAckEndsSetAsMalformed) {
+  this->hub_.enter_scan_mode();  // only so the malformed end is recorded and visible
+  this->hub_.add_set_task(SetDataTask::create(TaskTargetType::LEVEL, 173, "5"));
+  this->hub_.loop();  // dispatches the SET
+  ASSERT_EQ(this->hub_.current_running_task_type, TaskType::SET_DATA);
+  this->uart_.tx.clear();
+
+  this->uart_.push_rx(corrupted_ack());
+  this->loop_times(2);
+
+  EXPECT_EQ(this->hub_.current_running_task_type, TaskType::NONE);
+  EXPECT_EQ(this->hub_.get_last_scan_outcome(), ScanOutcome::SCAN_OUTCOME_TIMEOUT);
+  EXPECT_TRUE(this->uart_.tx.empty());
 }
 
 }  // namespace esphome::sec_touch::testing

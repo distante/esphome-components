@@ -11,7 +11,7 @@ namespace sec_touch {
 
 /// Shortest frame that can be a data message: `[STX]` + at least five bytes + `[ETX]`. Anything shorter is an ACK,
 /// a NAK, or corruption.
-static constexpr int DATA_MESSAGE_MIN_LEN = 7;
+constexpr const int DATA_MESSAGE_MIN_LEN = 7;
 
 /// Positions of the first three TABs in a data message `[STX]cmd[TAB]prop[TAB]value[TAB]crc[ETX]`, -1 when absent.
 /// TABs are found left to right, so `tab2 == -1` implies `tab3 == -1`.

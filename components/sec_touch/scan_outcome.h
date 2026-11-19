@@ -7,6 +7,9 @@
 namespace esphome {
 namespace sec_touch {
 
+/// How long the hub waits for the reply to a task before its watchdog ends the task as TASK_END_TIMEOUT.
+constexpr const unsigned long TASK_TIMEOUT_MS = 2000;
+
 // Enumerators carry a prefix because _definitions.h #defines NAK (and other wire bytes).
 
 /// How the hub's running task ended.
@@ -17,7 +20,7 @@ enum class TaskEnd : uint8_t {
   TASK_END_NAK,
   /// A reply arrived but could not be parsed.
   TASK_END_MALFORMED,
-  /// No reply within the task timeout.
+  /// No reply within TASK_TIMEOUT_MS.
   TASK_END_TIMEOUT,
 };
 

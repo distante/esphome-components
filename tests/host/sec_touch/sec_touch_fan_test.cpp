@@ -38,7 +38,7 @@ TEST_F(SecTouchFanTest, OffWithASpeedWritesLevelZeroToAnOffFan) {
   this->fan_.make_call().set_state(false).set_speed(1).perform();
   this->send_next_task();
 
-  EXPECT_EQ(this->uart_.tx, set_frame(LEVEL_ID, "0"));
+  EXPECT_EQ(this->uart_.tx, set_frame(LEVEL_ID, std::to_string(OFF_LEVEL)));
   EXPECT_FALSE(this->fan_.state);
 }
 
@@ -59,8 +59,8 @@ TEST_F(SecTouchFanTest, SplitBurstWritesItsLevelAndShowsTheSliderAtMax) {
   this->fan_.make_call().set_preset_mode("Burst").perform();
   this->send_next_task();
 
-  EXPECT_EQ(this->uart_.tx, set_frame(LEVEL_ID, "7"));
-  EXPECT_EQ(this->fan_.speed, 6);
+  EXPECT_EQ(this->uart_.tx, set_frame(LEVEL_ID, std::to_string(BURST_LEVEL)));
+  EXPECT_EQ(this->fan_.speed, MAX_NORMAL_LEVEL);
   EXPECT_EQ(std::string(this->fan_.get_preset_mode().c_str()), "Burst");
 }
 

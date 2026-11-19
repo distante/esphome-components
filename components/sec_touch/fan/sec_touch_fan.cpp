@@ -20,7 +20,7 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
       return;
     }
 
-    if (real_speed_from_device < 0 || (real_speed_from_device > 11 && real_speed_from_device != 255)) {
+    if (real_speed_from_device < OFF_LEVEL || (real_speed_from_device > MAX_LEVEL && real_speed_from_device != 255)) {
       ESP_LOGW(TAG, "Ignoring out-of-range speed %d for property_id %d", real_speed_from_device, property_id);
       return;
     }
@@ -80,7 +80,7 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
 }
 
 bool SecTouchFan::assign_new_speed_if_needed(int real_speed_from_device) {
-  if (real_speed_from_device == 0) {
+  if (real_speed_from_device == OFF_LEVEL) {
     if (this->state != 0) {
       this->state = 0;
       return true;
@@ -97,7 +97,7 @@ bool SecTouchFan::assign_new_speed_if_needed(int real_speed_from_device) {
     return false;
   }
 
-  if (real_speed_from_device < 7) {
+  if (real_speed_from_device <= MAX_NORMAL_LEVEL) {
     if (this->state != 1 || this->speed != real_speed_from_device) {
       this->state = 1;
       this->speed = real_speed_from_device;
@@ -108,21 +108,22 @@ bool SecTouchFan::assign_new_speed_if_needed(int real_speed_from_device) {
   }
 
   if (this->split_special_modes_) {
-    // Burst snaps the slider to 6 for visual parity with the outbound control() path;
+    // Burst snaps the slider to its max for visual parity with the outbound control() path;
     // other special modes leave speed untouched as they don't map to a single level.
     bool changed = false;
     if (this->state != 1) {
       this->state = 1;
       changed = true;
     }
-    // Guarantee a valid 1..6 slider value before publishing state=ON. Without this,
+    // Guarantee a normal slider value before publishing state=ON. Without this,
     // the first update after boot (speed=0) or after the "not connected" path (speed=255)
     // would publish state=ON with a speed outside the advertised range.
-    if (this->speed < 1 || this->speed > 6) {
-      this->speed = (real_speed_from_device == 7) ? 6 : 1;
+    bool burst = real_speed_from_device == BURST_LEVEL;
+    if (!is_normal_level(this->speed)) {
+      this->speed = burst ? MAX_NORMAL_LEVEL : MIN_NORMAL_LEVEL;
       changed = true;
-    } else if (real_speed_from_device == 7 && this->speed != 6) {
-      this->speed = 6;
+    } else if (burst && this->speed != MAX_NORMAL_LEVEL) {
+      this->speed = MAX_NORMAL_LEVEL;
       changed = true;
     }
     return changed;
@@ -174,7 +175,7 @@ void SecTouchFan::control(const fan::FanCall &call) {
   this->state = decision.on;
   this->speed = decision.speed;
 
-  if (decision.level == 0) {
+  if (decision.level == OFF_LEVEL) {
     ESP_LOGI(TAG, "[State Update for %d] - Turning off", this->level_id);
   }
 
@@ -200,27 +201,27 @@ void SecTouchFan::control(const fan::FanCall &call) {
 }
 
 FanModeEnum::FanMode SecTouchFan::calculate_mode_from_speed(int speed) {
-  if (speed < 7 || speed > 11) {
+  if (speed < BURST_LEVEL || speed > SLEEP_LEVEL) {
     return FanModeEnum::FanMode::NORMAL;
   }
 
-  if (speed == 7) {
+  if (speed == BURST_LEVEL) {
     return FanModeEnum::FanMode::BURST;
   }
 
-  if (speed == 8) {
+  if (speed == AUTOMATIC_HUMIDITY_LEVEL) {
     return FanModeEnum::FanMode::AUTOMATIC_HUMIDITY;
   }
 
-  if (speed == 9) {
+  if (speed == AUTOMATIC_CO2_LEVEL) {
     return FanModeEnum::FanMode::AUTOMATIC_CO2;
   }
 
-  if (speed == 10) {
+  if (speed == AUTOMATIC_TIME_LEVEL) {
     return FanModeEnum::FanMode::AUTOMATIC_TIME;
   }
 
-  if (speed == 11) {
+  if (speed == SLEEP_LEVEL) {
     return FanModeEnum::FanMode::SLEEP;
   }
 

@@ -8,6 +8,14 @@ Always wrap `if`/`else`/`for`/`while` bodies in braces `{}`, even single-line bo
 
 Always exit early when a condition makes the rest of a function irrelevant. Check preconditions and guard clauses at the top and return immediately. Avoid wrapping the main logic in an `if` block when an inverted early return keeps the happy path at the lowest indentation level.
 
+## Reuse existing definitions
+
+Before adding a constant, enum, type or helper, search `components/` and `tests/` for one that already names the concept, and use it. Each value has a single source of truth: code and tests reference its name, never a bare literal or a second definition. When the existing definition sits behind an ESPHome include that a pure header must not pull in, move it into a pure header that both sides include.
+
+## SEC-Touch protocol
+
+The SEC-Touch hardware and its UART protocol are fixed: command IDs, frame layout, property IDs and level values stay as they are. Code may rely on protocol constants coinciding (a SET and a data frame both start with `32`). Judge such code on readability alone.
+
 ## Worktrees
 
 Work in a git worktree (`EnterWorktree`, or `isolation: "worktree"` for subagents) unless the user says not to. Worktrees live in `.claude/worktrees/`.

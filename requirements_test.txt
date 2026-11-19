@@ -1,4 +1,4 @@
 # Test tooling for this repo. Needs the esphome submodule checked out.
 # The vendored ESPHome also brings its pinned PlatformIO (for `pio test -e native`).
 -e ./esphome
-pytest==9.1.1  # same pin as esphome/requirements_test.txt
+pytest==9.2.0  # same pin as esphome/requirements_test.txt

@@ -9,7 +9,7 @@ import pytest
 
 FIXTURES_DIR = Path(__file__).parent
 
-Command = Literal["config", "compile"]
+Command = Literal["config", "clean", "compile"]
 
 
 def fixtures(kind: str) -> list[Path]:

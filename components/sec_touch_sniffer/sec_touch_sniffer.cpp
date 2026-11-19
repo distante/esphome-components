@@ -21,7 +21,11 @@ void SecTouchSniffer::setup() {
 
 void SecTouchSniffer::dump_config() {
   ESP_LOGCONFIG(TAG, "SEC-Touch-Sniffer:");
+#ifdef USE_TIME
   ESP_LOGCONFIG(TAG, "  Time source: %s", this->time_ != nullptr ? "RTC" : "uptime fallback");
+#else
+  ESP_LOGCONFIG(TAG, "  Time source: uptime fallback");
+#endif
   if (this->scan_end_ > 0) {
     ESP_LOGCONFIG(TAG, "  Scan range: %d - %d", this->scan_start_, this->scan_end_);
   } else {
@@ -113,7 +117,7 @@ void SecTouchSniffer::on_queue_empty_() {
   }
 
   if (this->current_scan_id_ > this->scan_end_) {
-    ESP_LOGI(TAG, "Scan complete. %d unique IDs discovered.", this->discovered_ids_.size());
+    ESP_LOGI(TAG, "Scan complete. %zu unique IDs discovered.", this->discovered_ids_.size());
     this->is_scanning_ = false;
     this->update_scan_switch_();
     this->publish_state(this->build_state_string_());
@@ -154,8 +158,8 @@ void SecTouchSniffer::on_message_(int command_id, int property_id, const std::st
   entry.last_seen_at[sizeof(entry.last_seen_at) - 1] = '\0';
 
   if (is_new) {
-    ESP_LOGI(TAG, "NEW property_id %d (cmd=%d value=%d at=%s) total=%d", property_id, command_id, new_value, ts.c_str(),
-             this->discovered_ids_.size());
+    ESP_LOGI(TAG, "NEW property_id %d (cmd=%d value=%d at=%s) total=%zu", property_id, command_id, new_value,
+             ts.c_str(), this->discovered_ids_.size());
   } else {
     ESP_LOGW(TAG, "property_id %d updated (cmd=%d value=%d->%d at=%s)", property_id, command_id, old_value, new_value,
              ts.c_str());
@@ -167,12 +171,14 @@ void SecTouchSniffer::on_message_(int command_id, int property_id, const std::st
 }
 
 std::string SecTouchSniffer::get_timestamp_() const {
+#ifdef USE_TIME
   if (this->time_ != nullptr) {
     auto now = this->time_->now();
     if (now.is_valid()) {
       return now.strftime("%d-%m-%Y %H:%M");
     }
   }
+#endif
   char buf[16];
   snprintf(buf, sizeof(buf), "t=%lus", millis() / 1000UL);
   return std::string(buf);

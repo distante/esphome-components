@@ -7,6 +7,10 @@ esphome:
 esp32:
   board: esp32dev
 
+logger:
+  # Compiles every ESP_LOG* call, so the compile test sees -Wformat warnings.
+  level: VERY_VERBOSE
+
 external_components:
   - source:
       type: local

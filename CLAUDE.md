@@ -8,6 +8,10 @@ Always wrap `if`/`else`/`for`/`while` bodies in braces `{}`, even single-line bo
 
 Always exit early when a condition makes the rest of a function irrelevant. Check preconditions and guard clauses at the top and return immediately. Avoid wrapping the main logic in an `if` block when an inverted early return keeps the happy path at the lowest indentation level.
 
+## Worktrees
+
+Work in a git worktree (`EnterWorktree`, or `isolation: "worktree"` for subagents) unless the user says not to. Worktrees live in `.claude/worktrees/`.
+
 ## Tests
 
 Commands and setup: [readme.md#tests](readme.md#tests). Every change lands with tests in one of five layers:
@@ -17,3 +21,7 @@ Commands and setup: [readme.md#tests](readme.md#tests). Every change lands with 
 - **YAML config**: fixtures in `tests/config/valid/` or `tests/config/invalid/`. Each invalid fixture carries a `# expect-error: <text>` line.
 - **Config compile**: every valid fixture is also built with `esphome compile` (opt-in `--compile`). Use it for include and `AUTO_LOAD` bugs: add a valid fixture that leaves out the component the C++ wrongly needs.
 - **Page JS**: DOM-free ES modules in `components/<component>/web/`, imported by the page, with `*.test.mjs` beside them.
+
+## Pull requests
+
+All PR rules: [.claude/skills/pr-body/SKILL.md](.claude/skills/pr-body/SKILL.md). Read it before opening a PR or writing a PR title or body.

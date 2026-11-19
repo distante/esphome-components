@@ -159,3 +159,6 @@ sdkconfig.*
 !sdkconfig.defaults
 
 .tests/
+
+# Claude Code agent worktrees
+.claude/worktrees/

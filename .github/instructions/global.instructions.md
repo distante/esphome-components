@@ -9,3 +9,9 @@
 - We are working with C++ code for ESPHome, so please follow the C++ coding conventions https://developers.esphome.io/.
 - Memory Management: Be mindful of memory usage, especially on devices with limited resources. Avoid dynamic memory allocation where possible and use static or stack allocation.
 - Error Handling: Implement robust error handling to ensure that the component can gracefully handle unexpected conditions.
+
+# Pull requests
+- All PR rules: [.claude/skills/pr-body/SKILL.md](../../.claude/skills/pr-body/SKILL.md). Read it before opening a PR or writing a PR title or body.
+
+# Worktrees
+- Work in a git worktree unless the user says not to. Worktrees live in `.claude/worktrees/`.

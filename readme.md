@@ -37,6 +37,5 @@ We Follow TDD With teeth.
 5. We restore the implementation.
 
 ## Pull Requests Rules
-- We should explain with a TL/DR what was done.
-- We include a technical overview of the changes.
-- We try to use visual explanations when possible (Mermaid)
+
+All pull request rules (title, body template, visuals, evidence) live in [.claude/skills/pr-body/SKILL.md](.claude/skills/pr-body/SKILL.md).

@@ -5,6 +5,8 @@
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "../sec_touch.h"
 #include "_fan_mode.h"
+#include "fan_control.h"
+#include "fan_level.h"
 
 namespace esphome {
 namespace sec_touch {
@@ -20,7 +22,6 @@ class SecTouchFan : public Component, public fan::Fan {
   void control(const fan::FanCall &call) override;
   static FanModeEnum::FanMode calculate_mode_from_speed(int speed);
   void update_label_mode();
-  void turn_off_sec_touch_hardware_fan();
   // Returns true when state/speed changed and publish_state() should be called.
   bool assign_new_speed_if_needed(int real_speed_from_device);
 
@@ -33,7 +34,7 @@ class SecTouchFan : public Component, public fan::Fan {
 
   void setup() override { this->set_supported_preset_modes(FanModeEnum::getPresetModePointers()); }
   fan::FanTraits get_traits() override {
-    auto traits = fan::FanTraits(false, true, false, this->split_special_modes_ ? 6 : 11);
+    auto traits = fan::FanTraits(false, true, false, this->split_special_modes_ ? MAX_NORMAL_LEVEL : MAX_LEVEL);
     this->wire_preset_modes_(traits);
     return traits;
   }

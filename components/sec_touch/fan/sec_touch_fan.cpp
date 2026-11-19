@@ -20,7 +20,7 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
       return;
     }
 
-    if (real_speed_from_device < 0 || (real_speed_from_device > 11 && real_speed_from_device != 255)) {
+    if (real_speed_from_device < OFF_LEVEL || (real_speed_from_device > MAX_LEVEL && real_speed_from_device != 255)) {
       ESP_LOGW(TAG, "Ignoring out-of-range speed %d for property_id %d", real_speed_from_device, property_id);
       return;
     }
@@ -80,7 +80,7 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
 }
 
 bool SecTouchFan::assign_new_speed_if_needed(int real_speed_from_device) {
-  if (real_speed_from_device == 0) {
+  if (real_speed_from_device == OFF_LEVEL) {
     if (this->state != 0) {
       this->state = 0;
       return true;
@@ -97,7 +97,7 @@ bool SecTouchFan::assign_new_speed_if_needed(int real_speed_from_device) {
     return false;
   }
 
-  if (real_speed_from_device < 7) {
+  if (real_speed_from_device <= MAX_NORMAL_LEVEL) {
     if (this->state != 1 || this->speed != real_speed_from_device) {
       this->state = 1;
       this->speed = real_speed_from_device;
@@ -108,21 +108,22 @@ bool SecTouchFan::assign_new_speed_if_needed(int real_speed_from_device) {
   }
 
   if (this->split_special_modes_) {
-    // Burst snaps the slider to 6 for visual parity with the outbound control() path;
+    // Burst snaps the slider to its max for visual parity with the outbound control() path;
     // other special modes leave speed untouched as they don't map to a single level.
     bool changed = false;
     if (this->state != 1) {
       this->state = 1;
       changed = true;
     }
-    // Guarantee a valid 1..6 slider value before publishing state=ON. Without this,
+    // Guarantee a normal slider value before publishing state=ON. Without this,
     // the first update after boot (speed=0) or after the "not connected" path (speed=255)
     // would publish state=ON with a speed outside the advertised range.
-    if (this->speed < 1 || this->speed > 6) {
-      this->speed = (real_speed_from_device == 7) ? 6 : 1;
+    bool burst = real_speed_from_device == BURST_LEVEL;
+    if (!is_normal_level(this->speed)) {
+      this->speed = burst ? MAX_NORMAL_LEVEL : MIN_NORMAL_LEVEL;
       changed = true;
-    } else if (real_speed_from_device == 7 && this->speed != 6) {
-      this->speed = 6;
+    } else if (burst && this->speed != MAX_NORMAL_LEVEL) {
+      this->speed = MAX_NORMAL_LEVEL;
       changed = true;
     }
     return changed;
@@ -153,130 +154,78 @@ void SecTouchFan::control(const fan::FanCall &call) {
     }
   }
 
-  auto old_state = this->state;
-
+  FanCommand command;
   if (call.get_state().has_value()) {
     ESP_LOGD(TAG, "New state found in call: %d", *call.get_state());
-    this->state = *call.get_state();
+    command.state = *call.get_state();
   }
-
   if (call.get_speed().has_value()) {
     ESP_LOGD(TAG, "New speed found in call: %d", *call.get_speed());
-    this->speed = *call.get_speed();
+    command.speed = *call.get_speed();
   }
 
-  if (this->state == 0 && old_state == 1) {
-    // OFF
-    ESP_LOGI(TAG, "[State Update for %d] - Turning off", this->level_id);
-    turn_off_sec_touch_hardware_fan();
+  // The fan's preset once the call's own preset is stored; empty while the fan has none.
+  auto stored_preset = this->get_preset_mode();
+  std::string_view stored_preset_sv = stored_preset.empty()
+                                          ? std::string_view("")
+                                          : std::string_view(stored_preset.c_str(), stored_preset.size());
+  esphome::optional<FanModeEnum::FanMode> preset_mode = FanModeEnum::from_string(stored_preset_sv);
+  if (new_preset_found) {
+    command.preset_level = FanModeEnum::get_start_speed(preset_mode.value_or(FanModeEnum::FanMode::NORMAL));
+  }
 
+  FanControl decision = decide_fan_control(command, FanStatus{this->state, this->speed}, this->split_special_modes_);
+  this->state = decision.on;
+  this->speed = decision.speed;
+
+  if (decision.level == OFF_LEVEL) {
+    ESP_LOGI(TAG, "[State Update for %d] - Turning off", this->level_id);
+    this->parent->add_set_task(
+        SetDataTask::create(TaskTargetType::LEVEL, this->level_id, std::to_string(OFF_LEVEL).c_str()));
+    this->publish_state();
     return;
   }
 
-  if (call.get_state().has_value() && !call.get_speed().has_value()) {
-    if (call.get_state().value() == 0 && old_state == 0) {
-      // OFF
-      ESP_LOGI(TAG, "[State Update for %d] - Requesting just state OFF but device is already OFF. Requesting anyway",
-               this->level_id);
-      turn_off_sec_touch_hardware_fan();
-      return;
-    }
-
-    if (call.get_state().value() == 1 && old_state == 0) {
-      // ON
-      ESP_LOGI(TAG, "[State Update for %d] - Requesting just state ON", this->level_id);
-      // TODO Use a configuration https://github.com/distante/esphome-components/issues/10
-      int speed_to_set = (this->speed > 0) ? this->speed : 1;
-      this->speed = speed_to_set;
-    }
-  }
-
-  // ON
-  int target_level = this->speed;
-  if (new_preset_found) {
-    auto current = this->get_preset_mode();
-    std::string_view cur_sv =
-        current.empty() ? std::string_view("") : std::string_view(current.c_str(), current.size());
-    FanModeEnum::FanMode calculated_mode = FanModeEnum::from_string(cur_sv).value_or(FanModeEnum::FanMode::NORMAL);
-    if (calculated_mode == FanModeEnum::FanMode::NORMAL) {
-      if (this->split_special_modes_) {
-        // Split mode: the slider is the source of truth for continuous ventilation.
-        // Preserve the current speed; only clamp if it is outside the 1..6 range.
-        if (this->speed < 1 || this->speed > 6) {
-          this->speed = 1;
-        }
-        target_level = this->speed;
-      } else {
-        this->speed = 1;
-        target_level = 1;
-      }
-    } else {
-      target_level = FanModeEnum::get_start_speed(calculated_mode);
-      if (this->split_special_modes_ && target_level > 6) {
-        // Split mode: pick a representative slider position per preset so HA gives
-        // the user a visual hint of the airflow intensity. The BDE receives the real
-        // special level via target_level; the preset_mode dropdown remains authoritative.
-        if (calculated_mode == FanModeEnum::FanMode::BURST) {
-          // Burst = Stosslüften: aggressive airing-out, map to slider max (level 6).
-          this->speed = 6;
-        }
-        // Sleep and the Automatic_* modes leave the slider untouched:
-        // Sleep is low-intensity, Auto-* varies per sensor - neither maps cleanly.
-      } else {
-        this->speed = target_level;
-      }
-    }
-  }
-
-  // If no explicit preset was given and the level is in the normal range (1–6),
-  // clear any stale special-mode preset immediately so the UI stays consistent
+  // Clear a stale special-mode preset immediately so the UI stays consistent
   // without waiting for the device echo (which may arrive seconds later).
-  if (!new_preset_found && target_level >= 1 && target_level <= 6) {
-    auto current = this->get_preset_mode();
-    std::string_view cur_sv = current.empty() ? std::string_view("") : std::string_view(current.c_str(), current.size());
-    auto cur_mode = FanModeEnum::from_string(cur_sv).value_or(FanModeEnum::FanMode::NORMAL);
-    if (cur_mode != FanModeEnum::FanMode::NORMAL) {
-      this->set_preset_mode_(FanModeEnum::to_string(FanModeEnum::FanMode::NORMAL).data());
-    }
+  bool preset_is_special = preset_mode.has_value() && *preset_mode != FanModeEnum::FanMode::NORMAL;
+  if (decision.reset_preset_to_normal && preset_is_special) {
+    preset_mode = FanModeEnum::FanMode::NORMAL;
+    this->set_preset_mode_(FanModeEnum::to_string(*preset_mode).data());
   }
 
-  auto log_preset = this->get_preset_mode();
   ESP_LOGI(TAG, "[Update for %d] - [%s] target_level: %d (ha_speed: %d)", this->level_id,
-           log_preset.empty() ? "Unknown" : log_preset.c_str(), target_level, this->speed);
+           preset_mode.has_value() ? FanModeEnum::to_string(*preset_mode).data() : "Unknown", decision.level,
+           this->speed);
   this->parent->add_set_task(
-      SetDataTask::create(TaskTargetType::LEVEL, this->level_id, std::to_string(target_level).c_str()));
+      SetDataTask::create(TaskTargetType::LEVEL, this->level_id, std::to_string(decision.level).c_str()));
 
   ESP_LOGI(TAG, "Publishing state of FAN");
   this->publish_state();
 }
 
-void SecTouchFan::turn_off_sec_touch_hardware_fan() {
-  this->parent->add_set_task(SetDataTask::create(TaskTargetType::LEVEL, this->level_id, std::to_string(0).c_str()));
-  this->publish_state();
-}
-
 FanModeEnum::FanMode SecTouchFan::calculate_mode_from_speed(int speed) {
-  if (speed < 7 || speed > 11) {
+  if (speed < BURST_LEVEL || speed > SLEEP_LEVEL) {
     return FanModeEnum::FanMode::NORMAL;
   }
 
-  if (speed == 7) {
+  if (speed == BURST_LEVEL) {
     return FanModeEnum::FanMode::BURST;
   }
 
-  if (speed == 8) {
+  if (speed == AUTOMATIC_HUMIDITY_LEVEL) {
     return FanModeEnum::FanMode::AUTOMATIC_HUMIDITY;
   }
 
-  if (speed == 9) {
+  if (speed == AUTOMATIC_CO2_LEVEL) {
     return FanModeEnum::FanMode::AUTOMATIC_CO2;
   }
 
-  if (speed == 10) {
+  if (speed == AUTOMATIC_TIME_LEVEL) {
     return FanModeEnum::FanMode::AUTOMATIC_TIME;
   }
 
-  if (speed == 11) {
+  if (speed == SLEEP_LEVEL) {
     return FanModeEnum::FanMode::SLEEP;
   }
 

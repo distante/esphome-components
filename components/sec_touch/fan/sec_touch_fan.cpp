@@ -163,12 +163,15 @@ void SecTouchFan::control(const fan::FanCall &call) {
     ESP_LOGD(TAG, "New speed found in call: %d", *call.get_speed());
     command.speed = *call.get_speed();
   }
+
+  // The fan's preset once the call's own preset is stored; empty while the fan has none.
+  auto stored_preset = this->get_preset_mode();
+  std::string_view stored_preset_sv = stored_preset.empty()
+                                          ? std::string_view("")
+                                          : std::string_view(stored_preset.c_str(), stored_preset.size());
+  esphome::optional<FanModeEnum::FanMode> preset_mode = FanModeEnum::from_string(stored_preset_sv);
   if (new_preset_found) {
-    auto current = this->get_preset_mode();
-    std::string_view cur_sv =
-        current.empty() ? std::string_view("") : std::string_view(current.c_str(), current.size());
-    FanModeEnum::FanMode mode = FanModeEnum::from_string(cur_sv).value_or(FanModeEnum::FanMode::NORMAL);
-    command.preset_level = FanModeEnum::get_start_speed(mode);
+    command.preset_level = FanModeEnum::get_start_speed(preset_mode.value_or(FanModeEnum::FanMode::NORMAL));
   }
 
   FanControl decision = decide_fan_control(command, FanStatus{this->state, this->speed}, this->split_special_modes_);
@@ -177,22 +180,23 @@ void SecTouchFan::control(const fan::FanCall &call) {
 
   if (decision.level == OFF_LEVEL) {
     ESP_LOGI(TAG, "[State Update for %d] - Turning off", this->level_id);
+    this->parent->add_set_task(
+        SetDataTask::create(TaskTargetType::LEVEL, this->level_id, std::to_string(OFF_LEVEL).c_str()));
+    this->publish_state();
+    return;
   }
 
   // Clear a stale special-mode preset immediately so the UI stays consistent
   // without waiting for the device echo (which may arrive seconds later).
-  if (decision.reset_preset_to_normal) {
-    auto current = this->get_preset_mode();
-    std::string_view cur_sv = current.empty() ? std::string_view("") : std::string_view(current.c_str(), current.size());
-    auto cur_mode = FanModeEnum::from_string(cur_sv).value_or(FanModeEnum::FanMode::NORMAL);
-    if (cur_mode != FanModeEnum::FanMode::NORMAL) {
-      this->set_preset_mode_(FanModeEnum::to_string(FanModeEnum::FanMode::NORMAL).data());
-    }
+  bool preset_is_special = preset_mode.has_value() && *preset_mode != FanModeEnum::FanMode::NORMAL;
+  if (decision.reset_preset_to_normal && preset_is_special) {
+    preset_mode = FanModeEnum::FanMode::NORMAL;
+    this->set_preset_mode_(FanModeEnum::to_string(*preset_mode).data());
   }
 
-  auto log_preset = this->get_preset_mode();
   ESP_LOGI(TAG, "[Update for %d] - [%s] target_level: %d (ha_speed: %d)", this->level_id,
-           log_preset.empty() ? "Unknown" : log_preset.c_str(), decision.level, this->speed);
+           preset_mode.has_value() ? FanModeEnum::to_string(*preset_mode).data() : "Unknown", decision.level,
+           this->speed);
   this->parent->add_set_task(
       SetDataTask::create(TaskTargetType::LEVEL, this->level_id, std::to_string(decision.level).c_str()));
 

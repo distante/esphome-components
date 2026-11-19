@@ -21,7 +21,11 @@ void SecTouchSniffer::setup() {
 
 void SecTouchSniffer::dump_config() {
   ESP_LOGCONFIG(TAG, "SEC-Touch-Sniffer:");
+#ifdef USE_TIME
   ESP_LOGCONFIG(TAG, "  Time source: %s", this->time_ != nullptr ? "RTC" : "uptime fallback");
+#else
+  ESP_LOGCONFIG(TAG, "  Time source: uptime fallback");
+#endif
   if (this->scan_end_ > 0) {
     ESP_LOGCONFIG(TAG, "  Scan range: %d - %d", this->scan_start_, this->scan_end_);
   } else {
@@ -167,12 +171,14 @@ void SecTouchSniffer::on_message_(int command_id, int property_id, const std::st
 }
 
 std::string SecTouchSniffer::get_timestamp_() const {
+#ifdef USE_TIME
   if (this->time_ != nullptr) {
     auto now = this->time_->now();
     if (now.is_valid()) {
       return now.strftime("%d-%m-%Y %H:%M");
     }
   }
+#endif
   char buf[16];
   snprintf(buf, sizeof(buf), "t=%lus", millis() / 1000UL);
   return std::string(buf);

@@ -2,9 +2,12 @@
 
 #include <map>
 #include "esphome/core/component.h"
+#include "esphome/core/defines.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/switch/switch.h"
+#ifdef USE_TIME
 #include "esphome/components/time/real_time_clock.h"
+#endif
 #include "../sec_touch/sec_touch.h"
 
 namespace esphome {
@@ -25,7 +28,9 @@ class SecTouchSniffer : public Component, public text_sensor::TextSensor {
  public:
   explicit SecTouchSniffer(SECTouchComponent *parent);
 
+#ifdef USE_TIME
   void set_time(time::RealTimeClock *time) { this->time_ = time; }
+#endif
   void set_scan_range(int start, int end) {
     this->scan_start_ = start;
     this->scan_end_ = end;
@@ -40,7 +45,9 @@ class SecTouchSniffer : public Component, public text_sensor::TextSensor {
 
  protected:
   SECTouchComponent *parent_;
+#ifdef USE_TIME
   time::RealTimeClock *time_{nullptr};
+#endif
   switch_::Switch *scan_switch_{nullptr};
 
   // Active scan not recommended on ESP8266 — each entry takes ~80-100 bytes;

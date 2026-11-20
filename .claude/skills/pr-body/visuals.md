@@ -2,9 +2,9 @@
 
 Smallest view that makes the point; usually one, rarely more than two. Place each next to its caption. Keep only the calls, files, states, and boundaries the reader needs.
 
-## User journey (What changes for you)
+## Journeys (What changes for you)
 
-Owner's steps, before/after. Owner vocabulary: panel, fan, level, Home Assistant, web page.
+Owner's or developer's steps, before/after; the same shapes fit both. Owner vocabulary: panel, fan, level, Home Assistant, web page. Developer vocabulary: the files, commands and tools they touch (`CLAUDE.md`, a skill, `pre-commit`, a test suite).
 
 Fix → before/after flowchart:
 

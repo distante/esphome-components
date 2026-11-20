@@ -31,30 +31,27 @@ python3.12 -m venv .venv && . .venv/bin/activate
 pip install -r requirements_test.txt
 ```
 
-| Layer | Command | Tests live in | Use it for |
-| --- | --- | --- | --- |
-| C++ unit tests (PlatformIO `native` + GoogleTest) | `pio test -e native` | `tests/cpp/test_<name>/` | Logic in a pure header (a seam), no ESPHome includes. The default. |
-| Host component (real ESPHome core on the `host` platform + GoogleTest) | `python tests/host/run.py [component]` | `tests/host/<component>/` | Whole-component behaviour no seam can hold: bytes in through a fake UART, `loop()`, bytes and callbacks out. |
-| Config validation (`esphome config` + pytest) | `pytest tests/config` | `tests/config/{valid,invalid}/*.yaml` | YAML schema and validation errors. |
-| Config compile (`esphome compile` + pytest, opt-in) | `pytest tests/config --compile -m compile` | `tests/config/valid/*.yaml` | Include and `AUTO_LOAD` bugs: a header that needs a component the config left out. Compiler warnings, such as `-Wformat`, in `components/`. |
-| Page JS (`node --test`, Node 22, no dependencies) | `npm test` | `components/<component>/web/*.test.mjs` | Page logic in DOM-free ES modules. |
+| Layer | Command | Tests live in |
+| --- | --- | --- |
+| C++ unit tests (PlatformIO `native` + GoogleTest) | `pio test -e native` | `tests/cpp/test_<name>/` |
+| Host component (real ESPHome core on the `host` platform + GoogleTest) | `python tests/host/run.py [component]` | `tests/host/<component>/` |
+| Config validation (`esphome config` + pytest) | `pytest tests/config` | `tests/config/{valid,invalid}/*.yaml` |
+| Config compile (`esphome compile` + pytest, opt-in) | `pytest tests/config --compile -m compile` | `tests/config/valid/*.yaml` |
+| Page JS (`node --test`, Node 22, no dependencies) | `npm test` | `components/<component>/web/*.test.mjs` |
+
+Which layer a change needs, and the TDD With teeth steps: [.claude/skills/coding-standards/SKILL.md](.claude/skills/coding-standards/SKILL.md#tests).
 
 The host layer reuses ESPHome's own C++ unit test runner (`esphome/script/cpp_unit_test.py`, an internal API that may change on an ESPHome bump), so it needs the editable ESPHome install from the setup above and a C++ compiler with AddressSanitizer (clang on macOS, gcc on Linux). The first run downloads GoogleTest. When a test needs a platform, a `<domain>/` subfolder such as `tests/host/sec_touch/fan/` pulls it into the build. The host build uses `-Werror=format`: on a 64-bit host `size_t` is `unsigned long`, so a `%d` for a `.size()` fails here even though ESP32 builds stay quiet. A suite can include another suite's helpers (the sniffer uses `sec_touch/common.h`); list that in `TEST_HELPERS_FROM` in `tests/host/run.py` so the folder reaches the build.
 
 Invalid config fixtures start with `# expect-error: <text>`; the test checks that `esphome config` fails and prints that text.
 
-The compile layer builds every valid fixture, because `esphome config` never compiles and so can't catch a header that includes a component missing from the build (a missing `AUTO_LOAD`). Without `--compile`, `pytest tests/config` skips it. The first run downloads ESP-IDF and takes several minutes. CI builds each valid fixture in its own parallel job, one per test pytest collects. A valid fixture's name starts with its component's folder name (`sec_touch_sniffer_with_time.yaml`), which CI turns into the job name (`sec_sniffer: with time`). When a component's C++ uses another ESPHome component, add a valid fixture that leaves that component out of the config.
+The compile layer builds every valid fixture, because `esphome config` never compiles and so can't catch a header that includes a component missing from the build (a missing `AUTO_LOAD`). Without `--compile`, `pytest tests/config` skips it. The first run downloads ESP-IDF and takes several minutes. CI builds each valid fixture in its own parallel job, one per test pytest collects. CI turns a fixture's name (`sec_touch_sniffer_with_time.yaml`) into the job name (`sec_sniffer: with time`).
 
 The compile layer also fails on any compiler warning from `components/`. Each run starts with `esphome clean`, because an incremental build prints no warnings for files it skips. Every valid fixture sets `logger: level: VERY_VERBOSE`; without it, ESPHome compiles out every `ESP_LOG*` call and `-Wformat` never fires. The test checks that each fixture keeps it.
 
-## TDD With teeth.
+## Coding standards
 
-We Follow TDD With teeth.
-1. We define the test, (if a new API is needed, we define it with a skeleton)
-2. We see the test go red due to a real assertion (not build problem)
-3. We implement the fix and see the test go green
-4. We remove the implementation and the test should go red again with the correct assertion error.
-5. We restore the implementation.
+All coding standards (C++ style, memory, tests, TDD With teeth, checklists) live in [.claude/skills/coding-standards/SKILL.md](.claude/skills/coding-standards/SKILL.md).
 
 ## Pull Requests Rules
 

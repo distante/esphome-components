@@ -22,7 +22,7 @@ Single source for all PR rules in this repo.
 
 ## What changes for you
 
-<user journey diagram>
+<owner journey, developer journey, or both>
 
 ## Technical summary
 
@@ -52,7 +52,7 @@ Closes #<issue>
 No preambles. Terms from [GLOSSARY.md](../../../GLOSSARY.md).
 
 - **TL;DR**: for the panel owner, not a developer. What they notice: what works now, what stops failing, what YAML they must change. No identifiers, files, or bytes. No owner-visible change (tests, CI, docs) → one sentence naming who benefits.
-- **What changes for you**: owner journey before/after (actions, what panel/HA show). Omit the section when owner experience is unchanged. Shapes: [visuals.md](visuals.md).
+- **What changes for you**: before/after journey of everyone the change touches. Owner journey: actions, what panel/HA show. Developer journey (contributor or their agent): what they read, run, or get from tooling, tests, CI, docs. Both when both change. Label each journey with whose it is. Shapes: [visuals.md](visuals.md).
 - **Technical summary**: reviewer view. Smallest view that shows the change, one-line caption each. Mermaid for flow/interaction, `diff` for a changed existing shape. Menu: [visuals.md](visuals.md).
 - **Evidence**: screenshot if visible (web page, HA); else the test red → green with command and output. Teeth run required (TDD with teeth): removed line, failing assertion, restored.
 - **Door**: two-way = revert undoes it. One-way = not (renamed YAML key, changed default, panel writes); state why.

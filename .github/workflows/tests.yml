@@ -106,10 +106,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: |
-            requirements_test.txt
-            esphome/requirements.txt
       # ESPHome builds ESP32 with native ESP-IDF, installed with its toolchains under ~/.cache/esphome/idf.
       # They are large; key on the vendored ESPHome commit so every bump refreshes them.
       - id: esphome
@@ -118,7 +114,15 @@ jobs:
         with:
           path: ~/.cache/esphome/idf
           key: esp-idf-${{ runner.os }}-${{ steps.esphome.outputs.sha }}
-      - run: pip install -r requirements_test.txt
+      # Every matrix job needs the same installed Python env: restore it instead of running pip install.
+      # The ESPHome commit covers esphome/requirements.txt; pythonLocation covers the Python patch version.
+      - id: python-env
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.pythonLocation }}
+          key: python-env-${{ env.pythonLocation }}-${{ hashFiles('requirements_test.txt') }}-${{ steps.esphome.outputs.sha }}
+      - if: steps.python-env.outputs.cache-hit != 'true'
+        run: pip install -r requirements_test.txt
       - run: pytest --compile "$NODE"
         env:
           NODE: ${{ matrix.test.node }}

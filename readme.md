@@ -43,7 +43,7 @@ The host layer reuses ESPHome's own C++ unit test runner (`esphome/script/cpp_un
 
 Invalid config fixtures start with `# expect-error: <text>`; the test checks that `esphome config` fails and prints that text.
 
-The compile layer builds every valid fixture, because `esphome config` never compiles and so can't catch a header that includes a component missing from the build (a missing `AUTO_LOAD`). Without `--compile`, `pytest tests/config` skips it. The first run downloads ESP-IDF and takes several minutes. CI builds each valid fixture in its own parallel job, one per test pytest collects. When a component's C++ uses another ESPHome component, add a valid fixture that leaves that component out of the config.
+The compile layer builds every valid fixture, because `esphome config` never compiles and so can't catch a header that includes a component missing from the build (a missing `AUTO_LOAD`). Without `--compile`, `pytest tests/config` skips it. The first run downloads ESP-IDF and takes several minutes. CI builds each valid fixture in its own parallel job, one per test pytest collects. A valid fixture's name starts with its component's folder name (`sec_touch_sniffer_with_time.yaml`), which CI turns into the job name (`sec_sniffer: with time`). When a component's C++ uses another ESPHome component, add a valid fixture that leaves that component out of the config.
 
 The compile layer also fails on any compiler warning from `components/`. Each run starts with `esphome clean`, because an incremental build prints no warnings for files it skips. Every valid fixture sets `logger: level: VERY_VERBOSE`; without it, ESPHome compiles out every `ESP_LOG*` call and `-Wformat` never fires. The test checks that each fixture keeps it.
 

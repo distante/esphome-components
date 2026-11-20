@@ -78,24 +78,28 @@ jobs:
       # Collecting needs only pytest, at the pin requirements_test.txt names.
       - run: pip install "$(grep -o '^pytest==[^ ]*' requirements_test.txt)"
       # One matrix entry per compile test, as pytest collects it: {name, node: <node id>}.
-      # The name drops the prefix every fixture shares (`sec_touch_fan_only` -> `fan only`),
-      # so the job names fit the run graph; the `config-compile` group header gives the context.
+      # A fixture is named after its component (the longest `components/` folder it starts with),
+      # so the job name reads `<component>: <rest>`: `sec_touch_sniffer_with_time` -> `sec_sniffer: with time`.
+      # Every component is a SEC-Touch one, so `_touch` is dropped to keep names short in the run graph.
       - id: collect
         run: |
           pytest tests/config --compile -m compile --collect-only -q \
-            | python -c 'import json, os, re, sys
-          nodes = {
-              m.group(1): line.strip()
-              for line in sys.stdin
-              if (m := re.search(r"::\w+\[(.+)\]$", line.strip()))
-          }
-          assert nodes, "no compile tests collected"
-          prefix = os.path.commonprefix(list(nodes)) if len(nodes) > 1 else ""
-          prefix = prefix[: prefix.rfind("_") + 1]
-          tests = [
-              {"name": fixture.removeprefix(prefix).replace("_", " "), "node": node}
-              for fixture, node in nodes.items()
-          ]
+            | python -c 'import json, re, sys
+          from pathlib import Path
+          components = [d.name for d in Path("components").iterdir() if d.is_dir()]
+          tests = []
+          for line in sys.stdin:
+              m = re.search(r"::\w+\[(.+)\]$", line.strip())
+              if not m:
+                  continue
+              fixture = m.group(1)
+              owners = [c for c in components if fixture.startswith(c + "_")]
+              assert owners, fixture + " does not start with a components/ folder name"
+              component = max(owners, key=len)
+              rest = fixture.removeprefix(component + "_").replace("_", " ")
+              label = component.replace("_touch", "")
+              tests.append({"name": label + ": " + rest, "node": line.strip()})
+          assert tests, "no compile tests collected"
           print("tests=" + json.dumps(tests))' >> "$GITHUB_OUTPUT"
 
   config-compile:

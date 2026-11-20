@@ -13,9 +13,7 @@ using sec_touch_test::history_of;
 
 namespace {
 
-void push(HistoryPool &pool, uint8_t id, uint32_t t, const std::string &raw) {
-  pool.push(id, t, raw.data(), static_cast<uint8_t>(raw.size()));
-}
+void push(HistoryPool &pool, uint8_t id, uint32_t t, const std::string &raw) { pool.push(id, t, raw); }
 
 /// A fast-changing property, like the polled clock.
 constexpr uint8_t BUSY_ID = 2;

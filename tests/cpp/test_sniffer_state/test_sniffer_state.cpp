@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#include <cstdio>
 #include <string>
 
 #include "sec_touch/protocol_ids.h"
@@ -14,7 +13,7 @@ using esphome::sec_touch::MAX_STATE_LEN;
 using esphome::sec_touch::PropertyStore;
 using esphome::sec_touch::ScanOutcome;
 using esphome::sec_touch::STATE_ELLIPSIS;
-using esphome::sec_touch::STATE_MORE_FORMAT;
+using esphome::sec_touch::state_more;
 using esphome::sec_touch::STATE_SEPARATOR;
 
 namespace {
@@ -23,7 +22,7 @@ namespace {
 constexpr int REGISTERED_ID = 4;
 
 void record(PropertyStore &store, int id, const std::string &raw) {
-  store.record_message(COMMANDID_SET, id, raw.data(), raw.size(), /*now_s=*/1);
+  store.record_message(COMMANDID_SET, id, raw, /*now_s=*/1);
 }
 
 std::string state_of(const PropertyStore &store) {
@@ -70,9 +69,7 @@ TEST(SnifferState, ACutStateEndsWithTheCountOfEntriesLeftOut) {
   for (int id = FIRST_ID; id <= LAST_KEPT_ID; id++) {
     expected += (id == FIRST_ID ? "" : STATE_SEPARATOR) + std::to_string(id) + "=" + value;
   }
-  char more[24];
-  std::snprintf(more, sizeof(more), STATE_MORE_FORMAT, static_cast<size_t>(MAX_PROPERTY_ID - LAST_KEPT_ID));
-  expected += std::string(STATE_SEPARATOR) + STATE_ELLIPSIS + more;
+  expected += std::string(STATE_SEPARATOR) + STATE_ELLIPSIS + state_more(MAX_PROPERTY_ID - LAST_KEPT_ID);
   const std::string next_entry = STATE_SEPARATOR + std::to_string(LAST_KEPT_ID + 1) + "=" + value;
 
   EXPECT_EQ(state_of(store), expected);

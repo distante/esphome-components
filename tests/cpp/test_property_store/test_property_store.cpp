@@ -32,10 +32,10 @@ PropertyStore allocated_store(bool with_history = true) {
 
 RecordResult record(PropertyStore &store, int id, const std::string &raw, uint32_t now_s,
                     int command_id = COMMANDID_SET) {
-  return store.record_message(command_id, id, raw.data(), raw.size(), now_s);
+  return store.record_message(command_id, id, raw, now_s);
 }
 
-std::string raw_of(const PropertyStore &store, int id) { return std::string(store.raw_value(id), store.raw_len(id)); }
+std::string raw_of(const PropertyStore &store, int id) { return std::string(store.raw_value(id)); }
 
 std::vector<Entry> history_of(const PropertyStore &store, uint8_t id) {
   return sec_touch_test::history_of(store.history(), id);

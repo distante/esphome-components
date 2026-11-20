@@ -6,18 +6,13 @@
 namespace esphome {
 namespace sec_touch {
 
-// RAW_VALUE_CAP is derived from FRAME_BUFFER_SIZE; this ties it to the buffer the hub actually declares.
-static_assert(sizeof(IncomingMessage::buffer) == FRAME_BUFFER_SIZE,
-              "RAW_VALUE_CAP must hold every value the hub's frame buffer can deliver");
-
-/// Wait after a scan query's first timeout before its one retry.
-static constexpr uint32_t SCAN_RETRY_DELAY_MS = 5000;
-/// Gap between one scan query's outcome and the next query.
-static constexpr uint32_t SCAN_NEXT_DELAY_MS = 160;
-
 const char *const SecTouchSniffer::TAG = "sec_touch_sniffer";
 
-static uint32_t uptime_s() { return millis() / 1000; }
+static constexpr uint32_t MS_PER_S = 1000;
+
+/// Device uptime in seconds. From the 64-bit millis_64(): 32-bit millis() wraps after 49.7 days, seconds after 136
+/// years.
+static uint32_t uptime_s() { return static_cast<uint32_t>(millis_64() / MS_PER_S); }
 
 SecTouchSniffer::SecTouchSniffer(SECTouchComponent *parent) : parent_(parent) {}
 
@@ -115,7 +110,8 @@ void SecTouchSniffer::on_queue_empty_() {
     this->pending_query_id_ = NO_PENDING_QUERY;
     const ScanOutcome outcome = this->parent_->get_last_scan_outcome();
     if (outcome == ScanOutcome::SCAN_OUTCOME_TIMEOUT && !this->scan_retry_pending_) {
-      ESP_LOGW(TAG, "Scan: property_id %d timed out, retrying in %" PRIu32 "s", queried, SCAN_RETRY_DELAY_MS / 1000);
+      ESP_LOGW(TAG, "Scan: property_id %d timed out, retrying in %" PRIu32 "s", queried,
+               SCAN_RETRY_DELAY_MS / MS_PER_S);
       this->scan_retry_pending_ = true;
       // Rewound, so a scan stopped during the wait resumes at this ID.
       this->current_scan_id_ = queried;
@@ -158,8 +154,7 @@ void SecTouchSniffer::on_queue_empty_() {
 
 void SecTouchSniffer::on_message_(int command_id, int property_id, const std::string &raw_value) {
   const uint32_t now_s = uptime_s();
-  const RecordResult result =
-      this->store_.record_message(command_id, property_id, raw_value.data(), raw_value.size(), now_s);
+  const RecordResult result = this->store_.record_message(command_id, property_id, raw_value, now_s);
 
   if (result == RecordResult::RECORD_DROPPED) {
     if (this->store_.dropped() == 1) {

@@ -345,16 +345,18 @@ logger:
 
 ## Sniffer
 
-The sniffer listens for UART messages sent by the SEC-Touch for property IDs that no component has registered interest in. This lets you discover unknown property IDs for future use.
+The sniffer records every data message the SEC-Touch sends, registered property IDs included, keeping each value byte-exact as the panel sent it. This lets you discover unknown property IDs for future use.
 
 Two modes are available:
 
 - **Passive** (always on): unknown IDs that arrive during normal polling are captured automatically.
 - **Active scan** (optional): iterates through a configured range of property IDs, querying each one in turn. Normal polling is paused while scanning.
 
-Results are published as a text sensor and visible in Home Assistant. An optional switch reflects whether a scan is currently running and can be toggled from Home Assistant.
+Results are published as a text sensor and visible in Home Assistant: `id=raw` pairs such as `1=11.11.26, 3=SWZ0021E21H, 5=0100`, for the IDs no component has registered. Registered IDs (fan levels and labels) are recorded but left out of the text sensor. The state is capped at 2048 characters; a cut state ends with `, …+N more`. A message that repeats the same value does not republish it, and during an active scan the sensor is published once, when the scan ends or is stopped. An optional switch reflects whether a scan is currently running and can be toggled from Home Assistant.
 
 > **Note:** The sniffer runs on ESP32 only. It reserves its memory once at boot: about 25 KB of heap, about 27 KB with `web_page: true`.
+
+`web_page: true` (default `false`) also keeps up to 7 previous values per ID for the sniffer page. It needs an HTTP server: add `web_server_base:` (or `web_server:`).
 
 ### Passive-only example
 

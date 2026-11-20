@@ -15,6 +15,11 @@ class SecTouchSniffer : public Component, public text_sensor::TextSensor {
   static const char *const TAG;
 
  public:
+  /// Wait after a scan query's first timeout before its one retry.
+  static constexpr uint32_t SCAN_RETRY_DELAY_MS = 5000;
+  /// Gap between one scan query's outcome and the next query.
+  static constexpr uint32_t SCAN_NEXT_DELAY_MS = 160;
+
   explicit SecTouchSniffer(SECTouchComponent *parent);
 
   void set_scan_range(int start, int end) {

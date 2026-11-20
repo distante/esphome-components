@@ -4,7 +4,7 @@ import re
 import esphome.codegen as cg
 import esphome.config_validation as cv
 import esphome.final_validate as fv
-from esphome.components import text_sensor, switch
+from esphome.components import socket, text_sensor, switch
 from esphome.const import CONF_ID, CONF_TIME_ID
 from esphome.core import CORE
 
@@ -19,17 +19,23 @@ CONF_SCAN_SWITCH = "scan_switch"
 CONF_WEB_PAGE = "web_page"
 
 
-def _read_property_slots():
-    """PROPERTY_SLOTS from property_slots.h, the single definition the C++ store uses."""
+# The component that serves pages. Not in esphome.const.
+WEB_SERVER_BASE = "web_server_base"
+
+# Sockets the page takes: one for the polling tab, one spare for a reload or keep-alive.
+WEB_PAGE_SOCKETS = 2
+
+
+def _read_max_property_id():
+    """MAX_PROPERTY_ID from property_slots.h, the single definition the C++ store uses."""
     header = (Path(__file__).parent / "property_slots.h").read_text()
-    match = re.search(r"constexpr size_t PROPERTY_SLOTS = (\d+);", header)
+    match = re.search(r"constexpr int MAX_PROPERTY_ID = (\d+);", header)
     if match is None:
-        raise RuntimeError("PROPERTY_SLOTS not found in property_slots.h")
+        raise RuntimeError("MAX_PROPERTY_ID not found in property_slots.h")
     return int(match.group(1))
 
 
-# Highest property ID with a record slot, as MAX_PROPERTY_ID in property_slots.h.
-MAX_PROPERTY_ID = _read_property_slots() - 1
+MAX_PROPERTY_ID = _read_max_property_id()
 
 SecTouchSniffer = sec_touch_ns.class_(
     "SecTouchSniffer", cg.Component, text_sensor.TextSensor
@@ -54,6 +60,12 @@ def _validate_scan_range(config):
     return config
 
 
+def _consume_web_page_sockets(config):
+    if not config[CONF_WEB_PAGE]:
+        return config
+    return socket.consume_sockets(WEB_PAGE_SOCKETS, "sec_touch_sniffer")(config)
+
+
 CONFIG_SCHEMA = cv.All(
     text_sensor.text_sensor_schema(SecTouchSniffer)
     .extend(
@@ -72,15 +84,16 @@ CONFIG_SCHEMA = cv.All(
     .extend(cv.COMPONENT_SCHEMA),
     _validate_esp32,
     _validate_scan_range,
+    _consume_web_page_sockets,
 )
 
 
 def _final_validate(config):
     # web_server_base is not auto-loaded, so page-off builds carry no server code. web_server and the other
     # components that serve pages load it themselves.
-    if config[CONF_WEB_PAGE] and "web_server_base" not in fv.full_config.get():
+    if config[CONF_WEB_PAGE] and WEB_SERVER_BASE not in fv.full_config.get():
         raise cv.Invalid(
-            "web_page: true needs an HTTP server: add `web_server_base:` (or `web_server:`)",
+            f"web_page: true needs an HTTP server: add `{WEB_SERVER_BASE}:` (or `web_server:`)",
             path=[CONF_WEB_PAGE],
         )
     return config

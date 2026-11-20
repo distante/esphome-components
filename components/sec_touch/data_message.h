@@ -13,7 +13,8 @@ namespace sec_touch {
 /// a NAK, or corruption.
 constexpr const int DATA_MESSAGE_MIN_LEN = 7;
 
-/// Bytes in the hub's frame buffer. The hub leaves the last byte unused, so a frame is at most MAX_FRAME_LEN bytes.
+/// Bytes in the hub's frame buffers, incoming and outgoing. The last byte is left unused (the outgoing one takes
+/// snprintf's NUL), so a frame is at most MAX_FRAME_LEN bytes.
 constexpr const int FRAME_BUFFER_SIZE = 64;
 constexpr const int MAX_FRAME_LEN = FRAME_BUFFER_SIZE - 1;
 

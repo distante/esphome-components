@@ -7,6 +7,7 @@
 #include <cstring>
 #include <memory>
 #include <new>
+#include <string_view>
 
 #include "../sec_touch/data_message.h"
 #include "../sec_touch/scan_outcome.h"
@@ -78,13 +79,13 @@ class PropertyStore {
   bool is_allocated() const { return this->fields_ != nullptr && this->raw_ != nullptr; }
 
   /// Records a data message. A change is any difference in the raw bytes; a different command id alone is not.
-  RecordResult record_message(int command_id, int property_id, const char *raw, size_t len, uint32_t now_s) {
+  RecordResult record_message(int command_id, int property_id, std::string_view raw, uint32_t now_s) {
     if (!this->has_slot_(property_id)) {
       this->dropped_++;
       return RecordResult::RECORD_DROPPED;
     }
     // Rejected rather than truncated: raw values are byte-exact.
-    if (len > RAW_VALUE_CAP || !this->is_allocated()) {
+    if (raw.size() > RAW_VALUE_CAP || !this->is_allocated()) {
       return RecordResult::RECORD_REJECTED;
     }
     PropertyFields &f = this->fields_[property_id];
@@ -97,17 +98,17 @@ class PropertyStore {
       f.flags |= FLAG_SEEN;
       f.first_seen_s = now_s;
       f.last_changed_s = now_s;
-      this->store_raw_(f, stored, raw, len);
+      this->store_raw_(f, stored, raw);
       return RecordResult::RECORD_NEW;
     }
-    if (f.raw_len == len && std::memcmp(stored, raw, len) == 0) {
+    if (std::string_view(stored, f.raw_len) == raw) {
       return RecordResult::RECORD_UNCHANGED;
     }
 
-    this->history_.push(static_cast<uint8_t>(property_id), f.last_changed_s, stored, f.raw_len);
+    this->history_.push(static_cast<uint8_t>(property_id), f.last_changed_s, std::string_view(stored, f.raw_len));
     f.last_changed_s = now_s;
     f.change_count++;
-    this->store_raw_(f, stored, raw, len);
+    this->store_raw_(f, stored, raw);
     return RecordResult::RECORD_CHANGED;
   }
 
@@ -128,8 +129,9 @@ class PropertyStore {
   bool has_raw_value(int id) const { return (this->fields_[id].flags & FLAG_SEEN) != 0; }
   /// False while the query status is `unqueried`.
   bool is_queried(int id) const { return (this->fields_[id].flags & FLAG_QUERIED) != 0; }
-  const char *raw_value(int id) const { return this->raw_.get() + raw_offset_(id); }
-  uint8_t raw_len(int id) const { return this->fields_[id].raw_len; }
+  std::string_view raw_value(int id) const {
+    return std::string_view(this->raw_.get() + raw_offset_(id), this->fields_[id].raw_len);
+  }
 
   /// Goes up on every record update, `last_seen` included.
   uint32_t seq() const { return this->seq_; }
@@ -142,9 +144,9 @@ class PropertyStore {
   static size_t raw_offset_(int id) { return static_cast<size_t>(id) * RAW_VALUE_CAP; }
   char *raw_slot_(int id) { return this->raw_.get() + raw_offset_(id); }
 
-  static void store_raw_(PropertyFields &f, char *stored, const char *raw, size_t len) {
-    std::memcpy(stored, raw, len);
-    f.raw_len = static_cast<uint8_t>(len);
+  static void store_raw_(PropertyFields &f, char *stored, std::string_view raw) {
+    std::memcpy(stored, raw.data(), raw.size());
+    f.raw_len = static_cast<uint8_t>(raw.size());
   }
 
   std::unique_ptr<PropertyFields[]> fields_;

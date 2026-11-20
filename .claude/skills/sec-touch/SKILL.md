@@ -11,12 +11,12 @@ The SEC-Touch hardware and its UART protocol are fixed: command IDs, frame layou
 
 ## `components/sec_touch/**`
 
-- Treat [components/sec_touch/readme.md](../../../components/sec_touch/readme.md) as the authoritative spec for protocol details, special values, and hardware mapping; do not duplicate or contradict it.
-- Keep the UART handshake intact: ACK handling and GET/SET sequencing are required; changes to UART parsing must preserve ACK behavior.
+- Treat [components/sec_touch/readme.md](../../../components/sec_touch/readme.md) as the authoritative spec for protocol details, special values, and hardware mapping; do not duplicate or contradict it. If you have tangible proof that it is wrong, ask the user whether to update it.
+- Changes to UART parsing must keep the ACK handshake and GET/SET sequencing the readme describes.
 - Respect the update flows: fan levels are polled via recursive tasks, labels are refreshed only by manual update tasks (triggered by the program text update button).
 - Validate IDs before queueing tasks; task creation returns null for unknown IDs and must be handled.
 - Schema constraints are strict: fan_number is 1-6, text_sensor requires mode_text while label_text is optional; keep these aligned with ID arrays.
-- If modifying fan behavior, keep preset-to-speed mapping consistent with special values and do not change the meaning of speed 255 (not connected).
+- If modifying fan behavior, keep the preset-to-speed mapping consistent with the readme's special level values, `255` included.
 
 ## `components/sec_touch_sniffer/**`
 

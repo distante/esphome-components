@@ -3,7 +3,13 @@ name: coding-standards
 description: "Use before planning, changing, reviewing or committing anything in this repo, however small, and before a PR or briefing a subagent."
 ---
 
-Single source for this repo's coding standards. Every rule lives here once; `CLAUDE.md`, `readme.md` and `.github/skills/code-review/` (for Copilot) point here. SEC-Touch rules live in [sec-touch](../sec-touch/SKILL.md), PR title and body rules in [pr-body](../pr-body/SKILL.md).
+Single source for this repo's coding standards; every rule lives here once. Elsewhere:
+
+- `components/sec_touch*/` rules: [sec-touch](../sec-touch/SKILL.md)
+- PR title and body: [pr-body](../pr-body/SKILL.md)
+- Test and lint commands: [readme.md](../../../readme.md#tests)
+- Domain terms: [GLOSSARY.md](../../../GLOSSARY.md)
+- Feature specs: `.specs/`
 
 ## Precedence
 
@@ -24,7 +30,7 @@ Done when each new name in the diff has a grep behind it and each added heap all
 
 ## Checklist: review
 
-1. Start every reviewer and subagent prompt with this line, plus the issue and spec: `Read .claude/skills/coding-standards/SKILL.md first, and .claude/skills/sec-touch/SKILL.md when the diff touches components/sec_touch*/; together they are the complete list of this repo's standards.`
+1. Start every reviewer and subagent prompt with this line, plus the issue and spec: `Read .claude/skills/coding-standards/SKILL.md first; it is, or links to, every standard of this repo.`
 2. Give the reviewer the whole diff and every acceptance criterion. Known gaps go in as facts ("criterion 6 is deferred to #34"), and the reviewer decides whether to flag them.
 3. Fix every hard violation a reviewer reports, or tell the user why not. Only findings the reviewer itself called judgement calls may be skipped.
 
@@ -45,8 +51,6 @@ Done when every criterion carries a mark and the closing keyword matches the mar
 
 - This is an ESPHome custom component repository. All custom components are located in the `components/` directory. Each component should have its own `readme.md` file.
 - Contributions follow the [ESPHome contribution guidelines](https://esphome.io/guides/contributing.html), and all code adheres to the [ESPHome coding standards](https://esphome.io/guides/contributing.html#coding-standards).
-- Domain terms, and the words to avoid for each: [GLOSSARY.md](../../../GLOSSARY.md).
-- Feature specs live in `.specs/`.
 
 ### C++ style
 
@@ -66,13 +70,9 @@ Before adding a constant, enum, type or helper, search `components/` and `tests/
 
 This binds tests too: a test's expected values use the shared names (a cap, a separator, an ellipsis) where a generic testing skill would ask for an independent literal ([Precedence](#precedence)).
 
-### SEC-Touch
-
-Changes under `components/sec_touch/` or `components/sec_touch_sniffer/` also follow the [sec-touch](../sec-touch/SKILL.md) skill: the fixed protocol, the component rules, and the sniffer's memory exception.
-
 ### Tests
 
-Commands and setup: [readme.md#tests](../../../readme.md#tests). Every change lands with tests in one of five layers:
+Every change lands with tests in one of five layers:
 
 - **C++ logic** (the default for logic): plain C++ with no ESPHome includes, so it builds on the host. When logic needs `esphome/core` types, cut a seam: a pure header the component calls. Suites live in `tests/cpp/test_<name>/`.
 - **Host component**: the real component and real ESPHome core, compiled for the `host` platform. Reach for it only for whole-component behaviour no seam can hold: bytes in through a fake UART, `loop()`, bytes and callbacks out. Fake only the bus; everything else is the real ESPHome build. Suites live in `tests/host/<component>/`.
@@ -91,5 +91,5 @@ Commands and setup: [readme.md#tests](../../../readme.md#tests). Every change la
 ### Tooling
 
 - **Worktrees.** Work in a git worktree (`EnterWorktree`, or `isolation: "worktree"` for subagents) unless the user says not to. Worktrees live in `.claude/worktrees/`.
-- **Formatting and linting.** Before committing, run `pre-commit run --files <changed files>` and keep its fixes. Setup: [readme.md#linting](../../../readme.md#linting). Never format with a clang-format from outside the venv or pre-commit: other versions format differently.
+- **Formatting and linting.** Before committing, run `pre-commit run --files <changed files>` and keep its fixes. Never format with a clang-format from outside the venv or pre-commit: other versions format differently.
 - **Git hooks.** Commit with the hooks running. Never bypass them: no `--no-verify`, no `PRE_COMMIT_ALLOW_NO_CONFIG`.

@@ -65,9 +65,40 @@ jobs:
       - run: pip install -r requirements_test.txt
       - run: pytest tests/config
 
-  compile:
-    name: Config compile (esphome compile)
+  compile-fixtures:
+    name: Config compile (list fixtures)
     runs-on: ubuntu-latest
+    outputs:
+      tests: ${{ steps.collect.outputs.tests }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Collecting needs only pytest, at the pin requirements_test.txt names.
+      - run: pip install "$(grep -o '^pytest==[^ ]*' requirements_test.txt)"
+      # One matrix entry per compile test, as pytest collects it: {name: <fixture>, node: <node id>}.
+      - id: collect
+        run: |
+          pytest tests/config --compile -m compile --collect-only -q \
+            | python -c 'import json, re, sys
+          tests = [
+              {"name": m.group(1), "node": line.strip()}
+              for line in sys.stdin
+              if (m := re.search(r"::\w+\[(.+)\]$", line.strip()))
+          ]
+          assert tests, "no compile tests collected"
+          print("tests=" + json.dumps(tests))' >> "$GITHUB_OUTPUT"
+
+  compile:
+    name: Config compile (${{ matrix.test.name }})
+    needs: compile-fixtures
+    runs-on: ubuntu-latest
+    strategy:
+      # Report every fixture, not just the first failure.
+      fail-fast: false
+      matrix:
+        test: ${{ fromJSON(needs.compile-fixtures.outputs.tests) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -88,7 +119,9 @@ jobs:
           path: ~/.cache/esphome/idf
           key: esp-idf-${{ runner.os }}-${{ steps.esphome.outputs.sha }}
       - run: pip install -r requirements_test.txt
-      - run: pytest tests/config --compile -m compile
+      - run: pytest --compile "$NODE"
+        env:
+          NODE: ${{ matrix.test.node }}
 
   js:
     name: Page JS tests (node --test)

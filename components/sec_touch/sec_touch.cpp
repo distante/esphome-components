@@ -10,8 +10,6 @@ namespace sec_touch {
 static const char *const TAG = "sec_touch";
 static const char *const TAG_UART = "sec_touch.uart";
 
-static const unsigned long TASK_TIMEOUT_MS = 2000;  // 2 seconds
-
 SECTouchComponent::SECTouchComponent() {}
 
 void SECTouchComponent::setup() {
@@ -492,8 +490,19 @@ where:
   const char *buf = this->incoming_message.buffer;
   int len = this->incoming_message.buffer_index + 1;
 
+  // During a GET, a frame too short for data is most likely the panel's ACK with a flipped bit, and the data
+  // frame is still on the way. Leave the GET open: that frame or the watchdog ends it. Not ACKed (issue #50).
+  if (len < DATA_MESSAGE_MIN_LEN && this->current_running_task_type == TaskType::GET_DATA) {
+    char context[384];
+    this->describe_dropped_message(buf, len, "", context, sizeof(context));
+    ESP_LOGW(TAG_UART, "  [process_data] Frame too short for data (%s). Waiting for the data frame", context);
+    this->incoming_message.reset();
+    return;
+  }
+
   // Defensive: ensure message starts with STX and ends with ETX
-  if (len < 7 || static_cast<uint8_t>(buf[0]) != STX || static_cast<uint8_t>(buf[len - 1]) != ETX) {
+  if (len < DATA_MESSAGE_MIN_LEN || static_cast<uint8_t>(buf[0]) != STX ||
+      static_cast<uint8_t>(buf[len - 1]) != ETX) {
     char context[384];
     this->describe_dropped_message(buf, len, "", context, sizeof(context));
     ESP_LOGE(TAG_UART, "  [process_data] Invalid message format (%s). Task Failed", context);

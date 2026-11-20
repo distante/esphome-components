@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raw.githubusercontent.com/qupaya/claude-code-hooks/main/plugins/git-guardrails/git-guardrails.schema.json",
+  "disable": [
+    "confirm-push"
+  ],
+  "rules": [
+    {
+      "id": "rebase-ask",
+      "subcommand": "rebase",
+      "decision": "ask"
+    },
+    {
+      "subcommand": "tag",
+      "flags": [
+        "-d",
+        "--delete"
+      ],
+      "decision": "ask",
+      "reason": "release tags are permanent"
+    },
+    {
+      "id": "block-force-with-lease",
+      "subcommand": "push",
+      "flags": [
+        "--force-with-lease",
+        "--force-if-includes"
+      ],
+      "decision": "ask",
+      "reason": "no force pushes in this repo"
+    }
+  ]
+}

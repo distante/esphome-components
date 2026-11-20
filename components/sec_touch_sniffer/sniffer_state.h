@@ -7,6 +7,7 @@
 #include <cstring>
 #include <string>
 
+#include "property_slots.h"
 #include "property_store.h"
 
 namespace esphome {

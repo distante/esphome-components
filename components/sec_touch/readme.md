@@ -354,7 +354,7 @@ Two modes are available:
 
 Results are published as a text sensor and visible in Home Assistant. An optional switch reflects whether a scan is currently running and can be toggled from Home Assistant.
 
-> **Note:** Active scan is not recommended on ESP8266. Each discovered entry uses ~80–100 bytes of heap; a 200-ID scan uses ~20 KB against only ~40 KB of usable heap.
+> **Note:** The sniffer runs on ESP32 only. It reserves its memory once at boot: about 25 KB of heap, about 27 KB with `web_page: true`.
 
 ### Passive-only example
 

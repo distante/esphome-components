@@ -7,6 +7,7 @@
 #include "esphome/core/log.h"
 #include <functional>
 #include "protocol_ids.h"
+#include "data_message.h"
 
 namespace esphome {
 namespace sec_touch {
@@ -167,7 +168,7 @@ struct IncomingMessage {
   std::string returned_value = IncomingMessage::EMPTY;
 
  public:
-  char buffer[64];
+  char buffer[FRAME_BUFFER_SIZE];
   int buffer_index = -1;
 
   void reset() {

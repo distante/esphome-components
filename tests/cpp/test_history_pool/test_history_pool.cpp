@@ -2,24 +2,16 @@
 
 #include <cstdint>
 #include <string>
-#include <utility>
 #include <vector>
 
+#include "../common/history_entries.h"
 #include "sec_touch_sniffer/history_pool.h"
 
 using esphome::sec_touch::HistoryPool;
+using Entry = sec_touch_test::HistoryEntry;
+using sec_touch_test::history_of;
 
 namespace {
-
-using Entry = std::pair<uint32_t, std::string>;
-
-/// The ID's previous values as `{first seen, raw value}`, newest first.
-std::vector<Entry> history_of(const HistoryPool &pool, uint8_t id) {
-  std::vector<Entry> entries;
-  pool.for_each_newest_first(
-      id, [&](uint32_t t, const char *bytes, uint8_t len) { entries.emplace_back(t, std::string(bytes, len)); });
-  return entries;
-}
 
 void push(HistoryPool &pool, uint8_t id, uint32_t t, const std::string &raw) {
   pool.push(id, t, raw.data(), static_cast<uint8_t>(raw.size()));
@@ -43,19 +35,22 @@ TEST(HistoryPool, ReturnsAnIdsPreviousValuesNewestFirst) {
   EXPECT_EQ(history_of(pool, QUIET_ID), (std::vector<Entry>{{20, "0100"}, {10, "0000"}}));
 }
 
-// Depth 8 per ID counts the current value, which lives in the record, so the pool keeps 7 previous values.
-TEST(HistoryPool, AnEighthPreviousValueDropsThatIdsOldest) {
+// The depth per ID counts the current value, which lives in the record, so the pool keeps one fewer previous value.
+TEST(HistoryPool, OnePreviousValueTooManyDropsThatIdsOldest) {
   HistoryPool pool;
   ASSERT_TRUE(pool.allocate());
-  push(pool, BUSY_ID, 1, "a");
-  push(pool, QUIET_ID, 2, "q");
-  for (uint32_t t = 3; t <= 9; t++) {
+  push(pool, QUIET_ID, 1, "q");
+  // One more than the pool keeps for an ID: first seen at 1..MAX_PREVIOUS_PER_ID + 1.
+  for (uint32_t t = 1; t <= HistoryPool::MAX_PREVIOUS_PER_ID + 1u; t++) {
     push(pool, BUSY_ID, t, std::to_string(t));
   }
 
-  EXPECT_EQ(history_of(pool, BUSY_ID),
-            (std::vector<Entry>{{9, "9"}, {8, "8"}, {7, "7"}, {6, "6"}, {5, "5"}, {4, "4"}, {3, "3"}}));
-  EXPECT_EQ(history_of(pool, QUIET_ID), (std::vector<Entry>{{2, "q"}}));
+  std::vector<Entry> kept;
+  for (uint32_t t = HistoryPool::MAX_PREVIOUS_PER_ID + 1u; t >= 2; t--) {
+    kept.emplace_back(t, std::to_string(t));
+  }
+  EXPECT_EQ(history_of(pool, BUSY_ID), kept);
+  EXPECT_EQ(history_of(pool, QUIET_ID), (std::vector<Entry>{{1, "q"}}));
 }
 
 // When the pool is full, a fast-changing ID can't push out the history of rare IDs.

@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <cstdio>
 #include <string>
 
 #include "sec_touch/protocol_ids.h"
@@ -12,6 +13,9 @@ using esphome::sec_touch::MAX_PROPERTY_ID;
 using esphome::sec_touch::MAX_STATE_LEN;
 using esphome::sec_touch::PropertyStore;
 using esphome::sec_touch::ScanOutcome;
+using esphome::sec_touch::STATE_ELLIPSIS;
+using esphome::sec_touch::STATE_MORE_FORMAT;
+using esphome::sec_touch::STATE_SEPARATOR;
 
 namespace {
 
@@ -55,17 +59,26 @@ TEST(SnifferState, KeepsTheRawValueByteExact) {
 TEST(SnifferState, ACutStateEndsWithTheCountOfEntriesLeftOut) {
   PropertyStore store;
   ASSERT_TRUE(store.allocate(/*with_history=*/false));
+  constexpr int FIRST_ID = 100;
+  constexpr int LAST_KEPT_ID = 191;
   const std::string value(16, 'v');
-  for (int id = 100; id <= MAX_PROPERTY_ID; id++) {
+  for (int id = FIRST_ID; id <= MAX_PROPERTY_ID; id++) {
     record(store, id, value);
   }
 
-  const std::string state = state_of(store);
+  std::string expected;
+  for (int id = FIRST_ID; id <= LAST_KEPT_ID; id++) {
+    expected += (id == FIRST_ID ? "" : STATE_SEPARATOR) + std::to_string(id) + "=" + value;
+  }
+  char more[24];
+  std::snprintf(more, sizeof(more), STATE_MORE_FORMAT, static_cast<size_t>(MAX_PROPERTY_ID - LAST_KEPT_ID));
+  expected += std::string(STATE_SEPARATOR) + STATE_ELLIPSIS + more;
+  const std::string next_entry = STATE_SEPARATOR + std::to_string(LAST_KEPT_ID + 1) + "=" + value;
 
-  EXPECT_LE(state.size(), MAX_STATE_LEN);
-  EXPECT_EQ(state.size(), 2035u);
-  const std::string tail = "191=vvvvvvvvvvvvvvvv, \xE2\x80\xA6+64 more";
-  EXPECT_EQ(state.substr(state.size() - tail.size()), tail);
+  EXPECT_EQ(state_of(store), expected);
+  EXPECT_LE(expected.size(), MAX_STATE_LEN);
+  // The cut is tight: one more entry would not fit.
+  EXPECT_GT(expected.size() + next_entry.size(), MAX_STATE_LEN);
 }
 
 int main(int argc, char **argv) {

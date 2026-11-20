@@ -8,15 +8,18 @@
 #include <memory>
 #include <new>
 
+#include "../sec_touch/data_message.h"
 #include "../sec_touch/scan_outcome.h"
 #include "history_pool.h"
+#include "property_slots.h"
 
 namespace esphome {
 namespace sec_touch {
 
-/// Longest raw value kept, never truncated: everything the hub's frame buffer can deliver. sec_touch_sniffer.cpp ties
-/// it to that buffer with a static_assert.
-constexpr size_t RAW_VALUE_CAP = 59;
+/// Longest raw value kept, never truncated: the longest value the hub's frame buffer can deliver.
+constexpr size_t RAW_VALUE_CAP = MAX_DATA_VALUE_LEN;
+static_assert(RAW_VALUE_CAP <= UINT8_MAX,
+              "PropertyFields::raw_len and HistoryPool entries hold a raw length in a byte");
 
 enum class RecordResult : uint8_t {
   /// First message for the ID.
@@ -56,6 +59,11 @@ class PropertyStore {
   static constexpr uint8_t FLAG_QUERIED = 1 << 1;
 
   /// Allocates the record blocks, and the history pool when `with_history`. Until then every message is dropped.
+  ///
+  /// Heap, despite "avoid dynamic memory allocation": the sniffer is a development tool, flashed to discover
+  /// properties rather than kept on every device. Each block is allocated once at setup and never freed, so the heap
+  /// does not fragment at runtime; separate blocks stay under 16 KB each, the pool exists only with the page, and a
+  /// failed allocation marks the component failed instead of crashing.
   bool allocate(bool with_history) {
     if (this->fields_ == nullptr) {
       this->fields_.reset(new (std::nothrow) PropertyFields[PROPERTY_SLOTS]());

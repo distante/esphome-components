@@ -2,22 +2,23 @@
 
 #include <cstdint>
 #include <string>
-#include <utility>
 #include <vector>
 
+#include "../common/history_entries.h"
 #include "sec_touch/protocol_ids.h"
 #include "sec_touch_sniffer/property_store.h"
 
 using esphome::sec_touch::COMMANDID_SET;
+using esphome::sec_touch::MAX_DATA_VALUE_LEN;
 using esphome::sec_touch::MAX_PROPERTY_ID;
 using esphome::sec_touch::PropertyStore;
 using esphome::sec_touch::RAW_VALUE_CAP;
 using esphome::sec_touch::RecordResult;
 using esphome::sec_touch::ScanOutcome;
 
-namespace {
+using Entry = sec_touch_test::HistoryEntry;
 
-using Entry = std::pair<uint32_t, std::string>;
+namespace {
 
 constexpr int PROPERTY_ID = 5;
 /// A command id no message has carried so far.
@@ -37,10 +38,7 @@ RecordResult record(PropertyStore &store, int id, const std::string &raw, uint32
 std::string raw_of(const PropertyStore &store, int id) { return std::string(store.raw_value(id), store.raw_len(id)); }
 
 std::vector<Entry> history_of(const PropertyStore &store, uint8_t id) {
-  std::vector<Entry> entries;
-  store.history().for_each_newest_first(
-      id, [&](uint32_t t, const char *bytes, uint8_t len) { entries.emplace_back(t, std::string(bytes, len)); });
-  return entries;
+  return sec_touch_test::history_of(store.history(), id);
 }
 
 }  // namespace
@@ -173,15 +171,13 @@ TEST(PropertyStore, WithoutHistoryAChangeStillUpdatesTheRecord) {
   EXPECT_TRUE(history_of(store, PROPERTY_ID).empty());
 }
 
-// The longest value a frame can carry: STX, two empty IDs, two TABs, ETX around it in the hub's 63 usable bytes.
 TEST(PropertyStore, TheLongestValueAFrameCanCarryIsKeptWhole) {
   PropertyStore store = allocated_store();
-  const std::string longest(59, 'v');
+  const std::string longest(MAX_DATA_VALUE_LEN, 'v');
 
   EXPECT_EQ(record(store, PROPERTY_ID, longest, 1), RecordResult::RECORD_NEW);
 
   EXPECT_EQ(raw_of(store, PROPERTY_ID), longest);
-  EXPECT_EQ(RAW_VALUE_CAP, longest.size());
 }
 
 // `dropped` counts only IDs without a slot; a value too long to store is not truncated and not counted there.

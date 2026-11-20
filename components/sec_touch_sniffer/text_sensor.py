@@ -1,5 +1,9 @@
+from pathlib import Path
+import re
+
 import esphome.codegen as cg
 import esphome.config_validation as cv
+import esphome.final_validate as fv
 from esphome.components import text_sensor, switch
 from esphome.const import CONF_ID, CONF_TIME_ID
 from esphome.core import CORE
@@ -14,8 +18,18 @@ CONF_SCAN_END = "scan_end"
 CONF_SCAN_SWITCH = "scan_switch"
 CONF_WEB_PAGE = "web_page"
 
-# Highest property ID with a record slot: MAX_PROPERTY_ID in history_pool.h.
-MAX_PROPERTY_ID = 255
+
+def _read_property_slots():
+    """PROPERTY_SLOTS from property_slots.h, the single definition the C++ store uses."""
+    header = (Path(__file__).parent / "property_slots.h").read_text()
+    match = re.search(r"constexpr size_t PROPERTY_SLOTS = (\d+);", header)
+    if match is None:
+        raise RuntimeError("PROPERTY_SLOTS not found in property_slots.h")
+    return int(match.group(1))
+
+
+# Highest property ID with a record slot, as MAX_PROPERTY_ID in property_slots.h.
+MAX_PROPERTY_ID = _read_property_slots() - 1
 
 SecTouchSniffer = sec_touch_ns.class_(
     "SecTouchSniffer", cg.Component, text_sensor.TextSensor
@@ -59,6 +73,20 @@ CONFIG_SCHEMA = cv.All(
     _validate_esp32,
     _validate_scan_range,
 )
+
+
+def _final_validate(config):
+    # web_server_base is not auto-loaded, so page-off builds carry no server code. web_server and the other
+    # components that serve pages load it themselves.
+    if config[CONF_WEB_PAGE] and "web_server_base" not in fv.full_config.get():
+        raise cv.Invalid(
+            "web_page: true needs an HTTP server: add `web_server_base:` (or `web_server:`)",
+            path=[CONF_WEB_PAGE],
+        )
+    return config
+
+
+FINAL_VALIDATE_SCHEMA = _final_validate
 
 
 async def to_code(config):

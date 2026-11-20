@@ -6,11 +6,8 @@
 namespace esphome {
 namespace sec_touch {
 
-/// The fewest bytes around a value in a frame the hub routes: STX, the TABs after the command and property IDs (both
-/// may be empty), and ETX, with no CRC field.
-static constexpr size_t MIN_DATA_FRAME_OVERHEAD = 4;
-// The hub keeps one byte of its frame buffer unused, so a frame is at most sizeof(buffer) - 1 bytes.
-static_assert(RAW_VALUE_CAP >= sizeof(IncomingMessage::buffer) - 1 - MIN_DATA_FRAME_OVERHEAD,
+// RAW_VALUE_CAP is derived from FRAME_BUFFER_SIZE; this ties it to the buffer the hub actually declares.
+static_assert(sizeof(IncomingMessage::buffer) == FRAME_BUFFER_SIZE,
               "RAW_VALUE_CAP must hold every value the hub's frame buffer can deliver");
 
 /// Wait after a scan query's first timeout before its one retry.
@@ -59,7 +56,7 @@ void SecTouchSniffer::update_scan_switch_() {
 }
 
 void SecTouchSniffer::publish_records_() {
-  build_sniffer_state(this->store_, [this](int id) { return this->parent_->is_property_registered(id); }, this->state_);
+  build_sniffer_state(this->store_, this->is_registered_(), this->state_);
   this->publish_state(this->state_);
 }
 
@@ -73,7 +70,7 @@ void SecTouchSniffer::toggle_scan() {
     this->cancel_timeout("scan_retry");
     this->cancel_timeout("scan_next");
     this->scan_retry_pending_ = false;
-    this->pending_query_id_ = -1;
+    this->pending_query_id_ = NO_PENDING_QUERY;
     this->is_scanning_ = false;
     this->update_scan_switch_();
     this->publish_records_();
@@ -94,7 +91,7 @@ void SecTouchSniffer::toggle_scan() {
 
   ESP_LOGI(TAG, "Scan mode ON — scanning IDs %d to %d (resuming from %d)", this->scan_start_, this->scan_end_,
            this->current_scan_id_);
-  this->pending_query_id_ = -1;
+  this->pending_query_id_ = NO_PENDING_QUERY;
   this->is_scanning_ = true;
   this->update_scan_switch_();
   this->parent_->enter_scan_mode();
@@ -113,9 +110,9 @@ void SecTouchSniffer::on_queue_empty_() {
     return;
   }
 
-  if (this->pending_query_id_ >= 0) {
+  if (this->pending_query_id_ != NO_PENDING_QUERY) {
     const int queried = this->pending_query_id_;
-    this->pending_query_id_ = -1;
+    this->pending_query_id_ = NO_PENDING_QUERY;
     const ScanOutcome outcome = this->parent_->get_last_scan_outcome();
     if (outcome == ScanOutcome::SCAN_OUTCOME_TIMEOUT && !this->scan_retry_pending_) {
       ESP_LOGW(TAG, "Scan: property_id %d timed out, retrying in %" PRIu32 "s", queried, SCAN_RETRY_DELAY_MS / 1000);
@@ -188,8 +185,7 @@ void SecTouchSniffer::on_message_(int command_id, int property_id, const std::st
              command_id, raw_value.c_str(), now_s, this->store_.fields(property_id).change_count);
   }
 
-  if (this->is_scanning_ || !is_listed_in_state(this->store_, property_id,
-                                                [this](int id) { return this->parent_->is_property_registered(id); })) {
+  if (this->is_scanning_ || !is_listed_in_state(this->store_, property_id, this->is_registered_())) {
     return;
   }
   this->publish_records_();

@@ -8,13 +8,10 @@
 #include <memory>
 #include <new>
 
+#include "property_slots.h"
+
 namespace esphome {
 namespace sec_touch {
-
-/// Property IDs the sniffer records: one slot per ID 0..255, so an ID fits a uint8_t.
-constexpr size_t PROPERTY_SLOTS = 256;
-/// The highest property ID with a slot. Messages for higher IDs are dropped.
-constexpr int MAX_PROPERTY_ID = PROPERTY_SLOTS - 1;
 
 /// Bytes in the history pool, shared by every property ID.
 constexpr size_t HISTORY_POOL_BYTES = 2048;
@@ -24,10 +21,10 @@ constexpr size_t HISTORY_POOL_BYTES = 2048;
 constexpr uint8_t HISTORY_DEPTH = 8;
 
 /// Previous raw values of every property, oldest first, in one fixed block of variable-length entries
-/// `{id, len, t, bytes}`. Each insert or eviction costs one memmove of at most HISTORY_POOL_BYTES.
+/// `{id, len, first_seen_s, bytes}`. Each insert or eviction costs one memmove of at most HISTORY_POOL_BYTES.
 class HistoryPool {
  public:
-  /// `id` (1 B) + `len` (1 B) + `t` (4 B), before the raw bytes.
+  /// `id` (1 B) + `len` (1 B) + `first_seen_s` (4 B), before the raw bytes.
   static constexpr size_t ENTRY_HEADER_BYTES = 6;
   static constexpr size_t ENTRY_ID_OFFSET = 0;
   static constexpr size_t ENTRY_LEN_OFFSET = 1;
@@ -49,9 +46,9 @@ class HistoryPool {
 
   uint8_t count(uint8_t id) const { return this->counts_[id]; }
 
-  /// Adds a previous value of `id`, first seen at `t`. Drops that ID's oldest beyond MAX_PREVIOUS_PER_ID, and while
-  /// the pool is full, the oldest entry of the ID with the most entries.
-  void push(uint8_t id, uint32_t t, const char *bytes, uint8_t len) {
+  /// Adds a previous value of `id`, first seen at uptime `first_seen_s`. Drops that ID's oldest beyond
+  /// MAX_PREVIOUS_PER_ID, and while the pool is full, the oldest entry of the ID with the most entries.
+  void push(uint8_t id, uint32_t first_seen_s, const char *bytes, uint8_t len) {
     const size_t size = ENTRY_HEADER_BYTES + len;
     if (this->buf_ == nullptr || size > HISTORY_POOL_BYTES) {
       return;
@@ -66,13 +63,13 @@ class HistoryPool {
     uint8_t *entry = this->buf_.get() + this->used_;
     entry[ENTRY_ID_OFFSET] = id;
     entry[ENTRY_LEN_OFFSET] = len;
-    std::memcpy(entry + ENTRY_TIME_OFFSET, &t, sizeof(t));
+    std::memcpy(entry + ENTRY_TIME_OFFSET, &first_seen_s, sizeof(first_seen_s));
     std::memcpy(entry + ENTRY_HEADER_BYTES, bytes, len);
     this->used_ += size;
     this->counts_[id]++;
   }
 
-  /// Calls `f(uint32_t t, const char *bytes, uint8_t len)` for each previous value of `id`, newest first.
+  /// Calls `f(uint32_t first_seen_s, const char *bytes, uint8_t len)` for each previous value of `id`, newest first.
   template<typename F> void for_each_newest_first(uint8_t id, F f) const {
     if (this->buf_ == nullptr) {
       return;
@@ -86,9 +83,9 @@ class HistoryPool {
     }
     while (found > 0) {
       const uint8_t *entry = this->buf_.get() + offsets[--found];
-      uint32_t t;
-      std::memcpy(&t, entry + ENTRY_TIME_OFFSET, sizeof(t));
-      f(t, reinterpret_cast<const char *>(entry + ENTRY_HEADER_BYTES), entry[ENTRY_LEN_OFFSET]);
+      uint32_t first_seen_s;
+      std::memcpy(&first_seen_s, entry + ENTRY_TIME_OFFSET, sizeof(first_seen_s));
+      f(first_seen_s, reinterpret_cast<const char *>(entry + ENTRY_HEADER_BYTES), entry[ENTRY_LEN_OFFSET]);
     }
   }
 

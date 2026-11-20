@@ -43,8 +43,10 @@ class SecTouchSniffer : public Component, public text_sensor::TextSensor {
   int scan_start_{1};
   int scan_end_{0};
   int current_scan_id_{0};
-  /// The ID of the scan query whose outcome on_queue_empty_() records next, -1 when none is in flight.
-  int pending_query_id_{-1};
+  /// pending_query_id_ when no scan query is in flight.
+  static constexpr int NO_PENDING_QUERY = -1;
+  /// The ID of the scan query whose outcome on_queue_empty_() records next.
+  int pending_query_id_{NO_PENDING_QUERY};
   bool is_scanning_{false};
   bool scan_retry_pending_{false};
 
@@ -53,6 +55,10 @@ class SecTouchSniffer : public Component, public text_sensor::TextSensor {
   void on_queue_empty_();
   void query_(int property_id);
   void publish_records_();
+  /// Whether an entity registered a property ID, as the state builder takes it.
+  auto is_registered_() const {
+    return [this](int id) { return this->parent_->is_property_registered(id); };
+  }
 };
 
 }  // namespace sec_touch

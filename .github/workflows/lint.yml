@@ -23,5 +23,6 @@ jobs:
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
-      - run: pip install -r requirements_dev.txt
+      # Only pre-commit: the hooks bring their own tools. The venv's clang-format is for the editor.
+      - run: pip install "$(grep '^pre-commit==' requirements_dev.txt)"
       - run: pre-commit run --all-files --show-diff-on-failure

@@ -17,6 +17,8 @@ git config blame.ignoreRevsFile .git-blame-ignore-revs   # git blame skips forma
 
 Every tool is pinned. `.pre-commit-config.yaml` pins each hook, and pre-commit installs each one into its own cached environment (`~/.cache/pre-commit`), so the versions here never touch tools another project installs. clang-format and yamllint use the same versions as the vendored ESPHome. `requirements_dev.txt` also puts that clang-format into the venv, for the editor's format-on-save; keep its pin in step with the hook's `rev`.
 
+`.vscode/settings.json` points at `.venv/bin/clang-format`. On Windows, set `C_Cpp.clang_format_path` to `${workspaceFolder}/.venv/Scripts/clang-format.exe` in your user settings.
+
 # Tests
 
 All five layers run in CI ([.github/workflows/tests.yml](.github/workflows/tests.yml)) on every PR and push to `main`.

@@ -65,9 +65,52 @@ jobs:
       - run: pip install -r requirements_test.txt
       - run: pytest tests/config
 
-  compile:
-    name: Config compile (esphome compile)
+  compile-fixtures:
+    name: Config compile (list fixtures)
     runs-on: ubuntu-latest
+    outputs:
+      tests: ${{ steps.collect.outputs.tests }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Collecting needs only pytest, at the pin requirements_test.txt names.
+      - run: pip install "$(grep -o '^pytest==[^ ]*' requirements_test.txt)"
+      # One matrix entry per compile test, as pytest collects it: {name, node: <node id>}.
+      # A fixture is named after its component (the longest `components/` folder it starts with),
+      # so the job name reads `<component>: <rest>`: `sec_touch_sniffer_with_time` -> `sec_sniffer: with time`.
+      # Every component is a SEC-Touch one, so `_touch` is dropped to keep names short in the run graph.
+      - id: collect
+        run: |
+          pytest tests/config --compile -m compile --collect-only -q \
+            | python -c 'import json, re, sys
+          from pathlib import Path
+          components = [d.name for d in Path("components").iterdir() if d.is_dir()]
+          tests = []
+          for line in sys.stdin:
+              m = re.search(r"::\w+\[(.+)\]$", line.strip())
+              if not m:
+                  continue
+              fixture = m.group(1)
+              owners = [c for c in components if fixture.startswith(c + "_")]
+              assert owners, fixture + " does not start with a components/ folder name"
+              component = max(owners, key=len)
+              rest = fixture.removeprefix(component + "_").replace("_", " ")
+              label = component.replace("_touch", "")
+              tests.append({"name": label + ": " + rest, "node": line.strip()})
+          assert tests, "no compile tests collected"
+          print("tests=" + json.dumps(tests))' >> "$GITHUB_OUTPUT"
+
+  config-compile:
+    name: ${{ matrix.test.name }}
+    needs: compile-fixtures
+    runs-on: ubuntu-latest
+    strategy:
+      # Report every fixture, not just the first failure.
+      fail-fast: false
+      matrix:
+        test: ${{ fromJSON(needs.compile-fixtures.outputs.tests) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -75,10 +118,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: |
-            requirements_test.txt
-            esphome/requirements.txt
       # ESPHome builds ESP32 with native ESP-IDF, installed with its toolchains under ~/.cache/esphome/idf.
       # They are large; key on the vendored ESPHome commit so every bump refreshes them.
       - id: esphome
@@ -87,8 +126,18 @@ jobs:
         with:
           path: ~/.cache/esphome/idf
           key: esp-idf-${{ runner.os }}-${{ steps.esphome.outputs.sha }}
-      - run: pip install -r requirements_test.txt
-      - run: pytest tests/config --compile -m compile
+      # Every matrix job needs the same installed Python env: restore it instead of running pip install.
+      # The ESPHome commit covers esphome/requirements.txt; pythonLocation covers the Python patch version.
+      - id: python-env
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.pythonLocation }}
+          key: python-env-${{ env.pythonLocation }}-${{ hashFiles('requirements_test.txt') }}-${{ steps.esphome.outputs.sha }}
+      - if: steps.python-env.outputs.cache-hit != 'true'
+        run: pip install -r requirements_test.txt
+      - run: pytest --compile "$NODE"
+        env:
+          NODE: ${{ matrix.test.node }}
 
   js:
     name: Page JS tests (node --test)

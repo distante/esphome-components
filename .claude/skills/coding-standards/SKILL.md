@@ -3,7 +3,7 @@ name: coding-standards
 description: "Use before planning, changing, reviewing or committing anything in this repo, however small, and before a PR or briefing a subagent."
 ---
 
-Single source for this repo's coding standards. Every rule lives here once; `CLAUDE.md` and `readme.md` point here. PR title and body rules live in [pr-body](../pr-body/SKILL.md).
+Single source for this repo's coding standards. Every rule lives here once; `CLAUDE.md`, `readme.md` and `.github/skills/code-review/` (for Copilot) point here. PR title and body rules live in [pr-body](../pr-body/SKILL.md).
 
 ## Precedence
 

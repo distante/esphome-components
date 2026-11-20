@@ -1,3 +1,3 @@
 # ESPHome Components — Development Guidelines
 
-All coding standards: [.claude/skills/coding-standards/SKILL.md](.claude/skills/coding-standards/SKILL.md). Load the `coding-standards` skill before implementing, reviewing, or opening a PR, however small the change, and give it to every subagent and reviewer as the standards source.
+All coding standards live in the `coding-standards` skill (`.claude/skills/coding-standards/SKILL.md`). Load it before planning, changing, reviewing or committing anything here, however small. Start every subagent and reviewer prompt with: `Read .claude/skills/coding-standards/SKILL.md first; it is the complete list of this repo's standards.`

@@ -1,9 +1,9 @@
 ---
 name: coding-standards
-description: "Use before implementing, reviewing, or opening a PR in this repo: before writing or changing any code, test, config or doc, and when briefing a reviewer or subagent."
+description: "Use before planning, changing, reviewing or committing anything in this repo, however small, and before a PR or briefing a subagent."
 ---
 
-Single source for this repo's coding standards. Every rule lives here once; `CLAUDE.md`, `.github/instructions/` and `readme.md` point here. PR title and body rules live in [pr-body](../pr-body/SKILL.md).
+Single source for this repo's coding standards. Every rule lives here once; `CLAUDE.md` and `readme.md` point here. PR title and body rules live in [pr-body](../pr-body/SKILL.md).
 
 ## Precedence
 
@@ -14,19 +14,17 @@ Single source for this repo's coding standards. Every rule lives here once; `CLA
 ## Checklist: before coding
 
 1. Enter a worktree ([Tooling](#tooling)).
-2. Read this whole skill, and the issue with its acceptance criteria (`gh issue view <n>`) and its spec in `.specs/` when one exists. List every spec-versus-rule conflict and ask the user about each.
-3. Before adding any constant, enum, type or helper, grep `components/` and `tests/` for the **concept**, by its names and synonyms as well as its value. Then apply [Reuse existing definitions](#reuse-existing-definitions):
-   - It exists: use its name.
-   - It exists behind an ESPHome include: move it to a pure header both sides include.
-   - Python and C++ both need it: give it one source (such as a codegen define from Python); a "same as X" comment is a second definition.
-4. For every heap allocation (`new`, `malloc`, `std::vector`, `std::string`, `std::make_unique`, growth of a container), replace it with static or stack allocation, or state to the user why the heap is needed ([Memory](#memory)).
+2. Read the issue with its acceptance criteria (`gh issue view <n>`) and its spec in `.specs/` when one exists. List every spec-versus-rule conflict and ask the user about each.
+3. Before adding any constant, enum, type or helper, grep `components/` and `tests/` for the **concept**, by its names and synonyms as well as its value, then apply [Reuse existing definitions](#reuse-existing-definitions). A value Python and C++ both need gets one source (such as a codegen define from Python); a "same as X" comment is a second definition.
+4. For each heap allocation the change adds, use static or stack allocation instead, or tell the user why the heap is needed ([Memory](#memory)).
 5. Pick the test layer and write the test first ([Tests](#tests)).
+6. Before each commit, run pre-commit and commit with the hooks running ([Tooling](#tooling)).
 
-Done when each new name in the diff has a grep behind it and each heap allocation has a stated reason.
+Done when each new name in the diff has a grep behind it and each added heap allocation has a stated reason.
 
 ## Checklist: review
 
-1. Give every reviewer (subagent, review skill, human) this file as the standards source, plus the issue and spec. This file is the complete list of standards.
+1. Start every reviewer and subagent prompt with this line, plus the issue and spec: `Read .claude/skills/coding-standards/SKILL.md first; it is the complete list of this repo's standards.`
 2. Give the reviewer the whole diff and every acceptance criterion. Known gaps go in as facts ("criterion 6 is deferred to #34"), and the reviewer decides whether to flag them.
 3. Fix every hard violation a reviewer reports, or tell the user why not. Only findings the reviewer itself called judgement calls may be skipped.
 
@@ -37,8 +35,7 @@ Done when every reported finding is fixed, or named to the user with a reason.
 1. Go through the issue's acceptance criteria one by one and mark each **met** or **partial**.
 2. Any criterion partial: list it in the PR body and write `Refs #N`. `Closes #N` is for an issue whose every criterion is met.
 3. Name every deviation from the spec in the PR body.
-4. Run `pre-commit run --files <changed files>` and commit with the git hooks running. Never bypass them: no `--no-verify`, no `PRE_COMMIT_ALLOW_NO_CONFIG`.
-5. Follow [pr-body](../pr-body/SKILL.md) for title and body.
+4. Follow [pr-body](../pr-body/SKILL.md) for title and body.
 
 Done when every criterion carries a mark and the closing keyword matches the marks.
 
@@ -46,8 +43,7 @@ Done when every criterion carries a mark and the closing keyword matches the mar
 
 ### Repository
 
-- This is an ESPHome custom component repository. All custom components are located in the `components/` directory.
-- Each component should have its own `readme.md` file.
+- This is an ESPHome custom component repository. All custom components are located in the `components/` directory. Each component should have its own `readme.md` file.
 - Contributions follow the [ESPHome contribution guidelines](https://esphome.io/guides/contributing.html), and all code adheres to the [ESPHome coding standards](https://esphome.io/guides/contributing.html#coding-standards).
 - Domain terms, and the words to avoid for each: [GLOSSARY.md](../../../GLOSSARY.md).
 - Feature specs live in `.specs/`.
@@ -107,8 +103,4 @@ Commands and setup: [readme.md#tests](../../../readme.md#tests). Every change la
 
 - **Worktrees.** Work in a git worktree (`EnterWorktree`, or `isolation: "worktree"` for subagents) unless the user says not to. Worktrees live in `.claude/worktrees/`.
 - **Formatting and linting.** Before committing, run `pre-commit run --files <changed files>` and keep its fixes. Setup: [readme.md#linting](../../../readme.md#linting). Never format with a clang-format from outside the venv or pre-commit: other versions format differently.
-- **Git hooks** run on every commit ([before the PR](#checklist-before-the-pr), step 4).
-
-### Pull requests
-
-All PR rules: [pr-body](../pr-body/SKILL.md). Read it before opening a PR or writing a PR title or body.
+- **Git hooks.** Commit with the hooks running. Never bypass them: no `--no-verify`, no `PRE_COMMIT_ALLOW_NO_CONFIG`.

@@ -11,8 +11,8 @@ namespace esphome::sec_touch::testing {
 namespace {
 
 /// The level property of the fan from issue #54 ('Dachboden').
-constexpr int LEVEL_ID = 177;
-constexpr int LABEL_ID = 81;
+constexpr int LEVEL_ID = FAN_LEVEL_IDS[4];
+constexpr int LABEL_ID = FAN_LABEL_IDS[4];
 
 /// A Home Assistant fan call goes through the real SecTouchFan::control() and comes out as a SET on the bus.
 class SecTouchFanTest : public ::testing::Test {

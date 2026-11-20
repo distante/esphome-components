@@ -12,6 +12,14 @@ namespace {
 /// Fan pair 1's level property.
 constexpr int FAN_1_LEVEL_ID = FAN_LEVEL_IDS[0];
 
+/// A property id the panel never answers, so its GET always runs into the watchdog.
+constexpr int UNANSWERED_PROPERTY_ID = 500;
+
+/// `[STX]32[TAB]<id>[TAB]<value>[ETX]`: a data frame without its CRC field.
+std::vector<uint8_t> frame_without_crc(int property_id, const std::string &value) {
+  return frame(std::to_string(COMMANDID_SET) + tab + std::to_string(property_id) + tab + value);
+}
+
 /// The reply for FAN_1_LEVEL_ID with one bit flipped ('7' -> '3'), captured on the installed controller (issue #43).
 std::vector<uint8_t> bad_crc_frame() { return frame(data_head(133, "10") + "42696"); }
 
@@ -81,7 +89,7 @@ TEST_F(SECTouchHubTest, FrameWithBadCrcNeverReachesTapButIsAcked) {
 TEST_F(SECTouchHubTest, FrameWithoutCrcIsDroppedByDefaultButAcked) {
   const auto &seen = this->record_taps();
 
-  this->uart_.push_rx(frame("32" + tab + "173" + tab + "10"));
+  this->uart_.push_rx(frame_without_crc(FAN_1_LEVEL_ID, "10"));
   this->loop_times(3);
 
   EXPECT_TRUE(seen.empty());
@@ -101,10 +109,10 @@ TEST_F(SECTouchHubTest, FrameWithoutCrcReachesTapWithOptionalCrc) {
   this->hub_.set_optional_crc(true);
   const auto &seen = this->record_taps();
 
-  this->uart_.push_rx(frame("32" + tab + "173" + tab + "10"));
+  this->uart_.push_rx(frame_without_crc(FAN_1_LEVEL_ID, "10"));
   this->loop_times(3);
 
-  EXPECT_EQ(seen, std::vector<std::string>{"173=10"});
+  EXPECT_EQ(seen, std::vector<std::string>{std::to_string(FAN_1_LEVEL_ID) + "=10"});
 }
 
 TEST_F(SECTouchHubTest, NakDuringScanRecordsNakOutcome) {
@@ -128,7 +136,7 @@ TEST_F(SECTouchHubTest, BadCrcDuringScanRecordsTimeoutOutcome) {
 
 TEST_F(SECTouchHubTest, EnteringScanModeClearsStaleTimeoutOutcome) {
   this->hub_.enter_scan_mode();
-  this->hub_.add_discovery_get_task(500);
+  this->hub_.add_discovery_get_task(UNANSWERED_PROPERTY_ID);
   this->hub_.loop();  // dispatches the GET
   ASSERT_FALSE(this->uart_.tx.empty());
 

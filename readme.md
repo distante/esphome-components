@@ -10,6 +10,7 @@ One-time setup, inside the venv from [Tests](#tests):
 ```sh
 pip install -r requirements_dev.txt
 pre-commit install               # runs the hooks on every git commit
+git config blame.ignoreRevsFile .git-blame-ignore-revs   # git blame skips formatting-only commits
 ```
 
 `pre-commit run --all-files` checks the whole repo by hand. A hook that fixes files (such as clang-format) fails the commit; stage its changes and commit again.

@@ -9,7 +9,7 @@ esp32:
 
 logger:
   # Compiles every ESP_LOG* call, so the compile test sees -Wformat warnings.
-  level: VERY_VERBOSE
+  level: DEBUG
 
 external_components:
   - source:

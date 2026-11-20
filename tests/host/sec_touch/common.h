@@ -23,7 +23,7 @@ inline const std::string tab(1, static_cast<char>(TAB));
 
 /// `32[TAB]<id>[TAB]<value>[TAB]`: the part of a data message the CRC covers, after STX.
 inline std::string data_head(int property_id, const std::string &value) {
-  return "32" + tab + std::to_string(property_id) + tab + value + tab;
+  return std::to_string(COMMANDID_SET) + tab + std::to_string(property_id) + tab + value + tab;
 }
 
 /// `[STX]32[TAB]<id>[TAB]<value>[TAB]<crc>[ETX]`, the data half of a GET reply, with its real XModem CRC.

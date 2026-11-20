@@ -6,6 +6,7 @@
 #include <cstring>
 #include "esphome/core/log.h"
 #include <functional>
+#include "protocol_ids.h"
 
 namespace esphome {
 namespace sec_touch {
@@ -17,10 +18,6 @@ namespace sec_touch {
 #define TAB 0x09    // Tab
 #define NOISE 0xFF  // 255
 
-constexpr const int COMMANDID_SET = 32;
-constexpr const int COMMANDID_GET = 32800;
-constexpr const std::array<int, 6> FAN_LEVEL_IDS = {173, 174, 175, 176, 177, 178};
-constexpr const std::array<int, 6> FAN_LABEL_IDS = {78, 79, 80, 81, 82, 83};
 constexpr const int SUMMER_VENTILATION_PROPERTY_ID = 48;
 constexpr const int DATE_PROPERTY_ID = 1;   // "DD.MM.YY"
 constexpr const int CLOCK_PROPERTY_ID = 2;  // "HH:MM:SS"

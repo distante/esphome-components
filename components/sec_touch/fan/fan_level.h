@@ -22,6 +22,8 @@ constexpr int AUTOMATIC_TIME_LEVEL = 10;
 constexpr int SLEEP_LEVEL = 11;
 /// Highest level the panel reports for a running fan.
 constexpr int MAX_LEVEL = SLEEP_LEVEL;
+/// Level the panel reports when no fan is connected to the slot.
+constexpr int NOT_CONNECTED_LEVEL = 255;
 
 inline bool is_normal_level(int level) { return level >= MIN_NORMAL_LEVEL && level <= MAX_NORMAL_LEVEL; }
 

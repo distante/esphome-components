@@ -1,6 +1,21 @@
 # Components
 - [SEC-Touch Ventilation System](/components/sec_touch)
 
+# Linting
+
+[pre-commit](https://pre-commit.com) runs every linter and formatter: clang-format (`.clang-format`), yamllint (`.yamllint`), flake8 (`.flake8`), and checks for trailing whitespace, final newlines and LF line endings. CI runs the same hooks ([.github/workflows/lint.yml](.github/workflows/lint.yml)) on every PR and push to `main`.
+
+One-time setup, inside the venv from [Tests](#tests):
+
+```sh
+pip install -r requirements_dev.txt
+pre-commit install               # runs the hooks on every git commit
+```
+
+`pre-commit run --all-files` checks the whole repo by hand. A hook that fixes files (such as clang-format) fails the commit; stage its changes and commit again.
+
+Every tool is pinned. `.pre-commit-config.yaml` pins each hook, and pre-commit installs each one into its own cached environment (`~/.cache/pre-commit`), so the versions here never touch tools another project installs. clang-format and yamllint use the same versions as the vendored ESPHome. `requirements_dev.txt` also puts that clang-format into the venv, for the editor's format-on-save; keep its pin in step with the hook's `rev`.
+
 # Tests
 
 All five layers run in CI ([.github/workflows/tests.yml](.github/workflows/tests.yml)) on every PR and push to `main`.

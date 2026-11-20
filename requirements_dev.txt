@@ -1,0 +1,5 @@
+# Lint tooling for this repo. Standalone: CI's lint job installs it without the esphome submodule.
+# The hooks themselves are pinned in .pre-commit-config.yaml.
+pre-commit==4.7.0
+# For the editor's format-on-save. Keep in sync with the clang-format rev in .pre-commit-config.yaml.
+clang-format==23.1.3

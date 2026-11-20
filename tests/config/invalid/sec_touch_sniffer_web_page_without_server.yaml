@@ -1,0 +1,31 @@
+# expect-error: web_page: true needs an HTTP server
+
+# The sniffer page is served by web_server_base, which the sniffer does not auto-load.
+
+esphome:
+  name: sec-touch-sniffer-no-server
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch, sec_touch_sniffer]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  id: sec_touch_component
+  uart_id: sec_touch_uart
+
+text_sensor:
+  - platform: sec_touch_sniffer
+    sec_touch_id: sec_touch_component
+    name: "Sniffer"
+    web_page: true

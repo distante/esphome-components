@@ -1,9 +1,8 @@
-# The sniffer text sensor with its scan switch and no time: section, as in
-# components/sec_touch/readme.md. time_id is optional, so the sniffer must
-# build without the time component.
+# The sniffer text sensor with an active scan range and its scan switch, as in
+# the full example in components/sec_touch/readme.md.
 
 esphome:
-  name: sec-touch-sniffer-without-time
+  name: sec-touch-sniffer-scan-switch
 
 esp32:
   board: esp32dev

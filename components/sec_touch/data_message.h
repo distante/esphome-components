@@ -13,6 +13,18 @@ namespace sec_touch {
 /// a NAK, or corruption.
 constexpr const int DATA_MESSAGE_MIN_LEN = 7;
 
+/// Bytes in the hub's frame buffers, incoming and outgoing. The last byte is left unused (the outgoing one takes
+/// snprintf's NUL), so a frame is at most MAX_FRAME_LEN bytes.
+constexpr const int FRAME_BUFFER_SIZE = 64;
+constexpr const int MAX_FRAME_LEN = FRAME_BUFFER_SIZE - 1;
+
+/// Fewest bytes around the value in a data message the hub routes: STX, the TABs after the command and property IDs
+/// (both may be empty), and ETX, with no CRC field.
+constexpr const int DATA_MESSAGE_MIN_OVERHEAD = 4;
+
+/// Longest value a data message the hub routes can carry.
+constexpr const int MAX_DATA_VALUE_LEN = MAX_FRAME_LEN - DATA_MESSAGE_MIN_OVERHEAD;
+
 /// Positions of the first three TABs in a data message `[STX]cmd[TAB]prop[TAB]value[TAB]crc[ETX]`, -1 when absent.
 /// TABs are found left to right, so `tab2 == -1` implies `tab3 == -1`.
 struct DataMessageTabs {

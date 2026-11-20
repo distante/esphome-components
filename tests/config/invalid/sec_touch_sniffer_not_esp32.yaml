@@ -1,0 +1,30 @@
+# expect-error: sec_touch_sniffer is only available on ESP32
+
+# The sniffer is ESP32-only: its property records are sized against ESP32 heap.
+
+esphome:
+  name: sec-touch-sniffer-esp8266
+
+esp8266:
+  board: d1_mini
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch, sec_touch_sniffer]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO1
+  rx_pin: GPIO3
+  baud_rate: 28800
+
+sec_touch:
+  id: sec_touch_component
+  uart_id: sec_touch_uart
+
+text_sensor:
+  - platform: sec_touch_sniffer
+    sec_touch_id: sec_touch_component
+    name: "Sniffer"

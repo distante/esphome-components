@@ -89,7 +89,7 @@ cards:
               perform_action: fan.set_percentage
               data:
                 percentage: |
-                  {{ value | int  }} 
+                  {{ value | int  }}
             step: 9.090909090909092
             unit_of_measurement: U
             label: >-

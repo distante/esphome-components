@@ -33,7 +33,8 @@ inline std::vector<uint8_t> data_frame(int property_id, const std::string &value
   return frame(data_head(property_id, value) + std::to_string(crc));
 }
 
-/// `[STX]32[TAB]<id>[TAB]<value>[TAB]<crc>[ETX]`, the SET the hub sends. Same layout as a data frame: COMMANDID_SET is 32.
+/// `[STX]32[TAB]<id>[TAB]<value>[TAB]<crc>[ETX]`, the SET the hub sends.
+/// Same layout as a data frame: COMMANDID_SET is 32.
 inline std::vector<uint8_t> set_frame(int property_id, const std::string &value) {
   return data_frame(property_id, value);
 }

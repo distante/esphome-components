@@ -67,8 +67,7 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   ScanOutcome get_last_scan_outcome() const { return this->scan_outcome_.last(); }
   bool is_property_registered(int property_id) const {
     return this->recursive_update_listeners.count(property_id) > 0 ||
-           this->manual_update_listeners.count(property_id) > 0 ||
-           this->string_update_listeners.count(property_id) > 0;
+           this->manual_update_listeners.count(property_id) > 0 || this->string_update_listeners.count(property_id) > 0;
   }
 
   void set_inter_task_delay(uint32_t ms) { inter_task_delay_ms_ = ms; }

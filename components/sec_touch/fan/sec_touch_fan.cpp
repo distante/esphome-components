@@ -44,7 +44,8 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
     if (!need_speed_publish && !needs_preset_publish) {
       auto log_p = this->get_preset_mode();
       ESP_LOGD(TAG, "No update needed for fan with property_id %d incoming_speed=%d (state %d) (speed %d)(preset %s)",
-               property_id, real_speed_from_device, this->state, this->speed, log_p.empty() ? "Unknown" : log_p.c_str());
+               property_id, real_speed_from_device, this->state, this->speed,
+               log_p.empty() ? "Unknown" : log_p.c_str());
       return;
     }
 
@@ -166,9 +167,8 @@ void SecTouchFan::control(const fan::FanCall &call) {
 
   // The fan's preset once the call's own preset is stored; empty while the fan has none.
   auto stored_preset = this->get_preset_mode();
-  std::string_view stored_preset_sv = stored_preset.empty()
-                                          ? std::string_view("")
-                                          : std::string_view(stored_preset.c_str(), stored_preset.size());
+  std::string_view stored_preset_sv =
+      stored_preset.empty() ? std::string_view("") : std::string_view(stored_preset.c_str(), stored_preset.size());
   esphome::optional<FanModeEnum::FanMode> preset_mode = FanModeEnum::from_string(stored_preset_sv);
   if (new_preset_found) {
     command.preset_level = FanModeEnum::get_start_speed(preset_mode.value_or(FanModeEnum::FanMode::NORMAL));

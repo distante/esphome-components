@@ -20,6 +20,10 @@ The SEC-Touch hardware and its UART protocol are fixed: command IDs, frame layou
 
 Work in a git worktree (`EnterWorktree`, or `isolation: "worktree"` for subagents) unless the user says not to. Worktrees live in `.claude/worktrees/`.
 
+## Formatting and linting
+
+Before committing, run `pre-commit run --files <changed files>` and keep its fixes. Setup: [readme.md#linting](readme.md#linting). Never format with a clang-format from outside the venv or pre-commit: other versions format differently.
+
 ## Tests
 
 Commands and setup: [readme.md#tests](readme.md#tests). Every change lands with tests in one of five layers:

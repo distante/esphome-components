@@ -1,7 +1,6 @@
 from esphome.components import text_sensor
 import esphome.config_validation as cv
 import esphome.codegen as cg
-from esphome.const import ICON_FAN
 from . import (
     CONF_SEC_TOUCH_ID,
     sec_touch_ns,

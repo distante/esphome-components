@@ -1,0 +1,27 @@
+# Linters and formatters. Setup and usage: readme.md#linting.
+# Each hook runs in its own environment that pre-commit caches per pinned rev, so nothing here
+# touches tools installed for other projects. clang-format and yamllint use the same revs as the
+# vendored ESPHome (esphome/.pre-commit-config.yaml) so both format code the same way.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: mixed-line-ending
+        args: [--fix=lf]
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v23.1.3
+    hooks:
+      - id: clang-format
+        types_or: [c, c++]
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+        exclude: ^\.clang-format$
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.5.0
+    hooks:
+      - id: flake8

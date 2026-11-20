@@ -289,7 +289,7 @@ void SECTouchComponent::add_global_setting_tasks_to_queue() {
 
 void SECTouchComponent::register_recursive_update_listener(int property_id, UpdateCallbackListener listener) {
   ESP_LOGD(TAG, "register_recursive_update_listener for property_id %d", property_id);
-  this->recursive_update_listeners[property_id] = std ::move(listener);
+  this->recursive_update_listeners[property_id] = std::move(listener);
   this->fan_level_property_ids_.push_back(property_id);
 }
 
@@ -501,8 +501,7 @@ where:
   }
 
   // Defensive: ensure message starts with STX and ends with ETX
-  if (len < DATA_MESSAGE_MIN_LEN || static_cast<uint8_t>(buf[0]) != STX ||
-      static_cast<uint8_t>(buf[len - 1]) != ETX) {
+  if (len < DATA_MESSAGE_MIN_LEN || static_cast<uint8_t>(buf[0]) != STX || static_cast<uint8_t>(buf[len - 1]) != ETX) {
     char context[384];
     this->describe_dropped_message(buf, len, "", context, sizeof(context));
     ESP_LOGE(TAG_UART, "  [process_data] Invalid message format (%s). Task Failed", context);
@@ -533,11 +532,11 @@ where:
   }
 
   // Extract command id, property id, value, crc
-  int command_id  = atoi(std::string(&buf[1], tabs.tab1 - 1).c_str());
+  int command_id = atoi(std::string(&buf[1], tabs.tab1 - 1).c_str());
   int property_id = atoi(std::string(&buf[tabs.tab1 + 1], tabs.tab2 - tabs.tab1 - 1).c_str());
   std::string raw_value = this->extract_value_field(buf, len, tabs);
-  int value       = atoi(raw_value.c_str());
-  int crc         = (tabs.tab3 != -1) ? atoi(std::string(&buf[tabs.tab3 + 1], len - tabs.tab3 - 2).c_str()) : -1;
+  int value = atoi(raw_value.c_str());
+  int crc = (tabs.tab3 != -1) ? atoi(std::string(&buf[tabs.tab3 + 1], len - tabs.tab3 - 2).c_str()) : -1;
 
   ESP_LOGD(TAG, "  [process_data] command_id: %d, property_id: %d, value: %d (raw '%s'), crc: %d", command_id,
            property_id, value, raw_value.c_str(), crc);

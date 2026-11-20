@@ -1,0 +1,6 @@
+# Formatting-only commits, skipped by `git blame` (GitHub reads this file; locally run
+# `git config blame.ignoreRevsFile .git-blame-ignore-revs` once). These SHAs only survive a merge
+# commit, not a squash or rebase merge.
+
+# style: apply pre-commit hooks to the whole repo
+6b8a387572129cc7a8439ec3c6f3600afd6e0fb4

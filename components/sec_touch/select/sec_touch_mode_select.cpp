@@ -34,9 +34,9 @@ void SecTouchModeSelect::sync_from_fan_() {
     return;
   }
 
-  // Speed 255 = "Not Connected" sentinel. Selects can only publish strings
+  // NOT_CONNECTED_LEVEL is a sentinel, not a mode. Selects can only publish strings
   // from their option list, so leave the previous value untouched.
-  if (this->fan_->speed == 255) {
+  if (this->fan_->speed == NOT_CONNECTED_LEVEL) {
     return;
   }
 

@@ -20,7 +20,8 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
       return;
     }
 
-    if (real_speed_from_device < OFF_LEVEL || (real_speed_from_device > MAX_LEVEL && real_speed_from_device != 255)) {
+    if (real_speed_from_device < OFF_LEVEL ||
+        (real_speed_from_device > MAX_LEVEL && real_speed_from_device != NOT_CONNECTED_LEVEL)) {
       ESP_LOGW(TAG, "Ignoring out-of-range speed %d for property_id %d", real_speed_from_device, property_id);
       return;
     }
@@ -89,10 +90,10 @@ bool SecTouchFan::assign_new_speed_if_needed(int real_speed_from_device) {
     return false;
   }
 
-  if (real_speed_from_device == 255) {
-    if (this->state != 0 || this->speed != 255) {
+  if (real_speed_from_device == NOT_CONNECTED_LEVEL) {
+    if (this->state != 0 || this->speed != NOT_CONNECTED_LEVEL) {
       this->state = 0;
-      this->speed = 255;
+      this->speed = NOT_CONNECTED_LEVEL;
       return true;
     }
     return false;
@@ -117,7 +118,7 @@ bool SecTouchFan::assign_new_speed_if_needed(int real_speed_from_device) {
       changed = true;
     }
     // Guarantee a normal slider value before publishing state=ON. Without this,
-    // the first update after boot (speed=0) or after the "not connected" path (speed=255)
+    // the first update after boot (speed=0) or after the "not connected" path (speed=NOT_CONNECTED_LEVEL)
     // would publish state=ON with a speed outside the advertised range.
     bool burst = real_speed_from_device == BURST_LEVEL;
     if (!is_normal_level(this->speed)) {
@@ -245,7 +246,7 @@ void SecTouchFan::update_label_mode() {
     return;
   }
 
-  if (this->speed == 255) {
+  if (this->speed == NOT_CONNECTED_LEVEL) {
     level_text_sensor->publish_state("Not Connected");
     return;
   }

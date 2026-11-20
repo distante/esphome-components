@@ -77,21 +77,29 @@ jobs:
           python-version: "3.12"
       # Collecting needs only pytest, at the pin requirements_test.txt names.
       - run: pip install "$(grep -o '^pytest==[^ ]*' requirements_test.txt)"
-      # One matrix entry per compile test, as pytest collects it: {name: <fixture>, node: <node id>}.
+      # One matrix entry per compile test, as pytest collects it: {name, node: <node id>}.
+      # The name drops the prefix every fixture shares (`sec_touch_fan_only` -> `fan only`),
+      # so the job names fit the run graph; the `config-compile` group header gives the context.
       - id: collect
         run: |
           pytest tests/config --compile -m compile --collect-only -q \
-            | python -c 'import json, re, sys
-          tests = [
-              {"name": m.group(1), "node": line.strip()}
+            | python -c 'import json, os, re, sys
+          nodes = {
+              m.group(1): line.strip()
               for line in sys.stdin
               if (m := re.search(r"::\w+\[(.+)\]$", line.strip()))
+          }
+          assert nodes, "no compile tests collected"
+          prefix = os.path.commonprefix(list(nodes)) if len(nodes) > 1 else ""
+          prefix = prefix[: prefix.rfind("_") + 1]
+          tests = [
+              {"name": fixture.removeprefix(prefix).replace("_", " "), "node": node}
+              for fixture, node in nodes.items()
           ]
-          assert tests, "no compile tests collected"
           print("tests=" + json.dumps(tests))' >> "$GITHUB_OUTPUT"
 
-  compile:
-    name: Config compile (${{ matrix.test.name }})
+  config-compile:
+    name: ${{ matrix.test.name }}
     needs: compile-fixtures
     runs-on: ubuntu-latest
     strategy:

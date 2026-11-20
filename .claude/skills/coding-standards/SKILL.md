@@ -3,7 +3,7 @@ name: coding-standards
 description: "Use before planning, changing, reviewing or committing anything in this repo, however small, and before a PR or briefing a subagent."
 ---
 
-Single source for this repo's coding standards. Every rule lives here once; `CLAUDE.md`, `readme.md` and `.github/skills/code-review/` (for Copilot) point here. PR title and body rules live in [pr-body](../pr-body/SKILL.md).
+Single source for this repo's coding standards. Every rule lives here once; `CLAUDE.md`, `readme.md` and `.github/skills/code-review/` (for Copilot) point here. SEC-Touch rules live in [sec-touch](../sec-touch/SKILL.md), PR title and body rules in [pr-body](../pr-body/SKILL.md).
 
 ## Precedence
 
@@ -24,7 +24,7 @@ Done when each new name in the diff has a grep behind it and each added heap all
 
 ## Checklist: review
 
-1. Start every reviewer and subagent prompt with this line, plus the issue and spec: `Read .claude/skills/coding-standards/SKILL.md first; it is the complete list of this repo's standards.`
+1. Start every reviewer and subagent prompt with this line, plus the issue and spec: `Read .claude/skills/coding-standards/SKILL.md first, and .claude/skills/sec-touch/SKILL.md when the diff touches components/sec_touch*/; together they are the complete list of this repo's standards.`
 2. Give the reviewer the whole diff and every acceptance criterion. Known gaps go in as facts ("criterion 6 is deferred to #34"), and the reviewer decides whether to flag them.
 3. Fix every hard violation a reviewer reports, or tell the user why not. Only findings the reviewer itself called judgement calls may be skipped.
 
@@ -58,7 +58,7 @@ Done when every criterion carries a mark and the closing keyword matches the mar
 
 ### Memory
 
-Be mindful of memory usage, especially on devices with limited resources. Avoid dynamic memory allocation where possible and use static or stack allocation.
+Be mindful of memory usage, especially on devices with limited resources. Avoid dynamic memory allocation where possible and use static or stack allocation. Exception: `components/sec_touch_sniffer/` ([sec-touch](../sec-touch/SKILL.md)).
 
 ### Reuse existing definitions
 
@@ -66,20 +66,9 @@ Before adding a constant, enum, type or helper, search `components/` and `tests/
 
 This binds tests too: a test's expected values use the shared names (a cap, a separator, an ellipsis) where a generic testing skill would ask for an independent literal ([Precedence](#precedence)).
 
-### SEC-Touch protocol
+### SEC-Touch
 
-The SEC-Touch hardware and its UART protocol are fixed: command IDs, frame layout, property IDs and level values stay as they are. Code may rely on protocol constants coinciding (a SET and a data frame both start with `32`). Judge such code on readability alone.
-
-### `components/sec_touch/**` only
-
-These apply when a change touches `components/sec_touch/`.
-
-- Treat [components/sec_touch/readme.md](../../../components/sec_touch/readme.md) as the authoritative spec for protocol details, special values, and hardware mapping; do not duplicate or contradict it.
-- Keep the UART handshake intact: ACK handling and GET/SET sequencing are required; changes to UART parsing must preserve ACK behavior.
-- Respect the update flows: fan levels are polled via recursive tasks, labels are refreshed only by manual update tasks (triggered by the program text update button).
-- Validate IDs before queueing tasks; task creation returns null for unknown IDs and must be handled.
-- Schema constraints are strict: fan_number is 1-6, text_sensor requires mode_text while label_text is optional; keep these aligned with ID arrays.
-- If modifying fan behavior, keep preset-to-speed mapping consistent with special values and do not change the meaning of speed 255 (not connected).
+Changes under `components/sec_touch/` or `components/sec_touch_sniffer/` also follow the [sec-touch](../sec-touch/SKILL.md) skill: the fixed protocol, the component rules, and the sniffer's memory exception.
 
 ### Tests
 

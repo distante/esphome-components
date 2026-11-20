@@ -14,11 +14,11 @@ The SEC-Touch device is always the source of true. No fan state restoration is d
 - [Manuel Siekmann](https://github.com/Manuel-Siekmann/) who did the heavy lifting of find out the communication protocol of the SEC-TOUCH device in his [VentilationSystem](https://github.com/Manuel-Siekmann/VentilationSystem) project.
 - [Samuel Sieb](https://github.com/ssieb) who helped me to understand some basic c++ and ESPHome concepts and responded my questions on Discord.
 
-# Do it at your own Risk! 
+# Do it at your own Risk!
 
 The SEC-Touch has no open API or documentation for their UART interfaces, so I can no and DO NOT offer any warranty, everything here is reverse engineered. I have no affiliation with the company that produces the SEC-TOUCH device nor do I want this component to be used for financial gains. The only reason I developed this is because the official alternative is needs internet to works, which I do not want for a device that costs +200€ EURO.
 
-If you decide to use this component a **fan damage can not be ruled out**. **You** are the only responsible in case something goes wrong. 
+If you decide to use this component a **fan damage can not be ruled out**. **You** are the only responsible in case something goes wrong.
 
 Yes Really.
 
@@ -33,8 +33,8 @@ Yes Really.
 ## Optional
 - [Breakout board](https://amzn.to/4aGkvwM) if you do not want to solder stuff
 - [PCB board with header connectors](https://amzn.to/3YUpXos) if you want to solder everything (like I did, see bellow).
-- [Din Rail Mounting clips](https://amzn.to/4aBUr5V) to mount the device if needed. 
-  
+- [Din Rail Mounting clips](https://amzn.to/4aBUr5V) to mount the device if needed.
+
 # Connection
 
 The SEC-TOUCH has an "PC" port at the right bottom part. It has an `3.x` volts output. It worked to power my ESP32 device when I was using Software UART, but when I switched to Hardware UART it didn't work anymore. When I measured the voltage it was around `3.2v` tops.
@@ -46,10 +46,10 @@ That said, probably it has enough power for an ESP8266 device that uses software
 ### ESP32 cable connection (using external power )
 The same but without the 3.3v connection. 😬
 
-|ESP32  | SEC-Touch| 
-|--- | ---| 
+|ESP32  | SEC-Touch|
+|--- | ---|
 |GND | GND (1st from the left)|
-|GPIO 17 | RX (2nd from the left)| 
+|GPIO 17 | RX (2nd from the left)|
 |GPIO 16 | TX (3rd from the left)|
 
 Pin numbers count from the **left, looking straight at the "PC" port**. RX and TX are named from the SEC-Touch's side, so they cross over: the ESP's TX goes to the SEC-Touch's RX, and the other way round.
@@ -94,7 +94,7 @@ external_components:
       ref: stable
 
 wifi:
-  ssid: !secret wifi_ssid 
+  ssid: !secret wifi_ssid
   password: !secret wifi_password
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails
@@ -132,10 +132,10 @@ web_server:
     - id: group_settings
       name: Configuration
       sorting_weight: -94
-  
+
 uart:
   id: sec_touch_uart
-  tx_pin: 
+  tx_pin:
     number: GPIO17
   rx_pin:
     number: GPIO16
@@ -205,7 +205,7 @@ button:
       name: "Sync Panel Clock"
   - platform: restart
     name: "Restart"
-    
+
 text_sensor:
   - platform: sec_touch
     fan_number: 1
@@ -686,12 +686,12 @@ SET: 32
 GET: 32800
 ```
 ## Fan Pair Level
-Stored on `FAN_LEVEL_IDS` array as: 
+Stored on `FAN_LEVEL_IDS` array as:
 ```
 173, 174, 175, 176, 177, 178
 ```
 ## Fan Pair Label/Name
-Stored on `FAN_LABEL_IDS` array as: 
+Stored on `FAN_LABEL_IDS` array as:
 
 ```
 78, 79, 80, 81, 82, 83

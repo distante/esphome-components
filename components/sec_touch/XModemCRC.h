@@ -6,6 +6,7 @@
 #ifndef XModemCRC_H
 #define XModemCRC_H
 
+// clang-format off: keep the table at eight entries per row.
 static const unsigned short XModemCRCLookupTable[256] = {
     0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50a5, 0x60c6, 0x70e7,
     0x8108, 0x9129, 0xa14a, 0xb16b, 0xc18c, 0xd1ad, 0xe1ce, 0xf1ef,
@@ -39,12 +40,11 @@ static const unsigned short XModemCRCLookupTable[256] = {
     0x7c26, 0x6c07, 0x5c64, 0x4c45, 0x3ca2, 0x2c83, 0x1ce0, 0x0cc1,
     0xef1f, 0xff3e, 0xcf5d, 0xdf7c, 0xaf9b, 0xbfba, 0x8fd9, 0x9ff8,
     0x6e17, 0x7e36, 0x4e55, 0x5e74, 0x2e93, 0x3eb2, 0x0ed1, 0x1ef0};
+// clang-format on
 
-inline unsigned short GetXModemCRC(const char* buffer, uint length)
-{
+inline unsigned short GetXModemCRC(const char *buffer, uint length) {
   unsigned short crc = 0;
-  for (uint i = 0; i < length; i++)
-  {
+  for (uint i = 0; i < length; i++) {
     unsigned int lookupIndex = ((crc >> 8) ^ buffer[i]) & 0x00FF;
     crc = (crc << 8) ^ XModemCRCLookupTable[lookupIndex];
   }

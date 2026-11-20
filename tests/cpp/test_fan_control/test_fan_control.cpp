@@ -148,8 +148,7 @@ TEST(DecideFanControl, ResendingASpecialLevelDoesNotResetThePreset) {
 
 // The hub already stored the preset the command picked.
 TEST(DecideFanControl, APresetCommandLeavesThePresetAlone) {
-  EXPECT_FALSE(
-      decide_fan_control(FanCommand{{}, {}, NORMAL_PRESET_LEVEL}, ON_AT_4, NOT_SPLIT).reset_preset_to_normal);
+  EXPECT_FALSE(decide_fan_control(FanCommand{{}, {}, NORMAL_PRESET_LEVEL}, ON_AT_4, NOT_SPLIT).reset_preset_to_normal);
   EXPECT_FALSE(decide_fan_control(FanCommand{{}, {}, BURST_LEVEL}, ON_AT_4, SPLIT).reset_preset_to_normal);
 }
 

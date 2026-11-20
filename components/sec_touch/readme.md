@@ -368,17 +368,12 @@ text_sensor:
 ### Full example (with active scan)
 
 ```yaml
-time:
-  - platform: homeassistant
-    id: ha_time
-
 text_sensor:
   - platform: sec_touch_sniffer
     sec_touch_id: sec_touch_component
     name: "Sniffer"
-    time_id: ha_time       # optional — uses device uptime when omitted
     scan_start: 1          # first property ID to query in active scan
-    scan_end: 250          # last property ID to query; must be >= scan_start
+    scan_end: 250          # last property ID to query; scan_start..255
     scan_switch:
       name: "Sniffer Scan Active"
 ```

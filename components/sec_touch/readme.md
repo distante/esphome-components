@@ -410,7 +410,7 @@ See [RAW_VALUES.md](RAW_VALUES.md#how-to-reproduce) for a capture walkthrough.
 
 These changes break existing sniffer configs or automations that read its text sensor:
 
-- **Text sensor format:** the state lists each ID's raw value as the panel sent it (`1=11.11.26, 5=0100`) instead of the `atoi` result (`1=11, 5=100`). Templates or automations that parse the state need updating.
+- **Text sensor format:** the state lists each ID's raw value as the panel sent it (`1=11.11.26, 5=0100`) instead of the `atoi` result (`1=11, 5=100`), and a cut state ends with `, …+N more` instead of `, ...`. Templates or automations that parse the state need updating.
 - **`time_id` removed:** setting it is a config error. Delete it: sniffer timestamps are device uptime, and the page shows wall time.
 - **ESP32 only:** other targets (such as ESP8266) fail config validation.
 - **`scan_end` capped at 255:** a higher value is a config error. `scan_start` is capped at 255 as well.

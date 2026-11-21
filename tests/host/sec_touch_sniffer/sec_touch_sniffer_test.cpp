@@ -5,6 +5,7 @@
 
 #include "../sec_touch/common.h"
 #include "esphome/components/sec_touch_sniffer/sec_touch_sniffer.h"
+#include "esphome/components/sec_touch_sniffer/sec_touch_sniffer_scan_switch.h"
 #include "esphome/components/sec_touch_sniffer/sniffer_state.h"
 #include "esphome/core/application.h"
 #include "esphome/core/hal.h"
@@ -29,10 +30,13 @@ struct SnifferRig {
   FakeUART uart;
   TestableSECTouch hub;
   SecTouchSniffer sniffer{&hub};
+  SecTouchSnifferScanSwitch scan_switch;
   std::vector<std::string> published;
 
   SnifferRig() {
     this->hub.set_uart_parent(&this->uart);
+    this->scan_switch.set_parent(&this->sniffer);
+    this->sniffer.set_scan_switch(&this->scan_switch);
     this->sniffer.add_on_state_callback([this](const std::string &state) { this->published.push_back(state); });
     this->sniffer.setup();
   }
@@ -53,6 +57,16 @@ struct SnifferRig {
     delay(ms);
     App.scheduler.call(millis());
   }
+
+  /// A scan left running would leave its timers in the shared scheduler, pointing at this rig after it is gone.
+  ~SnifferRig() {
+    if (this->sniffer.is_scanning()) {
+      this->sniffer.toggle_scan();
+    }
+  }
+
+  /// Runs the sniffer's loop, as the main loop does once a request_scan() enabled it.
+  void loop_sniffer() { this->sniffer.loop(); }
 
   /// Starts a scan of `first`..`last`. The hub's first idle loop schedules the first query.
   void start_scan(int first, int last) {
@@ -160,6 +174,80 @@ TEST(SecTouchSnifferTest, ATimedOutScanQueryIsRetriedOnceThenSkipped) {
   EXPECT_FALSE(rig.sniffer.is_scanning());
   // A record that only ever failed is not listed, so the end-of-scan state is empty.
   EXPECT_EQ(rig.published, (std::vector<std::string>{""}));
+}
+
+// --- Scan start and stop from the page: queued by request_scan(), applied by loop() ---
+
+TEST(SecTouchSnifferTest, ARequestedStartWaitsForTheLoop) {
+  SnifferRig rig;
+  rig.sniffer.set_scan_range(UNREGISTERED_ID, NEXT_UNREGISTERED_ID);
+
+  rig.sniffer.request_scan(true);
+  EXPECT_FALSE(rig.sniffer.is_scanning());
+
+  rig.loop_sniffer();
+  EXPECT_TRUE(rig.sniffer.is_scanning());
+  EXPECT_TRUE(rig.scan_switch.state);
+}
+
+TEST(SecTouchSnifferTest, ARequestedStopEndsTheScanAndMovesTheSwitch) {
+  SnifferRig rig;
+  rig.start_scan(UNREGISTERED_ID, NEXT_UNREGISTERED_ID);
+  ASSERT_TRUE(rig.scan_switch.state);
+
+  rig.sniffer.request_scan(false);
+  rig.loop_sniffer();
+
+  EXPECT_FALSE(rig.sniffer.is_scanning());
+  EXPECT_FALSE(rig.scan_switch.state);
+}
+
+TEST(SecTouchSnifferTest, AStartDuringAScanChangesNothing) {
+  SnifferRig rig;
+  rig.start_scan(UNREGISTERED_ID, NEXT_UNREGISTERED_ID);
+  rig.answer_scan_query(UNREGISTERED_ID, "10");
+
+  rig.sniffer.request_scan(true);
+  rig.loop_sniffer();
+
+  EXPECT_TRUE(rig.sniffer.is_scanning());
+  // Not restarted: the scan still finishes after NEXT_UNREGISTERED_ID.
+  rig.answer_scan_query(NEXT_UNREGISTERED_ID, "11");
+  EXPECT_FALSE(rig.sniffer.is_scanning());
+  EXPECT_EQ(rig.gets_sent_for(UNREGISTERED_ID), 1);
+}
+
+TEST(SecTouchSnifferTest, AStopWhileIdleChangesNothing) {
+  SnifferRig rig;
+  rig.sniffer.set_scan_range(UNREGISTERED_ID, NEXT_UNREGISTERED_ID);
+
+  rig.sniffer.request_scan(false);
+  rig.loop_sniffer();
+
+  EXPECT_FALSE(rig.sniffer.is_scanning());
+  // Stopping an idle scan would publish the records; an ignored stop publishes nothing.
+  EXPECT_TRUE(rig.published.empty());
+}
+
+TEST(SecTouchSnifferTest, ARequestIsAppliedOnce) {
+  SnifferRig rig;
+  rig.sniffer.set_scan_range(UNREGISTERED_ID, NEXT_UNREGISTERED_ID);
+  rig.sniffer.request_scan(true);
+  rig.loop_sniffer();
+  rig.sniffer.toggle_scan();
+
+  rig.loop_sniffer();
+
+  EXPECT_FALSE(rig.sniffer.is_scanning());
+}
+
+TEST(SecTouchSnifferTest, WithoutAScanRangeAStartIsIgnored) {
+  SnifferRig rig;
+
+  rig.sniffer.request_scan(true);
+  rig.loop_sniffer();
+
+  EXPECT_FALSE(rig.sniffer.is_scanning());
 }
 
 }  // namespace esphome::sec_touch::testing

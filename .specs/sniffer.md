@@ -76,7 +76,7 @@ Decided in [What are the sniffer's memory caps?](https://github.com/distante/esp
 | Record fields | 4 × u32 uptime **seconds**, u32 `change_count`, u32 `seq` (for the page's deltas), cmd, status, raw length, flags (32 B) | 256 × 32 B = 8 KB (one block) |
 | Raw value | 59 B, never truncated | 256 × 59 B ≈ 15 KB (one block) |
 | History | 2 KB pool, depth 8 per ID (current value included) | 2 KB, **only with `web_page: true`** |
-| Serving scratch | binary record copy ≤ ~512 B + ~256 B JSON chunk | ~800 B, static |
+| Serving scratch | binary record copy ≤ ~540 B + 256 B JSON chunk | ~800 B, static |
 | Text sensor state | 2048 chars | ≤ 2 KB heap string |
 
 - **IDs above 255** are dropped, counted (`dropped` in the data JSON) and logged once. `scan_end > 255` is a config error.
@@ -135,7 +135,7 @@ text_sensor:
 - **ESP32 only**: any other target is a config error.
 - **HTTP server**: `web_server_base` is **not** auto-loaded, so page-off builds carry no server code. `web_page: true` without `web_server_base` loaded fails with "add `web_server_base:` (or `web_server:`)".
 - **Auth and port** are inherited. The handler registers with `add_handler()`, so `web_server: auth:` protects it when set. The port is `web_server_base`'s. The sniffer has no auth or port options.
-- **Sockets**: with `web_page: true`, `socket.consume_sockets(2, "sec_touch_sniffer")`: one for the polling tab, one spare for a reload or keep-alive.
+- **Sockets**: with `web_page: true`, `web_server_base.add_httpd_clients(2, "sec_touch_sniffer")`: one for the polling tab, one spare for a reload or keep-alive. It calls `socket.consume_sockets(2, "sec_touch_sniffer")` and also raises the httpd client limit (`max_open_sockets`) to match, as `web_server` does for its own clients.
 
 ---
 
@@ -173,14 +173,14 @@ Decided in [What is the contract between the device and the page?](https://githu
 
 | Endpoint | Does |
 |---|---|
-| `GET /sniffer` | the page, gzipped, served from flash (`constexpr uint8_t[]`, no RAM copy) |
+| `GET /sniffer` | the page, gzipped, served from flash (`constexpr uint8_t[]`, no RAM copy). Until the page lands ([#35](https://github.com/distante/esphome-components/issues/35)), a plain placeholder from flash that links to the data. |
 | `GET /sniffer/data?since=S` | JSON, see below |
 | `POST /sniffer/scan/start` | start scan; empty body; 200 with the `scan` object |
 | `POST /sniffer/scan/stop` | stop scan; empty body; 200 with the `scan` object |
 
 - **Start/stop are idempotent.** A start during a scan or a stop while idle is a no-op that returns 200.
-- The handler only **queues** the action; the main loop applies it. The reply reflects the request, not the completion.
-- Without a scan range, `scan` says scanning is unavailable and the page hides the controls.
+- The handler only **queues** the action (`request_scan()`, an atomic the component's `loop()` takes); the main loop applies it through the same path as the switch, so the switch moves too. The reply reflects the request, not the completion: its `active` is the requested state.
+- Without a scan range, `scan` is `null` and the page hides the controls. Start and stop then do nothing and reply 200 with `null`.
 
 **Transport: delta polling** (no SSE: the ESP32 `AsyncEventSource` is bound to `web_server` and a hand-rolled stream would hold a socket and the single httpd task).
 - A global `seq` goes up on **any** record change, `last_seen` included.
@@ -190,16 +190,16 @@ Decided in [What is the contract between the device and the page?](https://githu
 - The page resyncs with `since=0` on first load, when `boot` differs from the stored value (then runs the reboot merge), and when the server `seq` is lower than the page's `since`.
 
 **Concurrency and RAM.** Handlers run on the httpd task while the main loop writes records.
-- A mutex guards the record store.
-- Per record, the handler copies the record **in binary** (fields, raw value and its history entries, ≤ ~512 B) into static scratch under the lock, releases the lock, then formats JSON into a ~256 B chunk buffer and sends it with `httpd_resp_send_chunk` on the raw request. It sets status, content type and `Access-Control-Allow-Origin` itself and ends with the empty chunk.
-- Peak RAM ~800 B, no heap growth per request, independent of escaping.
+- A mutex (ESPHome's `Mutex`, a FreeRTOS mutex on ESP32) guards the record store. Only the store's writes take it on the main loop; the main loop reads without it, being the only writer. The scan fields the handler reads (scanning flag and position) are separate atomics, so a poll that races a scan step can show them out of step; the next poll corrects it.
+- Per record, the handler copies the record **in binary** (fields, raw value and its history entries, ≤ ~540 B) into static scratch under the lock, releases the lock, then formats JSON into a ~256 B chunk buffer and sends it with `httpd_resp_send_chunk` on the raw request. It sets status, content type and `Access-Control-Allow-Origin` itself and ends with the empty chunk.
+- Peak RAM ~800 B, no heap growth per request, independent of escaping. The query string is parsed in place, not through the server's heap-allocated parameters.
 - A response is not an atomic snapshot. A record changed mid-response is caught by the next poll through `seq`.
 
 **JSON shape** (compact keys):
 
 ```json
 {
-  "mac": "AABBCCDDEEFF", "name": "esp32-power-meter",
+  "mac": "aabbccddeeff", "name": "esp32-power-meter",
   "boot": "9f2c41ab", "uptime": 812000,
   "seq": 1204, "full": false, "dropped": 0,
   "scan": {"active": true, "from": 1, "to": 255, "next": 42, "done": false},
@@ -214,15 +214,19 @@ Decided in [What is the contract between the device and the page?](https://githu
 ```
 
 - Times are uptime in ms (stored as seconds, sent as `s × 1000`).
-- Unset timestamps and a never-seen raw value are `null`. A record that only ever failed has `raw: null` and `hist: []`.
+- Unset timestamps and a never-seen raw value are `null`. A record that only ever failed has `cmd: null`, `raw: null` and `hist: []`.
+- `status` is `unqueried`, `ok`, `nak` or `timeout`; `status_at` is `null` while `unqueried`.
 - `hist` holds `[first seen, raw value]` pairs, newest first. The newest is the current value (`raw`, time `changed`); the rest come from the history pool. Empty when the pool is off.
 - `reg` is read from the hub when served.
 - `dropped` counts messages for IDs above 255.
-- `scan.next` and `scan.done` drive the progress labels.
+- `scan` is `null` without a scan range.
+- `scan.next` is the ID the scan queries next, or resumes at after a stop; `to` while the last query of a run is in flight; `from` before the first run and after a completed one. `scan.done` is true only while idle after a run covered the whole range, until the next start. They drive the progress labels.
+- `since` missing or not a valid u32 counts as `0`, a full response.
+- Responses carry `Cache-Control: no-store`.
 
 **Raw value encoding:** byte-exact. Standard JSON escapes for `"` and `\`. Control bytes (< 0x20) and bytes ≥ 0x80 are sent as `\u00XX`, one code point per byte (Latin-1), so the page and the export recover the exact bytes. ASCII passes unchanged.
 
-**Device identity:** browser storage is keyed by the ESP's **MAC**. `boot` is a random id generated at setup, only for reboot detection. `name` is the ESPHome node name, for display. The panel's ID 3 is not used as a key.
+**Device identity:** browser storage is keyed by the ESP's **MAC** (12 lowercase hex digits). `boot` is a random id generated at setup (8 hex digits), only for reboot detection. `name` is the ESPHome node name, for display. The panel's ID 3 is not used as a key.
 
 ---
 

@@ -1,5 +1,5 @@
-# The sniffer with web_page: true, which allocates the history pool. web_server_base
-# serves the page once it lands. The wifi credentials are placeholders: the build never connects.
+# The sniffer with web_page: true on web_server_base alone, without web_server: the history pool and the
+# /sniffer handler. The wifi credentials are placeholders: the build never connects.
 
 esphome:
   name: sec-touch-sniffer-web-page

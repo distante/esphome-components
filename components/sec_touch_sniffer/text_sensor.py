@@ -4,7 +4,7 @@ import re
 import esphome.codegen as cg
 import esphome.config_validation as cv
 import esphome.final_validate as fv
-from esphome.components import socket, text_sensor, switch
+from esphome.components import text_sensor, switch, web_server_base
 from esphome.const import CONF_ID, CONF_TIME_ID
 from esphome.core import CORE
 
@@ -19,11 +19,14 @@ CONF_SCAN_SWITCH = "scan_switch"
 CONF_WEB_PAGE = "web_page"
 
 
-# The component that serves pages. Not in esphome.const.
-WEB_SERVER_BASE = "web_server_base"
+# The component that serves pages.
+WEB_SERVER_BASE = web_server_base.DOMAIN
 
-# Sockets the page takes: one for the polling tab, one spare for a reload or keep-alive.
-WEB_PAGE_SOCKETS = 2
+# HTTP clients the page keeps open: one for the polling tab, one spare for a reload or keep-alive.
+WEB_PAGE_CLIENTS = 2
+
+# Compiles the /sniffer handler; page-off builds carry no server code.
+WEB_PAGE_DEFINE = "USE_SEC_TOUCH_SNIFFER_WEB_PAGE"
 
 
 def _read_max_property_id():
@@ -60,10 +63,11 @@ def _validate_scan_range(config):
     return config
 
 
-def _consume_web_page_sockets(config):
-    if not config[CONF_WEB_PAGE]:
-        return config
-    return socket.consume_sockets(WEB_PAGE_SOCKETS, "sec_touch_sniffer")(config)
+def _add_web_page_clients(config):
+    # Counts the sockets (socket.consume_sockets) and raises the httpd client limit to match, as web_server does.
+    if config[CONF_WEB_PAGE]:
+        web_server_base.add_httpd_clients(WEB_PAGE_CLIENTS, "sec_touch_sniffer")
+    return config
 
 
 CONFIG_SCHEMA = cv.All(
@@ -84,7 +88,7 @@ CONFIG_SCHEMA = cv.All(
     .extend(cv.COMPONENT_SCHEMA),
     _validate_esp32,
     _validate_scan_range,
-    _consume_web_page_sockets,
+    _add_web_page_clients,
 )
 
 
@@ -109,6 +113,8 @@ async def to_code(config):
     await text_sensor.register_text_sensor(var, config)
 
     cg.add(var.set_web_page(config[CONF_WEB_PAGE]))
+    if config[CONF_WEB_PAGE]:
+        cg.add_define(WEB_PAGE_DEFINE)
 
     scan_end = config[CONF_SCAN_END]
     if scan_end > 0:

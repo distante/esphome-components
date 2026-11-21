@@ -1,0 +1,515 @@
+<!doctype html>
+<!--
+  The sniffer page (.specs/sniffer.md, "Page"). The build (page_bundle.py) inlines the ./*.mjs modules it imports
+  and gzips it into flash; the device serves it at GET /sniffer.
+  To work on it without flashing, serve this folder (`python -m http.server -d components/sec_touch_sniffer/web`)
+  and open sniffer_page.html?device=http://<device-ip>: the data endpoints allow any origin.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEC-Touch sniffer</title>
+<style>
+  :root { --bg:#fafafa; --fg:#1d1d1f; --mute:#6e6e73; --line:#ddd; --acc:#0a66c2; --bad:#c0392b; --ok:#1e8449; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:13px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--fg); padding:0 12px 24px; }
+  h1 { font-size:15px; margin:10px 0; }
+  button, input, select, textarea { font:inherit; }
+  button { padding:3px 9px; cursor:pointer; }
+  code { font-family:ui-monospace, Menlo, monospace; }
+  .mute { color:var(--mute); }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0; }
+  .grow { flex:1; }
+  .badge { display:inline-block; padding:0 5px; border-radius:3px; font-size:11px; border:1px solid var(--line); background:#fff; }
+  .offline { background:var(--bad); color:#fff; border-color:var(--bad); }
+  .bar { height:8px; background:#e5e5e5; border-radius:4px; overflow:hidden; min-width:120px; }
+  .bar > i { display:block; height:100%; background:var(--acc); }
+  #main { display:flex; gap:12px; align-items:flex-start; }
+  #grid { flex:1; display:grid; grid-template-columns:repeat(16, 1fr); gap:2px; max-width:900px; }
+  .cell { aspect-ratio:1; font-size:10px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    overflow:hidden; cursor:pointer; background:#f7f7f7; border:1px solid #e2e2e2; }
+  .cell code { font-size:10px; max-width:100%; overflow:hidden; white-space:nowrap; }
+  .cell.unseen { background:#fff; border:1px dashed #bbb; }
+  .cell.reg { border:2px solid #333; }
+  .cell.stale { opacity:.45; font-style:italic; }
+  .dim { background-image:repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,0,0,.3) 4px 6px); }
+  .cell.dim { opacity:.5; }
+  .cell.cursor { outline:3px solid var(--acc); }
+  .cell.sel { outline:2px solid red; }
+  .flash { animation:flash 2s; }
+  @keyframes flash { from { box-shadow:inset 0 0 0 40px #ffe58a; } to { box-shadow:none; } }
+  #side { width:340px; }
+  #drawer { background:#fff; border:1px solid var(--line); padding:8px; margin-bottom:10px; }
+  #drawer .value { font-size:20px; margin:6px 0; word-break:break-all; }
+  #drawer textarea { width:100%; min-height:60px; }
+  #drawer table td { padding:1px 6px 1px 0; vertical-align:top; }
+  #feed { max-height:55vh; overflow:auto; }
+  #feed div { cursor:pointer; border-bottom:1px solid var(--line); padding:2px 0; }
+  .s-ok { color:var(--ok); } .s-nak { color:var(--bad); } .s-timeout { color:#b9770e; } .s-unqueried { color:#999; }
+  @media (max-width:900px) { #main { flex-direction:column; } #side { width:100%; } }
+</style>
+</head>
+<body>
+<div class="row">
+  <h1 id="title">SEC-Touch sniffer</h1>
+  <span id="online" class="badge">connecting…</span>
+  <span id="device" class="mute"></span>
+  <span class="grow"></span>
+  <button id="export-json">Export JSON</button>
+  <button id="export-csv">Export CSV</button>
+</div>
+<div id="scan" class="row" hidden>
+  <button id="scan-toggle"></button>
+  <div class="bar grow"><i id="scan-bar"></i></div>
+  <span id="scan-label" class="mute"></span>
+</div>
+<div class="row">
+  <input id="f-query" placeholder="ID, value or note…" style="width:170px">
+  <label><input id="f-hide-reg" type="checkbox"> hide registered</label>
+  <select id="f-changed"></select>
+  colour by <select id="colour-by"><option>type</option><option>status</option></select>
+  <span class="badge" style="border:2px solid #333">registered</span>
+  <span class="badge" style="border:1px dashed #bbb">never seen</span>
+  <span class="badge dim">filtered out</span>
+</div>
+<div id="f-types" class="row"></div>
+<div id="f-statuses" class="row"></div>
+<div id="main">
+  <div id="grid"></div>
+  <div id="side">
+    <div id="drawer" hidden>
+      <div id="drawer-info"></div>
+      <textarea id="note"></textarea>
+    </div>
+    <b>Changes</b> <span class="mute">(newest first)</span>
+    <div id="feed"></div>
+  </div>
+</div>
+<script type="module">
+import { applyResponse, changeFeed, emptyCopy, rowsOf } from "./records.mjs";
+import { createPoller, resyncReason, sinceFor } from "./poll.mjs";
+import { allPass, matchesFilter } from "./filters.mjs";
+import { scanProgress } from "./scan_progress.mjs";
+import { exportCsv, exportJson } from "./export.mjs";
+import { deviceKey, LAST_MAC_KEY, parseStored, storedText } from "./storage.mjs";
+import { STATUS_COLOURS, TYPE_COLOURS } from "./colours.mjs";
+
+const ID_COUNT = 256;
+const FEED_LENGTH = 60;
+/** A grid cell previews this many characters of its value; the full value is in its tooltip. */
+const CELL_CHARS = 6;
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+/** The "changed recently" filter's choices, as [window in ms, label]; 0 means any time. */
+const CHANGED_WITHIN_PRESETS = [
+  [0, "changed any time"],
+  [5 * MINUTE_MS, "changed < 5 min"],
+  [HOUR_MS, "changed < 1 h"],
+];
+
+// Empty on the device; `?device=http://<ip>` while working on the page from a local server.
+const DEVICE_URL = new URLSearchParams(location.search).get("device") ?? "";
+const $ = (id) => document.getElementById(id);
+
+/** Builds an element: `el("b", {class: "x"}, "text", child)`. */
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [name, value] of Object.entries(attrs)) {
+    node.setAttribute(name, value);
+  }
+  node.append(...children.filter((child) => child !== null));
+  return node;
+}
+
+/** A raw value for display: trimmed, with control bytes as \xNN. */
+function shown(raw) {
+  if (raw === null) {
+    return "—";
+  }
+  return raw.trim().replace(/[\x00-\x1f\x7f]/g, (c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, "0")}`);
+}
+const isPadded = (raw) => raw !== null && raw !== raw.trim();
+const formatWall = (wallMs) => (wallMs === null ? "—" : new Date(wallMs).toLocaleString());
+
+// ───── state: the browser copy, notes and mutes, kept per device MAC ─────
+let mac = null;
+let copy = emptyCopy();
+let notes = {};
+let mutes = new Set();
+let selected = null;
+let online = null;
+let scanRequestFailed = false;
+const filter = allPass();
+let colourBy = "type";
+const flashIds = new Set();
+// The ID whose note the drawer's note field holds.
+let drawerFor = null;
+
+function load(newMac) {
+  mac = newMac;
+  // The selection stays, but the note field must refill from the new device's notes.
+  drawerFor = null;
+  let text = null;
+  try {
+    text = localStorage.getItem(deviceKey(mac));
+  } catch {
+    // Blocked storage: the device starts from an empty copy.
+  }
+  ({ copy, notes, mutes } = parseStored(text));
+}
+
+/** The MAC of the last device that answered, so its copy shows at page open even while it is offline. */
+function lastMac() {
+  try {
+    return localStorage.getItem(LAST_MAC_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function rememberMac() {
+  try {
+    localStorage.setItem(LAST_MAC_KEY, mac);
+  } catch {
+    // Blocked storage: the page just opens empty until the device answers.
+  }
+}
+
+function save() {
+  try {
+    localStorage.setItem(deviceKey(mac), storedText(copy, notes, mutes));
+  } catch {
+    // Full or blocked storage: the page still works, the copy just does not survive a reload.
+  }
+}
+
+// ───── device ─────
+/** Fetches from the device; rejects on a network error and on a non-OK status alike. */
+async function fetchOk(path, options) {
+  const response = await fetch(`${DEVICE_URL}${path}`, options);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  return response;
+}
+
+async function fetchData(since) {
+  const response = await fetchOk(`/sniffer/data?since=${since}`, { cache: "no-store" });
+  return response.json();
+}
+
+const currentScan = () => copy.device?.scan ?? null;
+
+async function pollOnce() {
+  let response = await fetchData(sinceFor(copy));
+  if (response.mac !== mac) {
+    load(response.mac);
+    rememberMac();
+    // The stored copy's `since` is unset, so this is a resync unless the response was full already.
+  }
+  if (resyncReason(copy, response) !== null) {
+    copy = { ...copy, since: null };
+    response = await fetchData(0);
+  }
+  const result = applyResponse(copy, response, Date.now());
+  copy = result.copy;
+  for (const id of result.changedIds) {
+    flashIds.add(id);
+  }
+  // The device answered, so a failed scan request no longer describes it.
+  scanRequestFailed = false;
+  save();
+  renderLogged();
+}
+
+const poller = createPoller({
+  poll: pollOnce,
+  setTimer: (fn, ms) => setTimeout(fn, ms),
+  clearTimer: (timer) => clearTimeout(timer),
+  onOnline: (isOnline) => {
+    online = isOnline;
+    renderHeader();
+  },
+});
+
+async function toggleScan() {
+  const action = currentScan()?.active ? "stop" : "start";
+  try {
+    await fetchOk(`/sniffer/scan/${action}`, { method: "POST" });
+    scanRequestFailed = false;
+    poller.pollNow();
+  } catch (error) {
+    // No poll at once: it would clear the failure before it shows. The next scheduled poll clears it.
+    console.error(`scan ${action} request failed`, error);
+    scanRequestFailed = true;
+  }
+  renderHeader();
+}
+
+// ───── rendering ─────
+const cells = [];
+
+function buildStatic() {
+  for (let id = 0; id < ID_COUNT; id++) {
+    const cell = el("div", { class: "cell", "data-id": id });
+    cells.push(cell);
+    $("grid").append(cell);
+  }
+  addChips($("f-types"), TYPE_COLOURS, filter.types);
+  addChips($("f-statuses"), STATUS_COLOURS, filter.statuses);
+  $("f-changed").append(...CHANGED_WITHIN_PRESETS.map(([ms, label]) => el("option", { value: ms }, label)));
+}
+
+function renderHeader() {
+  const device = copy.device;
+  if (device !== null) {
+    $("title").textContent = `SEC-Touch sniffer · ${device.name}`;
+    $("device").textContent = `${mac} · ${Object.keys(copy.records).length} IDs`;
+  }
+  const state = online === false ? "offline, retrying" : online ? "live" : "connecting…";
+  $("online").textContent = scanRequestFailed ? `${state} · scan request failed` : state;
+  $("online").classList.toggle("offline", online === false || scanRequestFailed);
+}
+
+function renderScan() {
+  const scan = currentScan();
+  $("scan").hidden = scan === null;
+  if (scan === null) {
+    return;
+  }
+  const progress = scanProgress(scan);
+  $("scan-toggle").textContent = scan.active ? "■ Stop scan" : "▶ Start scan";
+  $("scan-bar").style.width = `${progress.percent}%`;
+  $("scan-label").textContent = progress.label;
+}
+
+function cellColour(row) {
+  // An ID with no value has no type, so it shows its status colour.
+  return (colourBy === "type" && TYPE_COLOURS[row.type]) || STATUS_COLOURS[row.status];
+}
+
+function renderGrid(rowsById, visible) {
+  const scan = currentScan();
+  for (let id = 0; id < ID_COUNT; id++) {
+    const cell = cells[id];
+    const row = rowsById.get(id);
+    cell.replaceChildren(el("span", { class: "mute" }, String(id)));
+    // backgroundColor, not background, so the filtered-out stripes of .dim stay.
+    cell.style.backgroundColor = row ? cellColour(row) : "";
+    cell.classList.toggle("unseen", !row);
+    cell.title = row ? `${id} = ${shown(row.raw)}` : String(id);
+    if (row && row.raw !== null) {
+      cell.append(el("code", {}, shown(row.raw).slice(0, CELL_CHARS)));
+    }
+    if (row && notes[id]) {
+      cell.append(el("span", {}, "✎"));
+    }
+    cell.classList.toggle("reg", Boolean(row?.registered));
+    cell.classList.toggle("stale", Boolean(row?.stale));
+    cell.classList.toggle("dim", Boolean(row) && !visible.has(id));
+    cell.classList.toggle("cursor", Boolean(scan?.active) && scan.next === id);
+    cell.classList.toggle("sel", selected === id);
+    if (flashIds.has(id)) {
+      cell.classList.remove("flash");
+      void cell.offsetWidth; // restarts the animation
+      cell.classList.add("flash");
+    }
+  }
+  flashIds.clear();
+}
+
+/** A filter chip per key of `colours`, in its colour, toggling the key in `chosen`: filter and legend in one. */
+function addChips(parent, colours, chosen) {
+  for (const [key, colour] of Object.entries(colours)) {
+    const box = el("input", { type: "checkbox" });
+    box.checked = true;
+    box.addEventListener("change", () => {
+      if (box.checked) {
+        chosen.add(key);
+      } else {
+        chosen.delete(key);
+      }
+      render();
+    });
+    parent.append(el("label", { class: "badge", style: `background:${colour}` }, box, key));
+  }
+}
+
+function renderFeed(visible) {
+  const entries = changeFeed(copy, mutes).filter((entry) => visible.has(entry.id)).slice(0, FEED_LENGTH);
+  if (entries.length === 0) {
+    $("feed").replaceChildren(el("span", { class: "mute" }, "none yet"));
+    return;
+  }
+  $("feed").replaceChildren(
+    ...entries.map((entry) =>
+      el("div", { "data-id": entry.id },
+        el("span", { class: "mute" }, new Date(entry.atMs).toLocaleTimeString()), " ",
+        el("b", {}, String(entry.id)), " ",
+        el("code", {}, shown(entry.from)), " → ", el("code", {}, shown(entry.to)))),
+  );
+}
+
+function renderDrawer(rowsById) {
+  $("drawer").hidden = selected === null;
+  if (selected === null) {
+    drawerFor = null;
+    return;
+  }
+  const row = rowsById.get(selected);
+  const head = el("div", { class: "row" }, el("b", {}, `ID ${selected}`));
+  // The note field stays in place across polls, so typing keeps focus; it is refilled only for another ID.
+  const note = $("note");
+  if (drawerFor !== selected) {
+    note.value = notes[selected] ?? "";
+    note.placeholder = `Note for ID ${selected} (browser only, in the export)`;
+    drawerFor = selected;
+  }
+  note.hidden = !row;
+  if (!row) {
+    head.append(el("span", { class: "mute" }, "never seen"), el("span", { class: "grow" }), el("button", { "data-action": "close" }, "×"));
+    $("drawer-info").replaceChildren(head);
+    return;
+  }
+  head.append(
+    row.type ? el("span", { class: "badge", style: `background:${TYPE_COLOURS[row.type]}` }, row.type) : null,
+    row.registered ? el("span", { class: "badge", title: "registered: polled by the hub" }, "registered") : null,
+    row.stale ? el("span", { class: "badge" }, "stale: browser copy only") : null,
+    el("span", { class: "grow" }),
+    el("button", { "data-action": "mute" }, mutes.has(selected) ? "Unmute in feed" : "Mute in feed"),
+    el("button", { "data-action": "close" }, "×"),
+  );
+  const value = el("div", { class: "value" }, el("code", {}, shown(row.raw)));
+  if (isPadded(row.raw)) {
+    value.append(el("span", { class: "mute", title: `padded on the wire: "${row.raw}"` }, " ␣ padded"));
+  }
+  const fact = (label, ...value) => el("tr", {}, el("td", { class: "mute" }, label), el("td", {}, ...value));
+  const facts = el("table", {},
+    fact("Query status",
+      el("span", { class: `s-${row.status}` }, row.status), row.statusAtMs === null ? "" : ` · ${formatWall(row.statusAtMs)}`),
+    fact("Changes", String(row.changeCount)),
+    fact("Last change", formatWall(row.changedAtMs)),
+    fact("First / last seen", `${formatWall(row.firstSeenMs)} / ${formatWall(row.lastSeenMs)}`),
+    fact("Command id", String(row.cmd ?? "—")),
+  );
+  const history = row.history.length === 0
+    ? [el("div", { class: "mute" }, "no history")]
+    : row.history.map((entry, i) =>
+      el("div", {}, el("span", { class: "mute" }, formatWall(entry.atMs)), " ", el("code", {}, shown(entry.raw)),
+        i === 0 ? el("span", { class: "mute" }, " ← current") : null));
+  $("drawer-info").replaceChildren(head, value, facts, el("b", {}, "History"), ...history);
+}
+
+function render() {
+  const rows = rowsOf(copy, notes);
+  const rowsById = new Map(rows.map((row) => [row.id, row]));
+  const now = Date.now();
+  const visible = new Set(rows.filter((row) => matchesFilter(row, filter, now)).map((row) => row.id));
+  renderHeader();
+  renderScan();
+  renderGrid(rowsById, visible);
+  renderFeed(visible);
+  renderDrawer(rowsById);
+}
+
+/** Renders from a poll or at page open: a rendering bug is logged, not mistaken for the device being offline. */
+function renderLogged() {
+  try {
+    render();
+  } catch (error) {
+    console.error("render failed", error);
+  }
+}
+
+function download(name, text, type) {
+  const link = el("a", { href: URL.createObjectURL(new Blob([text], { type })), download: name });
+  // Safari can cancel a download from a detached link, or one whose URL is revoked right after the click.
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 0);
+}
+
+// ───── events ─────
+function select(id) {
+  selected = selected === id ? null : id;
+  render();
+}
+
+$("grid").addEventListener("click", (event) => {
+  const cell = event.target.closest(".cell");
+  if (cell) {
+    select(Number(cell.dataset.id));
+  }
+});
+$("feed").addEventListener("click", (event) => {
+  const entry = event.target.closest("[data-id]");
+  if (entry) {
+    selected = Number(entry.dataset.id);
+    render();
+  }
+});
+$("drawer").addEventListener("click", (event) => {
+  const action = event.target.dataset.action;
+  if (action === "close") {
+    selected = null;
+  } else if (action === "mute") {
+    if (mutes.has(selected)) {
+      mutes.delete(selected);
+    } else {
+      mutes.add(selected);
+    }
+    save();
+  } else {
+    return;
+  }
+  render();
+});
+$("drawer").addEventListener("input", (event) => {
+  if (event.target.id !== "note") {
+    return;
+  }
+  const text = event.target.value;
+  if (text) {
+    notes[selected] = text;
+  } else {
+    delete notes[selected];
+  }
+  save();
+  // The note field is not rebuilt by render, so it keeps focus; the ✎ marker and note search update now.
+  render();
+});
+$("f-query").addEventListener("input", (event) => {
+  filter.query = event.target.value;
+  render();
+});
+$("f-hide-reg").addEventListener("change", (event) => {
+  filter.hideRegistered = event.target.checked;
+  render();
+});
+$("f-changed").addEventListener("change", (event) => {
+  filter.changedWithinMs = Number(event.target.value);
+  render();
+});
+$("colour-by").addEventListener("change", (event) => {
+  colourBy = event.target.value;
+  render();
+});
+$("scan-toggle").addEventListener("click", toggleScan);
+$("export-json").addEventListener("click", () =>
+  download("sec_touch_sniffer.json", exportJson(copy, notes, Date.now()), "application/json"));
+$("export-csv").addEventListener("click", () =>
+  download("sec_touch_sniffer.csv", exportCsv(copy, notes), "text/csv"));
+
+buildStatic();
+const storedMac = lastMac();
+if (storedMac !== null) {
+  // Shows (and exports) the stored copy even when the device is offline at page open.
+  load(storedMac);
+  renderLogged();
+}
+poller.start();
+</script>
+</body>
+</html>

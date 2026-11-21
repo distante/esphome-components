@@ -78,7 +78,7 @@ Every change lands with tests in one of five layers:
 - **Host component**: the real component and real ESPHome core, compiled for the `host` platform. Reach for it only for whole-component behaviour no seam can hold: bytes in through a fake UART, `loop()`, bytes and callbacks out. Fake only the bus; everything else is the real ESPHome build. Suites live in `tests/host/<component>/`.
 - **YAML config**: fixtures in `tests/config/valid/` or `tests/config/invalid/`. Each invalid fixture carries a `# expect-error: <text>` line. A valid fixture's name starts with its component's folder name (`sec_touch_sniffer_with_time.yaml`).
 - **Config compile**: every valid fixture is also built with `esphome compile` (opt-in `--compile`). Use it for include and `AUTO_LOAD` bugs: add a valid fixture that leaves out the component the C++ wrongly needs. It also fails on compiler warnings from `components/`, so every valid fixture keeps `logger: level: VERY_VERBOSE`.
-- **Page JS**: DOM-free ES modules in `components/<component>/web/`, imported by the page, with `*.test.mjs` beside them.
+- **Page JS**: DOM-free ES modules in `components/<component>/web/`, imported by the page, with `*.test.mjs` beside them. The build inlines every module into the page's one module script (`components/sec_touch_sniffer/page_bundle.py`), so only `import { a, b } from "./x.mjs";` (no `as`) and `export function` / `async function` / `const` / `let` / `class` work, and a top-level name must be unique across the page and all its modules. The rendering glue in the page itself has no tests; keep logic out of it. To preview the page without flashing, see [readme.md](../../../readme.md#tests).
 
 **TDD with teeth.** Every change follows it:
 

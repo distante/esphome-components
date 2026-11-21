@@ -49,6 +49,15 @@ The compile layer builds every valid fixture, because `esphome config` never com
 
 The compile layer also fails on any compiler warning from `components/`. Each run starts with `esphome clean`, because an incremental build prints no warnings for files it skips. Every valid fixture sets `logger: level: VERY_VERBOSE`; without it, ESPHome compiles out every `ESP_LOG*` call and `-Wformat` never fires. The test checks that each fixture keeps it.
 
+The sniffer page (`components/sec_touch_sniffer/web/`) can be previewed without flashing. Bundle it into one file the way the build does, serve it locally, and point it at a device with `?device=`:
+
+```sh
+python -c "import sys; sys.path.insert(0, 'components/sec_touch_sniffer'); from page_bundle import bundle_page; open('sniffer.html', 'w').write(bundle_page())"
+python -m http.server 8000   # then open http://localhost:8000/sniffer.html?device=http://<device-ip>
+```
+
+The device's `/sniffer/data` sends `Access-Control-Allow-Origin: *`, so a desktop browser works once it grants local-network access. Headless Chrome stays offline against a LAN device, so screenshots need a small local proxy that serves the page and forwards `/sniffer/*` to the device on the same origin.
+
 ## Coding standards
 
 All coding standards (C++ style, memory, tests, TDD With teeth, checklists) live in [.claude/skills/coding-standards/SKILL.md](.claude/skills/coding-standards/SKILL.md).

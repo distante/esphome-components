@@ -1,0 +1,47 @@
+# The sniffer page next to web_server with auth: web_server loads web_server_base, and the /sniffer handler,
+# added with add_handler(), inherits its auth. The wifi credentials are placeholders: the build never connects.
+
+esphome:
+  name: sec-touch-sniffer-web-server
+
+esp32:
+  board: esp32dev
+
+logger:
+  # Compiles every ESP_LOG* call, so the compile test sees -Wformat warnings.
+  level: VERY_VERBOSE
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch, sec_touch_sniffer]
+
+wifi:
+  ssid: "fixture"
+  password: "fixture-password"
+
+web_server:
+  auth:
+    username: fixture
+    password: fixture-password
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  id: sec_touch_component
+  uart_id: sec_touch_uart
+
+text_sensor:
+  - platform: sec_touch_sniffer
+    sec_touch_id: sec_touch_component
+    name: "Sniffer"
+    scan_start: 1
+    scan_end: 208
+    scan_switch:
+      name: "Sniffer Scan"
+    web_page: true

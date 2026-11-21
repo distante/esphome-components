@@ -20,6 +20,7 @@ using esphome::sec_touch::MAX_PROPERTY_ID;
 using esphome::sec_touch::next_record_in_delta;
 using esphome::sec_touch::PropertyStore;
 using esphome::sec_touch::RecordSnapshot;
+using esphome::sec_touch::scan_reply;
 using esphome::sec_touch::scan_state;
 using esphome::sec_touch::ScanOutcome;
 using esphome::sec_touch::ScanState;
@@ -269,6 +270,39 @@ TEST(SnifferData, AStoppedScanResumesAtItsNextId) {
 TEST(SnifferData, ACompletedScanIsDoneAndRestartsAtFrom) {
   EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, scan_state(1, 255, 256, false)); }),
             R"({"active":false,"from":1,"to":255,"next":1,"done":true})");
+}
+
+// The sniffer moves past an ID when it queues the query, so while the last ID's query is in flight the scan is at
+// scan_end + 1 and still running.
+TEST(SnifferData, WhileTheLastIdIsQueriedTheScanIsNotDone) {
+  EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, scan_state(1, 208, 209, true)); }),
+            R"({"active":true,"from":1,"to":208,"next":208,"done":false})");
+}
+
+TEST(SnifferData, ARunStoppedAfterQueueingTheLastIdIsDone) {
+  EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, scan_state(1, 208, 209, false)); }),
+            R"({"active":false,"from":1,"to":208,"next":1,"done":true})");
+}
+
+TEST(SnifferData, AScanStartedAgainAfterARunIsNotDone) {
+  EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, scan_state(1, 208, 1, true)); }),
+            R"({"active":true,"from":1,"to":208,"next":1,"done":false})");
+}
+
+// --- Scan start and stop replies ---
+
+TEST(SnifferData, AStartReplyIsActiveBeforeTheLoopStartsTheScan) {
+  EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, scan_reply(scan_state(1, 208, 42, false), true)); }),
+            R"({"active":true,"from":1,"to":208,"next":42,"done":false})");
+}
+
+TEST(SnifferData, AStopReplyIsInactiveBeforeTheLoopStopsTheScan) {
+  EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, scan_reply(scan_state(1, 208, 42, true), false)); }),
+            R"({"active":false,"from":1,"to":208,"next":42,"done":false})");
+}
+
+TEST(SnifferData, WithoutAScanRangeAReplyIsNull) {
+  EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, scan_reply(NO_SCAN, true)); }), "null");
 }
 
 // --- Data response ---

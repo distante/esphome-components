@@ -1,6 +1,7 @@
 #include "sec_touch_sniffer.h"
 #include "esphome/core/log.h"
 #include "esphome/core/hal.h"
+#include "json_chunk_writer.h"
 #include "sniffer_state.h"
 
 #ifdef USE_SEC_TOUCH_SNIFFER_WEB_PAGE
@@ -11,8 +12,6 @@ namespace esphome {
 namespace sec_touch {
 
 const char *const SecTouchSniffer::TAG = "sec_touch_sniffer";
-
-static constexpr uint32_t MS_PER_S = 1000;
 
 /// Device uptime in seconds. From the 64-bit millis_64(): 32-bit millis() wraps after 49.7 days, seconds after 136
 /// years.
@@ -228,9 +227,8 @@ void SecTouchSniffer::on_message_(int command_id, int property_id, const std::st
 #ifdef USE_SEC_TOUCH_SNIFFER_WEB_PAGE
 
 /// Until the page lands (issue #35).
-static constexpr char PLACEHOLDER_PAGE[] =
-    "<!doctype html><meta charset=utf-8><title>SEC-Touch sniffer</title>"
-    "<p>The sniffer page is not built yet. Its data is at <a href=/sniffer/data>/sniffer/data</a>.";
+static constexpr char PLACEHOLDER_PAGE[] = "<!doctype html><meta charset=utf-8><title>SEC-Touch sniffer</title>"
+                                           "<p>The sniffer page is not built yet.";
 
 static SnifferRoute route_of(AsyncWebServerRequest *request) {
   SnifferMethod method = SnifferMethod::METHOD_OTHER;
@@ -279,6 +277,7 @@ bool SecTouchSniffer::send_chunk_(void *request, const char *data, size_t len) {
 void SecTouchSniffer::begin_json_response_(httpd_req_t *req) {
   httpd_resp_set_status(req, HTTPD_200);
   httpd_resp_set_type(req, "application/json");
+  // Mirrors web_server_base's DefaultHeaders, which the raw response bypasses; its guard enforces allowed_origins.
   httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
   httpd_resp_set_hdr(req, "Cache-Control", "no-store");
   this->json_.begin(req);
@@ -313,13 +312,8 @@ void SecTouchSniffer::serve_data_(httpd_req_t *req) {
 
 void SecTouchSniffer::serve_scan_(httpd_req_t *req, bool start) {
   this->request_scan(start);
-  ScanState scan = this->scan_state_();
-  if (scan.available) {
-    // The reply reflects the request; loop() applies it.
-    scan.active = start;
-  }
   this->begin_json_response_(req);
-  write_scan_json(this->json_, scan);
+  write_scan_json(this->json_, scan_reply(this->scan_state_(), start));
   this->end_json_response_(req);
 }
 

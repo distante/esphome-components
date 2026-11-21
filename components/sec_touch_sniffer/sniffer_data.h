@@ -150,24 +150,37 @@ struct ScanState {
   bool active;
   int from;
   int to;
-  /// The ID the scan queries next, or resumes at after a stop.
+  /// The ID the scan queries next, or resumes at after a stop. While the last ID's query finishes a run, that ID.
   int next;
-  /// The last run covered the whole range; the next start begins again at `from`.
+  /// The last run covered the whole range and the scan is idle; the next start begins again at `from`.
   bool done;
 };
 
-/// The scan state from the sniffer's scan fields. `current_id` is the ID it queries next, 0 before the first scan.
+/// The scan state from the sniffer's scan fields. `current_id` is the first ID not queued yet, 0 before the first
+/// scan. The sniffer moves past an ID when it queues the query, so a running scan reaches scan_end + 1 while the last
+/// query is still in flight.
 inline ScanState scan_state(int scan_start, int scan_end, int current_id, bool scanning) {
-  const bool done = current_id > scan_end;
-  const bool fresh = current_id == 0 || done;
+  const bool past_end = current_id > scan_end;
+  int next = current_id;
+  if (scanning && past_end) {
+    next = scan_end;
+  } else if (!scanning && (current_id == 0 || past_end)) {
+    next = scan_start;
+  }
   return ScanState{
       .available = scan_end > 0,
       .active = scanning,
       .from = scan_start,
       .to = scan_end,
-      .next = fresh ? scan_start : current_id,
-      .done = done,
+      .next = next,
+      .done = !scanning && past_end,
   };
+}
+
+/// The scan object a start or stop replies with: the requested state, which loop() applies afterwards.
+inline ScanState scan_reply(ScanState scan, bool start) {
+  scan.active = start;
+  return scan;
 }
 
 /// Writes the scan object, or `null` when no scan range is configured.

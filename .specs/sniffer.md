@@ -220,7 +220,7 @@ Decided in [What is the contract between the device and the page?](https://githu
 - `reg` is read from the hub when served.
 - `dropped` counts messages for IDs above 255.
 - `scan` is `null` without a scan range.
-- `scan.next` is the ID the scan queries next, or resumes at after a stop; `from` before the first run and after a completed one. `scan.done` is true once a run covered the whole range, until the next start. They drive the progress labels.
+- `scan.next` is the ID the scan queries next, or resumes at after a stop; `to` while the last query of a run is in flight; `from` before the first run and after a completed one. `scan.done` is true only while idle after a run covered the whole range, until the next start. They drive the progress labels.
 - `since` missing or not a valid u32 counts as `0`, a full response.
 - Responses carry `Cache-Control: no-store`.
 

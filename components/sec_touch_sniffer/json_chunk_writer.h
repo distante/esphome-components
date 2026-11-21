@@ -9,6 +9,9 @@
 namespace esphome {
 namespace sec_touch {
 
+/// Uptime is stored in seconds and sent to the page in milliseconds.
+constexpr uint32_t MS_PER_S = 1000;
+
 /// Bytes of JSON buffered before each send.
 constexpr size_t JSON_CHUNK_BYTES = 256;
 
@@ -84,8 +87,6 @@ class JsonChunkWriter {
   bool ok() const { return this->ok_; }
 
  protected:
-  static constexpr uint64_t MS_PER_S = 1000;
-
   void put_(char c) {
     if (this->len_ == JSON_CHUNK_BYTES) {
       this->flush();

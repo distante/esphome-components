@@ -39,3 +39,7 @@ _Avoid_: New ID, unmapped ID
 **Sniffer goal**:
 What a sniffing session is for. It picks both which properties a scan queries and which ones the page shows. **Discover** (the default) targets unknown properties, to find new controls. **Check** targets known properties, so a user can confirm their panel sends what the component expects.
 _Avoid_: Mode (passive and scan are modes), preset, filter
+
+**Mark**:
+A snapshot of every raw value the page takes on request, so that after a setting is changed on the panel and the scan runs again, the page can show only the properties whose value differs from the snapshot. Browser only; the device knows nothing of it.
+_Avoid_: Baseline, checkpoint, bookmark

@@ -352,7 +352,7 @@ Two modes are available:
 - **Passive** (always on): unknown IDs that arrive during normal polling are captured automatically.
 - **Active scan** (optional): iterates through a configured range of property IDs, querying each one in turn. Normal polling is paused while scanning.
 
-Results are published as a text sensor and visible in Home Assistant: `id=raw` pairs such as `1=11.11.26, 3=SWZ0021E21H, 5=0100`, for the IDs no component has registered. Registered IDs (fan levels and labels) are recorded but left out of the text sensor. The state is capped at 2048 bytes; a cut state ends with `, …+N more`. A message that repeats the same value does not republish it, and during an active scan the sensor is published once, when the scan ends or is stopped. An optional switch reflects whether a scan is currently running and can be toggled from Home Assistant.
+Results are published as a text sensor and visible in Home Assistant: `id=raw` pairs such as `1=11.11.26, 3=SWZ0021E21H, 5=0100`, for the IDs no component has registered. Registered IDs (fan levels and labels) are recorded but left out of the text sensor. The state is capped at 2048 bytes; a cut state ends with `, …+N more`. A message that repeats the same value does not republish it, and during an active scan the sensor is published once, when the scan ends or is stopped. An optional switch reflects whether a scan is currently running and can be toggled from Home Assistant. An optional web page (`web_page: true`) shows every captured ID, registered ones included; see [Sniffer page](#sniffer-page).
 
 > **Note:** The sniffer runs on ESP32 only. It reserves its memory once at boot: about 25 KB of heap, about 27 KB with `web_page: true`, as measured on a real controller. Nothing is allocated per discovered ID, so a scan does not grow it. To compare heap sensors before and after enabling the sniffer, take both readings a few minutes after boot: the minimum free heap drops by 13–16 KB within the first minute whether the sniffer runs or not.
 
@@ -418,7 +418,7 @@ These changes break existing sniffer configs or automations that read its text s
 
 ### What I have found so far
 
-Scan performed over IDs 1–208 with an earlier version of the sniffer, which left registered listeners out of its output. The IDs registered at the time (78–82, 173–175 and 177) are therefore missing below; their meaning is already documented above.
+Scan performed over IDs 1–208. The text sensor leaves registered listeners out, so the IDs registered at the time (78–82, 173–175 and 177) are missing below; their meaning is already documented above.
 
 **If you recognize a pattern or know what an ID controls, please open a PR or issue.**
 

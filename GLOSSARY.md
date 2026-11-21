@@ -23,3 +23,19 @@ _Avoid_: Update
 **Query status**:
 The outcome of the sniffer's latest scan query for a property: unqueried, ok, nak or timeout.
 _Avoid_: Unresponsive, state
+
+**Known property**:
+A property the SEC-Touch component can turn into a control, whether or not this configuration uses it. The set is fixed by the component, not by the user.
+_Avoid_: Supported ID, mapped ID
+
+**Registered property**:
+A known property that an entity in this configuration actually uses. Every registered property is known; a known property may be unregistered.
+_Avoid_: Configured ID, used ID
+
+**Unknown property**:
+A property that is not known: the target of reverse-engineering.
+_Avoid_: New ID, unmapped ID
+
+**Sniffer goal**:
+What a sniffing session is for. It picks both which properties a scan queries and which ones the page shows. **Discover** (the default) targets unknown properties, to find new controls. **Check** targets known properties, so a user can confirm their panel sends what the component expects.
+_Avoid_: Mode (passive and scan are modes), preset, filter

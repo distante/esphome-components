@@ -1,0 +1,373 @@
+<!doctype html>
+<!--
+  PROTOTYPE, throwaway (wayfinder ticket #69). Never merged.
+  Question: how does the sniffer page look in check, where does the goal switch sit, and does a "mark" help discover?
+  Three variants of the check layout + goal switch placement, switch with ?variant=A|B|C or the bottom bar.
+  Discover (with the mark) is the same in all three. Fake data, no device.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sniffer goals prototype</title>
+<style>
+  :root { --bg:#fafafa; --fg:#1d1d1f; --mute:#6e6e73; --line:#ddd; --acc:#0a66c2; --bad:#c0392b; --ok:#1e8449; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:13px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--fg); padding:0 12px 80px; }
+  h1 { font-size:15px; margin:10px 0; }
+  button, input, select { font:inherit; }
+  button { padding:3px 9px; cursor:pointer; }
+  code { font-family:ui-monospace, Menlo, monospace; }
+  .mute { color:var(--mute); }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0; }
+  .grow { flex:1; }
+  .badge { display:inline-block; padding:0 5px; border-radius:3px; font-size:11px; border:1px solid var(--line); background:#fff; }
+  .bar { height:8px; background:#e5e5e5; border-radius:4px; overflow:hidden; min-width:120px; }
+  .bar > i { display:block; height:100%; background:var(--acc); }
+  #main { display:flex; gap:12px; align-items:flex-start; }
+  .grid { flex:1; display:grid; grid-template-columns:repeat(16, 1fr); grid-template-rows:repeat(16, 1fr); gap:2px; height:calc(100vh - 200px); min-height:420px; }
+  .cell { font-size:10px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    overflow:hidden; cursor:pointer; background:#f7f7f7; border:1px solid #e2e2e2; }
+  .cell code { font-size:10px; max-width:100%; overflow:hidden; white-space:nowrap; }
+  .cell.unseen { background:#fff; border:1px dashed #bbb; }
+  .cell.gone { background:transparent; border:none; cursor:default; }
+  .cell.dim { opacity:.3; }
+  .cell.marked { box-shadow:inset 0 0 0 3px #e67e22; }
+  .cell.reg { border:2px solid #333; }
+  .cell.bad { background:#f8d7d3; }
+  .cell.cursor { outline:3px solid var(--acc); }
+  .cell.sel { outline:2px solid red; }
+  #side { width:380px; flex:none; max-height:calc(100vh - 200px); overflow:auto; }
+  .box { background:#fff; border:1px solid var(--line); padding:8px; margin-bottom:10px; }
+  .feed div { cursor:pointer; border-bottom:1px solid var(--line); padding:2px 0; }
+  .unexp { color:var(--bad); font-weight:600; }
+  table.ctl { border-collapse:collapse; background:#fff; }
+  table.ctl td, table.ctl th { border:1px solid var(--line); padding:4px 8px; text-align:left; }
+  table.ctl th { background:#f0f0f0; }
+  table.ctl tr.grp td { background:#f7f7f7; font-weight:600; }
+  table.ctl tr:hover td { background:#eef5fc; cursor:pointer; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:10px; flex:1; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:6px; padding:10px; }
+  .card h3 { margin:0 0 6px; font-size:14px; }
+  .card .big { font-size:18px; }
+  .tabs button { border:1px solid var(--line); background:#fff; }
+  .tabs button.on { background:var(--acc); color:#fff; border-color:var(--acc); }
+  .seg { display:inline-flex; border:1px solid var(--acc); border-radius:4px; overflow:hidden; }
+  .seg button { border:none; background:#fff; color:var(--acc); }
+  .seg button.on { background:var(--acc); color:#fff; }
+  .bigtabs { display:flex; gap:0; margin:8px 0; border-bottom:2px solid var(--line); }
+  .bigtabs button { border:none; background:none; padding:8px 16px; font-size:14px; border-bottom:3px solid transparent; margin-bottom:-2px; }
+  .bigtabs button.on { border-bottom-color:var(--acc); font-weight:600; }
+  .bigtabs small { display:block; font-weight:400; color:var(--mute); font-size:11px; }
+  #proto { position:fixed; bottom:12px; left:50%; transform:translateX(-50%); background:#222; color:#fff; border-radius:20px;
+    padding:6px 12px; display:flex; gap:10px; align-items:center; box-shadow:0 4px 16px rgba(0,0,0,.3); z-index:9; }
+  #proto button { background:#444; color:#fff; border:none; border-radius:10px; }
+  #state { position:fixed; bottom:60px; right:12px; background:#222; color:#cfc; font:11px ui-monospace, monospace;
+    padding:6px 8px; border-radius:6px; max-width:260px; white-space:pre-wrap; opacity:.85; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="state"></div>
+<div id="proto">
+  <button id="prev">◀</button><b id="vlabel"></b><button id="next">▶</button>
+  <span>|</span>
+  <button id="sim" title="Pretend someone changed settings on the panel">⚙ simulate panel change</button>
+</div>
+<script>
+// ───── fake data ─────
+const LEVEL_NAMES = { 0: "off", 1: "level 1", 2: "level 2", 3: "level 3", 4: "level 4", 5: "level 5", 6: "level 6",
+  7: "burst", 8: "auto humidity", 9: "auto CO2", 10: "auto time", 11: "sleep", 255: "not connected" };
+const LABELS = ["-", "Bereich 1", "Bereich 2", "Bereich 3", "Bereich 4", "Bereich 5", "Bereich 6", "Wohnzimmer", "Küche", "Bad", "Schlafzimmer"];
+const LEVEL_IDS = [173, 174, 175, 176, 177, 178];
+const LABEL_IDS = [78, 79, 80, 81, 82, 83];
+const KNOWN = new Map();
+LEVEL_IDS.forEach((id, i) => KNOWN.set(id, { control: `Fan ${i + 1}`, what: "level",
+  meaning: (raw) => LEVEL_NAMES[Number(raw)] ?? null }));
+LABEL_IDS.forEach((id, i) => KNOWN.set(id, { control: `Fan ${i + 1}`, what: "label",
+  meaning: (raw) => LABELS[Number(raw)] ?? null }));
+KNOWN.set(48, { control: "Global", what: "summer ventilation", meaning: (r) => ({ "0A00": "on", "0800": "off" })[r.trim()] ?? null });
+KNOWN.set(1, { control: "Global", what: "date", meaning: (r) => /^\d\d\.\d\d\.\d\d$/.test(r) ? r : null });
+KNOWN.set(2, { control: "Global", what: "time", meaning: (r) => /^\d\d:\d\d(:\d\d)?$/.test(r) ? r : null });
+const REGISTERED = new Set([173, 174, 175, 78, 79, 80, 48]);
+
+const records = new Map(); // id -> { raw, changedAt }
+const feed = []; // { at, id, from, to }
+function put(id, raw, quiet) {
+  const old = records.get(id);
+  if (old && old.raw === raw) return;
+  if (old && !quiet) feed.unshift({ at: Date.now(), id, from: old.raw, to: raw });
+  records.set(id, { raw, changedAt: Date.now() });
+}
+// unknown properties
+const seed = { 3: "12", 4: "0", 5: "01", 7: "21.5", 9: "0100", 12: "00.00.00", 20: "1", 21: "1", 22: "0", 30: "45",
+  31: "60", 40: "3", 41: "7", 50: "0A10", 60: "-", 61: "-", 70: "2", 90: "18", 91: "22", 100: "0", 101: "1", 120: "3",
+  121: "30", 140: "5", 150: "ABC", 160: "07:30", 161: "22:00", 200: "0", 201: "15", 210: "1", 230: "0800", 250: "9" };
+for (const [id, raw] of Object.entries(seed)) put(Number(id), raw, true);
+// known properties (fan 6 not connected, fan 5 label garbled to show "unexpected")
+[3, 2, 0, 1, 7, 255].forEach((l, i) => put(LEVEL_IDS[i], String(l), true));
+[7, 8, 9, 10, "ZZ", 0].forEach((l, i) => put(LABEL_IDS[i], String(l), true));
+put(48, "0A00", true); put(1, "21.11.26", true);
+const clock = () => new Date().toTimeString().slice(0, 8);
+put(2, clock(), true);
+const unseenIds = new Set([...Array(256).keys()].filter((id) => !records.has(id) && id % 3 === 0 && id > 130));
+
+// ───── page state ─────
+const ui = { goal: "discover", selected: null, mark: null, sinceMark: false, query: "", changedWithin: 0,
+  scanning: false, scanNext: 0, colourBy: "type", types: new Set(["int", "padded int", "decimal", "date", "time", "hex", "text or hex", "text", "empty"]), statuses: new Set(["ok", "nak", "timeout", "unqueried"]) };
+let variant = new URLSearchParams(location.search).get("variant") ?? "C";
+const VARIANTS = { A: "Map, goal tabs by title", B: "Control table, goal beside scan", C: "Panel cards, big goal tabs" };
+
+const isKnown = (id) => KNOWN.has(id);
+const meaningOf = (id) => {
+  const r = records.get(id);
+  if (!r) return { text: "never seen", bad: false };
+  const m = KNOWN.get(id).meaning(r.raw);
+  return m === null ? { text: `unexpected value "${r.raw}"`, bad: true } : { text: m, bad: false };
+};
+function changedSinceMark(id) {
+  if (!ui.mark) return false;
+  const r = records.get(id);
+  return (ui.mark.get(id)?.raw ?? null) !== (r?.raw ?? null);
+}
+const TYPE_COLOURS = { int: "#9cc3ea", "padded int": "#6fa3d8", decimal: "#8fd4ae", date: "#f0b48a", time: "#c9a2e6",
+  hex: "#f39ac2", "text or hex": "#f2c4d8", text: "#bbb", empty: "#fff" };
+const STATUS_COLOURS = { ok: "#8fd4ae", nak: "#e88b80", timeout: "#f5cf74", unqueried: "#c9d3df" };
+// Rough single-value guess; the real page uses type_guess.mjs over the history.
+function typeOf(id) {
+  const v = (records.get(id)?.raw ?? "").trim();
+  if (v === "" || /^-+$/.test(v)) return "empty";
+  if (/^\d\d\.\d\d\.\d\d$/.test(v)) return "date";
+  if (/^\d\d:\d\d(:\d\d)?$/.test(v)) return "time";
+  if (/^-?\d+\.\d+$/.test(v)) return "decimal";
+  if (/^0\d+$/.test(v)) return "padded int";
+  if (/^-?\d+$/.test(v)) return "int";
+  if (/^[0-9A-F]+$/.test(v)) return "text or hex";
+  return "text";
+}
+const statusOf = (id) => records.has(id) ? "ok" : unseenIds.has(id) ? (id % 2 ? "nak" : "timeout") : "unqueried";
+function visibleDiscover(id) {
+  const r = records.get(id);
+  if (r && !ui.types.has(typeOf(id))) return false;
+  if (!ui.statuses.has(statusOf(id))) return false;
+  if (ui.sinceMark && !changedSinceMark(id)) return false;
+  if (ui.changedWithin && (!r || Date.now() - r.changedAt > ui.changedWithin)) return false;
+  if (ui.query && !(String(id).includes(ui.query) || (r?.raw ?? "").includes(ui.query))) return false;
+  return true;
+}
+
+// ───── tiny DOM helper ─────
+function el(tag, attrs = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k.startsWith("on")) n.addEventListener(k.slice(2), v); else if (v !== false && v != null) n.setAttribute(k, v === true ? "" : v);
+  }
+  n.append(...kids.flat().filter((k) => k != null && k !== false));
+  return n;
+}
+
+// ───── shared pieces ─────
+function setGoal(goal) {
+  if (goal === ui.goal) return;
+  if (ui.scanning && !confirm(`A ${ui.goal} scan is running. Switching to ${goal} stops it. Switch?`)) return;
+  ui.scanning = false; ui.goal = goal; ui.selected = null; render();
+}
+function header(extra) {
+  return el("div", { class: "row" }, extra?.left, el("h1", {}, "SEC-Touch sniffer · ventilation-controller"),
+    el("span", { class: "badge" }, "live"), el("span", { class: "grow" }),
+    el("button", {}, "Export JSON"), el("button", {}, "Export CSV"));
+}
+function scanRow(extra) {
+  const range = ui.goal === "check" ? `${KNOWN.size} known IDs` : "IDs 0–255 minus known";
+  const label = ui.scanning ? `Scanning ID ${ui.scanNext} · ${range}` : `idle · ${ui.goal} scan queries ${range}`;
+  return el("div", { class: "row" }, extra,
+    el("button", { onclick: () => { ui.scanning = !ui.scanning; render(); } }, ui.scanning ? "■ Stop scan" : `▶ Start ${ui.goal} scan`),
+    el("div", { class: "bar grow" }, el("i", { style: `width:${ui.scanning ? 40 : 0}%` })),
+    el("span", { class: "mute" }, label));
+}
+function goalTabs(cls) {
+  return el("span", { class: cls },
+    ["discover", "check"].map((g) => el("button", { class: ui.goal === g ? "on" : "", onclick: () => setGoal(g) },
+      g === "discover" ? "Discover" : "Check")));
+}
+
+// discover: identical in every variant
+function markControls() {
+  return el("div", { class: "box" }, el("b", {}, "Mark "), el("span", { class: "mute" }, "before/after a panel change"),
+    el("div", { class: "row" }, ui.mark
+    ? [el("label", {}, el("input", { type: "checkbox", checked: ui.sinceMark, onchange: (e) => { ui.sinceMark = e.target.checked; render(); } }),
+        ` only changed since mark (${[...records.keys()].filter((id) => !isKnown(id) && changedSinceMark(id)).length}) `),
+       el("span", { class: "mute" }, `mark set ${new Date(ui.mark.at).toLocaleTimeString()}`),
+       el("button", { onclick: () => { ui.mark = snapshot(); render(); } }, "⟳ Move mark to now"),
+       el("button", { onclick: () => { ui.mark = null; ui.sinceMark = false; render(); } }, "Clear mark")]
+    : [el("button", { onclick: () => { ui.mark = snapshot(); ui.sinceMark = true; render(); }, title: "Remember every value now; then change something on the panel" }, "📍 Set mark")]));
+}
+function discoverFilters() {
+  return el("div", { class: "row" },
+    el("input", { placeholder: "ID, value or note…", value: ui.query, oninput: (e) => { ui.query = e.target.value; render(true); } }),
+    el("select", { onchange: (e) => { ui.changedWithin = Number(e.target.value); render(); } },
+      [[0, "changed any time"], [300000, "changed < 5 min"], [3600000, "changed < 1 h"]].map(([v, t]) =>
+        el("option", { value: v, selected: ui.changedWithin === v }, t))),
+    "colour by", el("select", { onchange: (e) => { ui.colourBy = e.target.value; render(); } },
+      ["type", "status"].map((v) => el("option", { selected: ui.colourBy === v }, v))),
+    el("span", { class: "badge", style: "border:1px dashed #bbb" }, "never seen"),
+    el("span", { class: "badge", style: "box-shadow:inset 0 0 0 2px #e67e22" }, "changed since mark"),
+    el("span", { class: "mute" }, "· no “hide registered”: known IDs are gone"));
+}
+function chipRow(colours, chosen) {
+  return el("span", { class: "row", style: "margin:0" }, Object.entries(colours).map(([key, colour]) =>
+    el("label", { class: "badge", style: `background:${colour}` },
+      el("input", { type: "checkbox", checked: chosen.has(key),
+        onchange: (e) => { if (e.target.checked) chosen.add(key); else chosen.delete(key); render(); } }), key)));
+}
+function snapshot() {
+  const m = new Map([...records].map(([id, r]) => [id, { ...r }])); m.at = Date.now(); return m;
+}
+function discoverMain() {
+  const grid = el("div", { class: "grid" });
+  for (let id = 0; id < 256; id++) {
+    if (isKnown(id)) { grid.append(el("div", { class: "cell gone", title: `${id}: known, see Check` })); continue; }
+    const r = records.get(id);
+    const cls = ["cell", !r && !unseenIds.has(id) ? "unseen" : "", !visibleDiscover(id) ? "dim" : "",
+      changedSinceMark(id) ? "marked" : "", ui.selected === id ? "sel" : "",
+      ui.scanning && ui.scanNext === id ? "cursor" : ""].join(" ");
+    const colour = r ? (ui.colourBy === "type" ? TYPE_COLOURS[typeOf(id)] : STATUS_COLOURS[statusOf(id)])
+      : unseenIds.has(id) ? STATUS_COLOURS[statusOf(id)] : "";
+    grid.append(el("div", { class: cls, style: colour ? `background-color:${colour}` : null, onclick: () => { ui.selected = id; render(); } },
+      el("span", { class: "mute" }, String(id)), r ? el("code", {}, r.raw.slice(0, 10)) : null));
+  }
+  let sideList;
+  if (ui.sinceMark && ui.mark) {
+    const ids = [...new Set([...records.keys(), ...ui.mark.keys()])].filter((id) => !isKnown(id) && changedSinceMark(id));
+    sideList = el("div", {}, el("b", {}, "Changed since mark"), el("span", { class: "mute" }, " (mark value → now)"),
+      el("div", { class: "feed" }, ids.length ? ids.map((id) => el("div", { onclick: () => { ui.selected = id; render(); } },
+        el("b", {}, String(id)), " ", el("code", {}, ui.mark.get(id)?.raw ?? "—"), " → ", el("code", {}, records.get(id)?.raw ?? "—")))
+        : el("span", { class: "mute" }, "nothing yet: change a setting on the panel, then scan again")));
+  } else {
+    const entries = feed.filter((f) => !isKnown(f.id) && visibleDiscover(f.id)).slice(0, 30);
+    sideList = el("div", {}, el("b", {}, "Changes"), el("span", { class: "mute" }, " (newest first)"),
+      el("div", { class: "feed" }, entries.length ? entries.map((f) => el("div", { onclick: () => { ui.selected = f.id; render(); } },
+        el("span", { class: "mute" }, new Date(f.at).toLocaleTimeString()), " ", el("b", {}, String(f.id)), " ",
+        el("code", {}, f.from), " → ", el("code", {}, f.to))) : el("span", { class: "mute" }, "none yet")));
+  }
+  return el("div", { id: "main" }, grid, el("div", { id: "side" }, markControls(), drawer(), sideList));
+}
+function drawer() {
+  if (ui.selected === null) return null;
+  const id = ui.selected, r = records.get(id);
+  const k = KNOWN.get(id);
+  const m = k ? meaningOf(id) : null;
+  return el("div", { class: "box" },
+    el("div", { class: "row" }, el("b", {}, `ID ${id}`), k ? el("span", { class: "badge" }, `${k.control} ${k.what}`) : null,
+      REGISTERED.has(id) ? el("span", { class: "badge" }, "registered") : null, el("span", { class: "grow" }),
+      el("button", { onclick: () => { ui.selected = null; render(); } }, "×")),
+    el("div", { style: "font-size:20px" }, el("code", {}, r?.raw ?? "—")),
+    m ? el("div", { class: m.bad ? "unexp" : "" }, "expected meaning: ", m.text) : null,
+    ui.mark && !k ? el("div", { class: "mute" }, "at mark: ", el("code", {}, ui.mark.get(id)?.raw ?? "—")) : null,
+    el("div", { class: "mute" }, "…history, status, note as today"));
+}
+
+// ───── check variants ─────
+function checkGridA() {
+  const grid = el("div", { class: "grid" });
+  for (let id = 0; id < 256; id++) {
+    if (!isKnown(id)) { grid.append(el("div", { class: "cell gone" })); continue; }
+    const m = meaningOf(id);
+    grid.append(el("div", { class: `cell ${REGISTERED.has(id) ? "reg" : ""} ${m.bad ? "bad" : ""} ${ui.selected === id ? "sel" : ""}`,
+      onclick: () => { ui.selected = id; render(); }, title: m.text },
+      el("span", { class: "mute" }, String(id)), el("code", {}, records.get(id)?.raw.slice(0, 6) ?? ""),
+      el("span", { style: "font-size:9px" }, m.bad ? "⚠" : m.text.slice(0, 8))));
+  }
+  return grid;
+}
+function checkFeed() {
+  const entries = feed.filter((f) => isKnown(f.id) && f.id !== 2).slice(0, 20);
+  return el("div", {}, el("b", {}, "Changes"), el("span", { class: "mute" }, " (known IDs, newest first)"),
+    el("div", { class: "feed" }, entries.length ? entries.map((f) => el("div", {},
+      el("span", { class: "mute" }, new Date(f.at).toLocaleTimeString()), " ", el("b", {}, String(f.id)), " ",
+      el("code", {}, f.from), " → ", el("code", {}, f.to), " ", el("span", { class: "mute" }, meaningOf(f.id).text)))
+      : el("span", { class: "mute" }, "none yet")));
+}
+function cellTd(id) {
+  const m = meaningOf(id);
+  return [el("td", { class: "mute" }, String(id), REGISTERED.has(id) ? " ●" : ""), el("td", {}, el("code", {}, records.get(id)?.raw ?? "—")),
+    el("td", { class: m.bad ? "unexp" : "" }, m.text)];
+}
+function checkTableB() {
+  const rows = [el("tr", {}, el("th", {}, "Control"), el("th", {}, "ID"), el("th", {}, "raw"), el("th", {}, "meaning"),
+    el("th", {}, "ID"), el("th", {}, "raw"), el("th", {}, "meaning"))];
+  rows.push(el("tr", { class: "grp" }, el("td", { colspan: 7 }, "Fans: level · label")));
+  LEVEL_IDS.forEach((lid, i) => rows.push(el("tr", { onclick: () => { ui.selected = lid; render(); } },
+    el("td", {}, `Fan ${i + 1}`), ...cellTd(lid), ...cellTd(LABEL_IDS[i]))));
+  rows.push(el("tr", { class: "grp" }, el("td", { colspan: 7 }, "Global")));
+  for (const id of [48, 1, 2]) rows.push(el("tr", { onclick: () => { ui.selected = id; render(); } },
+    el("td", {}, KNOWN.get(id).what), ...cellTd(id), el("td", { colspan: 3 })));
+  return el("div", { class: "grow" }, el("table", { class: "ctl" }, rows),
+    el("div", { class: "mute" }, "● registered (used by this YAML)"));
+}
+function checkCardsC() {
+  const cards = LEVEL_IDS.map((lid, i) => {
+    const lv = meaningOf(lid), lb = meaningOf(LABEL_IDS[i]);
+    return el("div", { class: "card" }, el("h3", {}, `Fan ${i + 1}`, REGISTERED.has(lid) ? el("span", { class: "badge", style: "margin-left:6px" }, "registered") : null),
+      el("div", { class: `big ${lv.bad ? "unexp" : ""}` }, lv.text),
+      el("div", { class: "mute" }, `${lid} = `, el("code", {}, records.get(lid)?.raw ?? "—")),
+      el("div", { class: lb.bad ? "unexp" : "", style: "margin-top:6px" }, "label: ", lb.text),
+      el("div", { class: "mute" }, `${LABEL_IDS[i]} = `, el("code", {}, records.get(LABEL_IDS[i])?.raw ?? "—")));
+  });
+  cards.push(el("div", { class: "card" }, el("h3", {}, "Global"),
+    [48, 1, 2].map((id) => { const m = meaningOf(id); return el("div", {}, `${KNOWN.get(id).what}: `,
+      el("span", { class: m.bad ? "unexp" : "" }, m.text), el("span", { class: "mute" }, ` (${id} = `, el("code", {}, records.get(id)?.raw ?? "—"), ")")); })));
+  return el("div", { class: "cards" }, cards);
+}
+function checkFilters() {
+  return el("div", { class: "row mute" }, "Check has no filters: 15 IDs fit on screen. Unexpected values are red.");
+}
+
+// ───── variants ─────
+function render() {
+  const app = document.getElementById("app");
+  const focus = document.activeElement?.tagName === "INPUT" && document.activeElement.type !== "checkbox";
+  let parts;
+  if (variant === "A") {
+    parts = [header({ left: goalTabs("tabs") }), scanRow(), ui.goal === "discover" ? [discoverFilters(), el("div", { class: "row" }, chipRow(TYPE_COLOURS, ui.types), el("span", { class: "mute" }, "│"), chipRow(STATUS_COLOURS, ui.statuses)), discoverMain()]
+      : [checkFilters(), el("div", { id: "main" }, checkGridA(), el("div", { id: "side" }, drawer(), checkFeed()))]];
+  } else if (variant === "B") {
+    parts = [header(), scanRow(el("span", {}, "Goal ", goalTabs("seg"))), ui.goal === "discover" ? [discoverFilters(), el("div", { class: "row" }, chipRow(TYPE_COLOURS, ui.types), el("span", { class: "mute" }, "│"), chipRow(STATUS_COLOURS, ui.statuses)), discoverMain()]
+      : [checkFilters(), el("div", { id: "main" }, checkTableB(), el("div", { id: "side" }, drawer(), checkFeed()))]];
+  } else {
+    const tabs = el("div", { class: "bigtabs" }, [["discover", "Discover", "find unknown properties"], ["check", "Check", "confirm known properties"]]
+      .map(([g, t, s]) => el("button", { class: ui.goal === g ? "on" : "", onclick: () => setGoal(g) }, t, el("small", {}, s))));
+    parts = [header(), tabs, scanRow(), ui.goal === "discover" ? [discoverFilters(), el("div", { class: "row" }, chipRow(TYPE_COLOURS, ui.types), el("span", { class: "mute" }, "│"), chipRow(STATUS_COLOURS, ui.statuses)), discoverMain()]
+      : [checkFilters(), el("div", { id: "main" }, checkCardsC())]];
+  }
+  app.replaceChildren(...parts.flat(2));
+  if (focus) { const q = app.querySelector("input:not([type])"); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
+  document.getElementById("vlabel").textContent = `${variant} (${VARIANTS[variant]})`;
+  document.getElementById("state").textContent = JSON.stringify({ variant, goal: ui.goal, scanning: ui.scanning,
+    mark: ui.mark ? new Date(ui.mark.at).toLocaleTimeString() : null, sinceMark: ui.sinceMark, selected: ui.selected }, null, 1);
+}
+
+// ───── prototype controls ─────
+function go(d) {
+  const keys = Object.keys(VARIANTS); variant = keys[(keys.indexOf(variant) + d + keys.length) % keys.length];
+  const u = new URL(location); u.searchParams.set("variant", variant); history.replaceState(null, "", u); render();
+}
+document.getElementById("prev").onclick = () => go(-1);
+document.getElementById("next").onclick = () => go(1);
+addEventListener("keydown", (e) => { if (e.target.tagName === "INPUT") return; if (e.key === "ArrowLeft") go(-1); if (e.key === "ArrowRight") go(1); });
+let simStep = 0;
+document.getElementById("sim").onclick = () => {
+  // Pretend the user set fan 2 to burst on the panel: a known level moves, and a few unknown IDs move with it.
+  const steps = [() => { put(174, "7"); put(120, "4"); put(201, "20"); }, () => { put(48, "0800"); put(50, "0810"); },
+    () => { put(174, "2"); put(120, "3"); put(201, "15"); put(41, "9"); }];
+  steps[simStep++ % steps.length](); render();
+};
+setInterval(() => {
+  put(2, clock()); // the polled clock moves every second
+  if (ui.scanning) ui.scanNext = (ui.scanNext + 1) % 256;
+  if (!document.activeElement || document.activeElement.tagName !== "INPUT") render();
+}, 1000);
+render();
+</script>
+</body>
+</html>

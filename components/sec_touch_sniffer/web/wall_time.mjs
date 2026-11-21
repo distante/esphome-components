@@ -10,3 +10,14 @@
 export function wallTimeMs(browserNowMs, uptimeNowMs, recordUptimeMs) {
   return browserNowMs - (uptimeNowMs - recordUptimeMs);
 }
+
+/**
+ * The device's uptime at a browser time, extrapolated from a response.
+ *
+ * @param {{browserNowMs: number, uptimeMs: number}} anchor browser time a response arrived and the uptime it carried
+ * @param {number} browserMs a browser time (epoch ms)
+ * @returns {number} the device's uptime then (ms)
+ */
+export function uptimeAtMs(anchor, browserMs) {
+  return anchor.uptimeMs + (browserMs - anchor.browserNowMs);
+}

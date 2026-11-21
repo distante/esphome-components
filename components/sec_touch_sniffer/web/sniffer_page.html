@@ -78,7 +78,10 @@
 <div id="main">
   <div id="grid"></div>
   <div id="side">
-    <div id="drawer" hidden></div>
+    <div id="drawer" hidden>
+      <div id="drawer-info"></div>
+      <textarea id="note"></textarea>
+    </div>
     <b>Changes</b> <span class="mute">(newest first)</span>
     <div id="feed"></div>
   </div>
@@ -93,7 +96,7 @@ import { exportCsv, exportJson } from "./export.mjs";
 
 const ID_COUNT = 256;
 const FEED_LENGTH = 60;
-const FLASH_MS = 2000;
+const LAST_MAC_KEY = "sec_touch_sniffer:last_mac";
 const TYPE_COLOURS = {
   int: "#9cc3ea", "padded int": "#6fa3d8", decimal: "#8fd4ae", date: "#f0b48a", time: "#c9a2e6",
   hex: "#f39ac2", "text or hex": "#f2c4d8", text: "#bbb", empty: "#fff",
@@ -131,6 +134,7 @@ let notes = {};
 let mutes = new Set();
 let selected = null;
 let online = null;
+let scanRequestFailed = false;
 const filter = allPass();
 let colourBy = "type";
 const flashIds = new Set();
@@ -148,6 +152,23 @@ function load(newMac) {
   copy = fromStored(stored?.copy ?? null);
   notes = stored?.notes ?? {};
   mutes = new Set(stored?.mutes ?? []);
+}
+
+/** The MAC of the last device that answered, so its copy shows at page open even while it is offline. */
+function lastMac() {
+  try {
+    return localStorage.getItem(LAST_MAC_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function rememberMac() {
+  try {
+    localStorage.setItem(LAST_MAC_KEY, mac);
+  } catch {
+    // Blocked storage: the page just opens empty until the device answers.
+  }
 }
 
 function save() {
@@ -171,6 +192,7 @@ async function pollOnce() {
   let response = await fetchData(sinceFor(copy));
   if (response.mac !== mac) {
     load(response.mac);
+    rememberMac();
     // The stored copy's `since` is unset, so this is a resync unless the response was full already.
   }
   if (resyncReason(copy, response) !== null || (copy.since === null && !response.full)) {
@@ -183,7 +205,7 @@ async function pollOnce() {
     flashIds.add(id);
   }
   save();
-  render();
+  renderLogged();
 }
 
 const poller = createPoller({
@@ -199,10 +221,17 @@ const poller = createPoller({
 async function toggleScan() {
   const action = copy.device?.scan?.active ? "stop" : "start";
   try {
-    await fetch(`${DEVICE_URL}/sniffer/scan/${action}`, { method: "POST" });
-  } finally {
-    poller.pollNow();
+    const response = await fetch(`${DEVICE_URL}/sniffer/scan/${action}`, { method: "POST" });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    scanRequestFailed = false;
+  } catch (error) {
+    console.error(`scan ${action} request failed`, error);
+    scanRequestFailed = true;
   }
+  renderHeader();
+  poller.pollNow();
 }
 
 // ───── rendering ─────
@@ -228,8 +257,9 @@ function renderHeader() {
     $("title").textContent = `SEC-Touch sniffer · ${device.name}`;
     $("device").textContent = `${mac} · ${Object.keys(copy.records).length} IDs`;
   }
-  $("online").textContent = online === false ? "offline, retrying" : online ? "live" : "connecting…";
-  $("online").classList.toggle("offline", online === false);
+  const state = online === false ? "offline, retrying" : online ? "live" : "connecting…";
+  $("online").textContent = scanRequestFailed ? `${state} · scan request failed` : state;
+  $("online").classList.toggle("offline", online === false || scanRequestFailed);
 }
 
 function renderScan() {
@@ -274,7 +304,6 @@ function renderGrid(rowsById, visible) {
       cell.classList.remove("flash");
       void cell.offsetWidth; // restarts the animation
       cell.classList.add("flash");
-      setTimeout(() => cell.classList.remove("flash"), FLASH_MS);
     }
   }
   flashIds.clear();
@@ -313,10 +342,17 @@ function renderDrawer(rowsById) {
   }
   const row = rowsById.get(selected);
   const head = el("div", { class: "row" }, el("b", {}, `ID ${selected}`));
+  // The note field stays in place across polls, so typing keeps focus; it is refilled only for another ID.
+  const note = $("note");
+  if (drawerFor !== selected) {
+    note.value = notes[selected] ?? "";
+    note.placeholder = `Note for ID ${selected} (browser only, in the export)`;
+    drawerFor = selected;
+  }
+  note.hidden = !row;
   if (!row) {
     head.append(el("span", { class: "mute" }, "never seen"), el("span", { class: "grow" }), el("button", { "data-action": "close" }, "×"));
-    $("drawer").replaceChildren(head);
-    drawerFor = selected;
+    $("drawer-info").replaceChildren(head);
     return;
   }
   head.append(
@@ -344,14 +380,7 @@ function renderDrawer(rowsById) {
     : row.history.map((entry, i) =>
       el("div", {}, el("span", { class: "mute" }, clock(entry.atMs)), " ", el("code", {}, shown(entry.raw)),
         i === 0 ? el("span", { class: "mute" }, " ← current") : null));
-  // Keep the note field across polls, so typing is not interrupted.
-  const note = drawerFor === selected ? $("note") : null;
-  const noteField = note ?? el("textarea", { id: "note", placeholder: `Note for ID ${selected} (browser only, in the export)` });
-  if (note === null) {
-    noteField.value = notes[selected] ?? "";
-  }
-  $("drawer").replaceChildren(head, value, facts, el("b", {}, "History"), ...history, noteField);
-  drawerFor = selected;
+  $("drawer-info").replaceChildren(head, value, facts, el("b", {}, "History"), ...history);
 }
 
 function render() {
@@ -364,6 +393,15 @@ function render() {
   renderGrid(rowsById, visible);
   renderFeed(visible);
   renderDrawer(rowsById);
+}
+
+/** Renders from a poll or at page open: a rendering bug is logged, not mistaken for the device being offline. */
+function renderLogged() {
+  try {
+    render();
+  } catch (error) {
+    console.error("render failed", error);
+  }
 }
 
 function download(name, text, type) {
@@ -457,6 +495,12 @@ $("export-csv").addEventListener("click", () =>
 
 buildStatic();
 renderLegend();
+const storedMac = lastMac();
+if (storedMac !== null) {
+  // Shows (and exports) the stored copy even when the device is offline at page open.
+  load(storedMac);
+  renderLogged();
+}
 poller.start();
 </script>
 </body>

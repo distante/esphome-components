@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { applyResponse, changeFeed, emptyCopy, fromStored, toStored, wallOf } from "./records.mjs";
+import { applyResponse, changeFeed, emptyCopy, fromStored, rowsOf, toStored, wallOf } from "./records.mjs";
 
 const BROWSER_NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
 
@@ -171,4 +171,40 @@ test("the change feed lists changes across IDs newest first, without muted IDs",
     { id: 5, atMs: BROWSER_NOW_MS - 3000, from: "0100", to: "0080" },
     { id: 5, atMs: BROWSER_NOW_MS - 6000, from: "0000", to: "0100" },
   ]);
+});
+
+test("malformed stored records are dropped, the readable ones stay", () => {
+  const { copy } = applyResponse(emptyCopy(), response([deviceRecord(5, "0100")]), BROWSER_NOW_MS);
+  const stored = JSON.parse(JSON.stringify(toStored(copy)));
+  const good = stored.records[5];
+  stored.records = {
+    5: good,
+    6: "nope",
+    7: null,
+    8: { ...good, id: "8" },
+    9: { ...good, id: 9, hist: "nope" },
+    10: { ...good, id: 10, anchor: undefined },
+    11: { ...good, id: 11, anchor: { browserNowMs: BROWSER_NOW_MS } },
+  };
+
+  const reloaded = fromStored(stored);
+
+  assert.deepEqual(Object.keys(reloaded.records), ["5"]);
+  assert.deepEqual(
+    rowsOf(reloaded, {}).map((row) => row.id),
+    [5],
+  );
+});
+
+test("a stored device without a readable anchor is dropped", () => {
+  const stored = { boot: "9f2c41ab", device: { mac: "aabbccddeeff", uptimeMs: 1, browserNowMs: 2 }, records: {} };
+
+  assert.equal(fromStored(stored).device, null);
+});
+
+test("the device and its records share the anchor of the response that carried them", () => {
+  const { copy } = applyResponse(emptyCopy(), response([deviceRecord(5, "0100")], { uptime: 10_000 }), BROWSER_NOW_MS);
+
+  assert.deepEqual(copy.device.anchor, { browserNowMs: BROWSER_NOW_MS, uptimeMs: 10_000 });
+  assert.equal(copy.device.anchor, copy.records[5].anchor);
 });

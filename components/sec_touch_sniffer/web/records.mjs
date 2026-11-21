@@ -2,10 +2,10 @@
  * The page's browser copy of a device's property records, fed by /sniffer/data responses
  * (see .specs/sniffer.md, "Device/page contract" and "Browser storage").
  *
- * A copy is `{boot, since, device, records}`. `device` is the latest response's identity, uptime and scan, anchored
- * at the browser time it arrived. `records` maps a property ID to the record as the device served it, plus
- * `anchor` (the response it came in, to read its uptimes as wall time) and `stale` (only in the browser copy since
- * the device rebooted).
+ * A copy is `{boot, since, device, records}`. An `anchor` is `{browserNowMs, uptimeMs}`: the browser time a response
+ * arrived and the device uptime it carried. `device` is the latest response's identity and scan, plus its `anchor`.
+ * `records` maps a property ID to the record as the device served it, plus `anchor` (the response it came in, to
+ * read its uptimes as wall time) and `stale` (only in the browser copy since the device rebooted).
  */
 
 import { guessIdType } from "./type_guess.mjs";
@@ -41,13 +41,7 @@ export function applyResponse(copy, response, browserNowMs) {
     }
     records[record.id] = { ...record, anchor, stale: false };
   }
-  const device = {
-    mac: response.mac,
-    name: response.name,
-    scan: response.scan,
-    uptimeMs: response.uptime,
-    browserNowMs,
-  };
+  const device = { mac: response.mac, name: response.name, scan: response.scan, anchor };
   return { copy: { boot: response.boot, since: response.seq, device, records }, changedIds };
 }
 
@@ -68,21 +62,29 @@ export function toStored(copy) {
   return { boot: copy.boot, device: copy.device, records: copy.records };
 }
 
+const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+
+const hasAnchor = (value) =>
+  isObject(value) &&
+  isObject(value.anchor) &&
+  typeof value.anchor.browserNowMs === "number" &&
+  typeof value.anchor.uptimeMs === "number";
+
+const isReadableRecord = (record) => hasAnchor(record) && typeof record.id === "number" && Array.isArray(record.hist);
+
 /**
+ * Old or corrupted storage must not break the page: unreadable records and an unreadable device are dropped.
+ *
  * @param {unknown} stored what browser storage held, parsed
  * @returns {object} the copy it holds, polling from scratch (`since` unset), or an empty copy when unreadable
  */
 export function fromStored(stored) {
-  const valid =
-    stored !== null &&
-    typeof stored === "object" &&
-    stored.records !== null &&
-    typeof stored.records === "object" &&
-    !Array.isArray(stored.records);
-  if (!valid) {
+  if (!isObject(stored) || !isObject(stored.records)) {
     return emptyCopy();
   }
-  return { boot: stored.boot ?? null, since: null, device: stored.device ?? null, records: stored.records };
+  const records = Object.fromEntries(Object.entries(stored.records).filter(([, record]) => isReadableRecord(record)));
+  const device = hasAnchor(stored.device) ? stored.device : null;
+  return { boot: stored.boot ?? null, since: null, device, records };
 }
 
 /**

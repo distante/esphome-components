@@ -14,7 +14,7 @@
 #ifdef USE_SEC_TOUCH_SNIFFER_WEB_PAGE
 #include "esphome/components/web_server_base/web_server_base.h"
 
-/// The sniffer page, gzipped, in flash. The codegen (__init__.py, PAGE_ARRAY) bundles web/ and emits both.
+/// The sniffer page, gzipped, in flash. The codegen (text_sensor.py, PAGE_ARRAY) bundles web/ and emits both.
 extern const uint8_t SEC_TOUCH_SNIFFER_PAGE[] PROGMEM;
 extern const size_t SEC_TOUCH_SNIFFER_PAGE_SIZE;
 #endif

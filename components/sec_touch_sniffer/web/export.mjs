@@ -6,16 +6,9 @@
  */
 
 import { rowsOf } from "./records.mjs";
+import { uptimeAtMs } from "./wall_time.mjs";
 
 const isoOf = (wallMs) => (wallMs === null ? null : new Date(wallMs).toISOString());
-
-/** The device's uptime now, extrapolated from the latest response. */
-function uptimeNowMs(device, browserNowMs) {
-  if (device === null) {
-    return null;
-  }
-  return device.uptimeMs + (browserNowMs - device.browserNowMs);
-}
 
 /**
  * @param {object} copy the browser copy (see records.mjs)
@@ -43,7 +36,7 @@ export function exportJson(copy, notes, browserNowMs) {
     {
       exported_at: new Date(browserNowMs).toISOString(),
       device: device === null ? null : { mac: device.mac, name: device.name, boot: copy.boot },
-      uptime_ms: uptimeNowMs(device, browserNowMs),
+      uptime_ms: device === null ? null : uptimeAtMs(device.anchor, browserNowMs),
       scan: device === null ? null : device.scan,
       records,
     },

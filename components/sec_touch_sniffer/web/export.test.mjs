@@ -77,7 +77,7 @@ test("control and non-ASCII bytes round-trip byte-exact from the device JSON int
 });
 
 test("the CSV export has one row per ID in ID order, raw value and note quoted", () => {
-  const csv = exportCsv(copyFromDevice(), { 9: 'says "hi"' }, BROWSER_NOW_MS);
+  const csv = exportCsv(copyFromDevice(), { 9: 'says "hi"' });
 
   assert.deepEqual(csv.split("\r\n"), [
     "id,raw,guessed_type,registered,status,change_count,first_seen,last_changed,note",

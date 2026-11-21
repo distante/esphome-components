@@ -352,11 +352,9 @@ Two modes are available:
 - **Passive** (always on): unknown IDs that arrive during normal polling are captured automatically.
 - **Active scan** (optional): iterates through a configured range of property IDs, querying each one in turn. Normal polling is paused while scanning.
 
-Results are published as a text sensor and visible in Home Assistant: `id=raw` pairs such as `1=11.11.26, 3=SWZ0021E21H, 5=0100`, for the IDs no component has registered. Registered IDs (fan levels and labels) are recorded but left out of the text sensor. The state is capped at 2048 characters; a cut state ends with `, …+N more`. A message that repeats the same value does not republish it, and during an active scan the sensor is published once, when the scan ends or is stopped. An optional switch reflects whether a scan is currently running and can be toggled from Home Assistant.
+Results are published as a text sensor and visible in Home Assistant: `id=raw` pairs such as `1=11.11.26, 3=SWZ0021E21H, 5=0100`, for the IDs no component has registered. Registered IDs (fan levels and labels) are recorded but left out of the text sensor. The state is capped at 2048 bytes; a cut state ends with `, …+N more`. A message that repeats the same value does not republish it, and during an active scan the sensor is published once, when the scan ends or is stopped. An optional switch reflects whether a scan is currently running and can be toggled from Home Assistant. An optional web page (`web_page: true`) shows every captured ID, registered ones included; see [Sniffer page](#sniffer-page).
 
-> **Note:** The sniffer runs on ESP32 only. It reserves its memory once at boot: about 25 KB of heap, about 27 KB with `web_page: true`.
-
-`web_page: true` (default `false`) also keeps up to 7 previous values per ID for the sniffer page. It needs an HTTP server: add `web_server_base:` (or `web_server:`).
+> **Note:** The sniffer runs on ESP32 only. It reserves its memory once at boot: about 25 KB of heap, about 27 KB with `web_page: true`, as measured on a real controller. Nothing is allocated per discovered ID, so a scan does not grow it. To compare heap sensors before and after enabling the sniffer, take both readings a few minutes after boot: the minimum free heap drops by 13–16 KB within the first minute whether the sniffer runs or not.
 
 ### Passive-only example
 
@@ -384,9 +382,43 @@ Turning the switch on starts a scan from `scan_start`. Turning it off stops the 
 
 If a property ID does not respond within 2 seconds the scan retries it once. If it times out again the ID is skipped and a warning is logged.
 
+### Sniffer page
+
+```yaml
+web_server_base:   # or web_server:
+
+text_sensor:
+  - platform: sec_touch_sniffer
+    sec_touch_id: sec_touch_component
+    name: "Sniffer"
+    scan_start: 1
+    scan_end: 255
+    web_page: true     # default false
+```
+
+`web_page: true` serves, at `http://<device>/sniffer`, a page for working out what the IDs mean: a map of IDs 0–255 coloured by guessed type or by scan status, a drawer per ID with its raw value and up to 7 previous values, a feed of recent changes, filters, per-ID notes, scan start and stop, and a JSON and CSV export. Notes and a copy of the records are kept in the browser, keyed by the ESP's MAC, and never sent to the device. Without `scan_end` the page shows passive captures only, without scan controls.
+
+- **HTTP server:** the page needs `web_server_base:`, or `web_server:`, which loads it. Without either the config fails. The port is the server's; the sniffer has no port or auth options of its own.
+- **Sockets:** the page raises the HTTP server's client limit by 2, one for the page's polling and one spare for a reload.
+- **Open on the LAN without auth:** without `web_server: auth:`, anyone on your network can open the page and start or stop a scan, which pauses normal polling. When set, `web_server: auth:` and `allowed_origins` also apply to `/sniffer`, `/sniffer/data` and `/sniffer/scan/*`.
+- **Captive portal:** while the device runs its captive-portal access point (the Wi-Fi fallback), the portal answers every GET request, so the page may be unreachable until the device is back on your network.
+- **Scripting a scan:** `curl -X POST -H 'Content-Length: 0' http://<device>/sniffer/scan/start` (or `/stop`). Without the explicit empty body the server answers `411`. Both are idempotent and move the scan switch like the page's button. The data endpoint and its JSON are described in the [spec](../../.specs/sniffer.md#devicepage-contract).
+
+See [RAW_VALUES.md](RAW_VALUES.md#how-to-reproduce) for a capture walkthrough.
+
+### Upgrading the sniffer from v1.4
+
+These changes break existing sniffer configs or automations that read its text sensor:
+
+- **Text sensor format:** the state lists each ID's raw value as the panel sent it (`1=11.11.26, 5=0100`) instead of the `atoi` result (`1=11, 5=100`), and a cut state ends with `, …+N more` instead of `, ...`. Templates or automations that parse the state need updating.
+- **`time_id` removed:** setting it is a config error. Delete it: sniffer timestamps are device uptime, and the page shows wall time.
+- **ESP32 only:** other targets (such as ESP8266) fail config validation.
+- **`scan_end` capped at 255:** a higher value is a config error. `scan_start` is capped at 255 as well.
+- **`web_page: true` needs an HTTP server:** `web_server_base` is not loaded automatically; add `web_server_base:` or `web_server:`.
+
 ### What I have found so far
 
-Scan performed over IDs 1–208. IDs 78–83 (fan labels) and 173–178 (fan levels) are registered listeners and are excluded from the sniffer output — their meaning is already documented above.
+Scan performed over IDs 1–208. The text sensor leaves registered listeners out, so the IDs registered at the time (78–82, 173–175 and 177) are missing below; their meaning is already documented above.
 
 **If you recognize a pattern or know what an ID controls, please open a PR or issue.**
 
@@ -404,7 +436,7 @@ Scan performed over IDs 1–208. IDs 78–83 (fan labels) and 173–178 (fan lev
 <details>
 <summary>ID analysis table (help wanted — fill in what you know)</summary>
 
-> **IDs not in output:** 48 (summer ventilation, registered listener), 78–82 (fan pair labels, registered listener), 173–175, 177 (fan pair levels, registered listener), 193 (no response from device).
+> **IDs not in output:** 78–82 (fan pair labels, registered listener), 173–175, 177 (fan pair levels, registered listener), 193 (no response from device).
 
 | ID | Value | Hypothesis | Confidence |
 |----|-------|------------|------------|
@@ -455,6 +487,7 @@ Scan performed over IDs 1–208. IDs 78–83 (fan labels) and 173–178 (fan lev
 | 45 | 50 | | |
 | 46 | 50 | | |
 | 47 | 75 | | |
+| 48 | 800 | Summer ventilation (registered now), see [SUMMER_VENTILATION.md](SUMMER_VENTILATION.md) | High |
 | 49 | 1200 | | |
 | 50 | 400 | | |
 | 51 | 20 | | |

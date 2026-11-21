@@ -1,41 +1,34 @@
 #pragma once
 
-#include <map>
+#include <string>
 #include "esphome/core/component.h"
 #include "esphome/core/defines.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/switch/switch.h"
-#ifdef USE_TIME
-#include "esphome/components/time/real_time_clock.h"
-#endif
 #include "../sec_touch/sec_touch.h"
+#include "property_store.h"
 
 namespace esphome {
 namespace sec_touch {
 
-struct SniffedEntry {
-  int command_id;
-  int value;
-  char last_seen_at[20];  // "dd-mm-yyyy HH:MM" fits in 16 chars; fixed size avoids heap churn
-};
-
 class SecTouchSniffer : public Component, public text_sensor::TextSensor {
   static const char *const TAG;
-  // Text sensor payload cap: keeps output within comfortable MQTT/API packet sizes.
-  // Each entry is ~35 chars; 2048 chars fits ~58 entries before truncation.
-  static constexpr size_t MAX_STATE_LEN = 2048;
 
  public:
+  /// Wait after a scan query's first timeout before its one retry.
+  static constexpr uint32_t SCAN_RETRY_DELAY_MS = 5000;
+  /// Gap between one scan query's outcome and the next query.
+  static constexpr uint32_t SCAN_NEXT_DELAY_MS = 160;
+
   explicit SecTouchSniffer(SECTouchComponent *parent);
 
-#ifdef USE_TIME
-  void set_time(time::RealTimeClock *time) { this->time_ = time; }
-#endif
   void set_scan_range(int start, int end) {
     this->scan_start_ = start;
     this->scan_end_ = end;
   }
   void set_scan_switch(switch_::Switch *s) { this->scan_switch_ = s; }
+  /// With the page on, the store keeps a history of previous raw values.
+  void set_web_page(bool web_page) { this->web_page_ = web_page; }
 
   bool is_scanning() const { return this->is_scanning_; }
   void toggle_scan();
@@ -45,26 +38,32 @@ class SecTouchSniffer : public Component, public text_sensor::TextSensor {
 
  protected:
   SECTouchComponent *parent_;
-#ifdef USE_TIME
-  time::RealTimeClock *time_{nullptr};
-#endif
   switch_::Switch *scan_switch_{nullptr};
 
-  // Active scan not recommended on ESP8266 — each entry takes ~80-100 bytes;
-  // a 200-ID scan uses ~20 KB against only ~40 KB usable heap.
-  std::map<int, SniffedEntry> discovered_ids_;
+  PropertyStore store_;
+  /// The text sensor state, reserved once in setup() and rebuilt in place.
+  std::string state_;
+  bool web_page_{false};
 
   int scan_start_{1};
   int scan_end_{0};
   int current_scan_id_{0};
+  /// pending_query_id_ when no scan query is in flight.
+  static constexpr int NO_PENDING_QUERY = -1;
+  /// The ID of the scan query whose outcome on_queue_empty_() records next.
+  int pending_query_id_{NO_PENDING_QUERY};
   bool is_scanning_{false};
   bool scan_retry_pending_{false};
 
   void update_scan_switch_();
   void on_message_(int command_id, int property_id, const std::string &raw_value);
   void on_queue_empty_();
-  std::string get_timestamp_() const;
-  std::string build_state_string_() const;
+  void query_(int property_id);
+  void publish_records_();
+  /// Whether an entity registered a property ID, as the state builder takes it.
+  auto is_registered_() const {
+    return [this](int id) { return this->parent_->is_property_registered(id); };
+  }
 };
 
 }  // namespace sec_touch

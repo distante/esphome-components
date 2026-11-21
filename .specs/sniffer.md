@@ -68,20 +68,20 @@ One **property record** per property ID:
 
 Decided in [What are the sniffer's memory caps?](https://github.com/distante/esphome-components/issues/31), sized against [measured heap](https://github.com/distante/esphome-components/issues/30#issuecomment-6911212958) on a real controller (BLE proxy, `web_server`, ESP-IDF 5.5.6): ~57 KB min free, ~31 KB largest free block.
 
-**Budget:** ~20 KB total, allocated once in `setup()`. No per-ID allocations and no single block over 16 KB. All caps are named constants in the header, not YAML options.
+**Budget:** ~25 KB total, ~27 KB with the page (the ~20 KB first decided grew with the per-record `seq` and the 59 B raw cap), allocated once in `setup()`. No per-ID allocations and no single block over 16 KB. All caps are named constants in the header, not YAML options.
 
 | What | Cap | Cost |
 |---|---|---|
 | Property IDs | 256 slots, indexed by ID 0–255 | — |
-| Record fields | 4 × u32 uptime **seconds**, u32 `change_count`, cmd, status, raw length, flags (~24 B) | 256 × 24 B ≈ 6 KB (one block) |
-| Raw value | 48 B, never truncated | 256 × 48 B ≈ 12 KB (one block) |
+| Record fields | 4 × u32 uptime **seconds**, u32 `change_count`, u32 `seq` (for the page's deltas), cmd, status, raw length, flags (32 B) | 256 × 32 B = 8 KB (one block) |
+| Raw value | 59 B, never truncated | 256 × 59 B ≈ 15 KB (one block) |
 | History | 2 KB pool, depth 8 per ID (current value included) | 2 KB, **only with `web_page: true`** |
 | Serving scratch | binary record copy ≤ ~512 B + ~256 B JSON chunk | ~800 B, static |
 | Text sensor state | 2048 chars | ≤ 2 KB heap string |
 
 - **IDs above 255** are dropped, counted (`dropped` in the data JSON) and logged once. `scan_end > 255` is a config error.
 - **Timestamps** are stored as u32 uptime seconds (good for 136 years) and sent to the page as ms (`s × 1000`).
-- **Raw cap 48 B** is everything the hub's 64 B frame buffer (`IncomingMessage::buffer`) can deliver after ~15 B of frame overhead. A `static_assert` ties the cap to that buffer size so they can't drift. The longest raw value seen so far is 17 B.
+- **Raw cap 59 B** is everything the hub's 64 B frame buffer (`IncomingMessage::buffer`, `FRAME_BUFFER_SIZE`) can deliver: the hub routes a frame with empty command and property IDs and no CRC, so only STX, two TABs and ETX surround the value. The cap is derived from `FRAME_BUFFER_SIZE`, the constant the buffer is declared with, so they can't drift. The longest raw value seen so far is 17 B.
 - **History pool:** one 2 KB array of variable-length entries `{id, len, t, bytes}` (~12 B typical, ~170 entries). It holds **previous values only**; the current value lives in the record and its time is `last_changed`.
   - An ID keeps at most 7 previous values. Inserting another drops that ID's oldest.
   - When the pool is full, drop the oldest entry of the ID with the most entries, so a fast-changing ID (the clock, ID 2) can't push out the history of rare IDs.
@@ -285,7 +285,7 @@ Captured data lives in RAM and is lost on restart or flash. The page keeps a cop
 
 **Readme** (sniffer section):
 - The `web_page` option, the `/sniffer` URL and the `web_server_base` requirement.
-- Memory cost: ~18 KB, ~20 KB with the page.
+- Memory cost: ~25 KB, ~27 KB with the page.
 - Without `web_server: auth:`, the page and scan start/stop are **open on the LAN**.
 - During captive-portal AP fallback, the portal claims every GET, so the page may be unreachable.
 

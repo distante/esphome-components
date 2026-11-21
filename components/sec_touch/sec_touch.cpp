@@ -360,7 +360,7 @@ void SECTouchComponent::add_set_task(std::unique_ptr<SetDataTask> task) {
 void SECTouchComponent::send_get_message(GetDataTask &task) {
   ESP_LOGD(TAG_UART, "send_get_message");
 
-  std::array<char, 64> message_buffer;
+  std::array<char, FRAME_BUFFER_SIZE> message_buffer;
 
   int len = snprintf(message_buffer.data(), message_buffer.size(), "%c%d%c%d%c", STX, COMMANDID_GET, TAB,
                      task.property_id, TAB);
@@ -372,7 +372,7 @@ void SECTouchComponent::send_get_message(GetDataTask &task) {
 }
 
 void SECTouchComponent::send_set_message(SetDataTask &task) {
-  std::array<char, 64> message_buffer;
+  std::array<char, FRAME_BUFFER_SIZE> message_buffer;
   int len = snprintf(message_buffer.data(), message_buffer.size(), "%c%d%c%d%c%s%c", STX, COMMANDID_SET, TAB,
                      task.property_id, TAB, task.value, TAB);
 

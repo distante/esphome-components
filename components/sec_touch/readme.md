@@ -345,16 +345,18 @@ logger:
 
 ## Sniffer
 
-The sniffer listens for UART messages sent by the SEC-Touch for property IDs that no component has registered interest in. This lets you discover unknown property IDs for future use.
+The sniffer records every data message the SEC-Touch sends, registered property IDs included, keeping each value byte-exact as the panel sent it. This lets you discover unknown property IDs for future use.
 
 Two modes are available:
 
 - **Passive** (always on): unknown IDs that arrive during normal polling are captured automatically.
 - **Active scan** (optional): iterates through a configured range of property IDs, querying each one in turn. Normal polling is paused while scanning.
 
-Results are published as a text sensor and visible in Home Assistant. An optional switch reflects whether a scan is currently running and can be toggled from Home Assistant.
+Results are published as a text sensor and visible in Home Assistant: `id=raw` pairs such as `1=11.11.26, 3=SWZ0021E21H, 5=0100`, for the IDs no component has registered. Registered IDs (fan levels and labels) are recorded but left out of the text sensor. The state is capped at 2048 characters; a cut state ends with `, …+N more`. A message that repeats the same value does not republish it, and during an active scan the sensor is published once, when the scan ends or is stopped. An optional switch reflects whether a scan is currently running and can be toggled from Home Assistant.
 
-> **Note:** Active scan is not recommended on ESP8266. Each discovered entry uses ~80–100 bytes of heap; a 200-ID scan uses ~20 KB against only ~40 KB of usable heap.
+> **Note:** The sniffer runs on ESP32 only. It reserves its memory once at boot: about 25 KB of heap, about 27 KB with `web_page: true`.
+
+`web_page: true` (default `false`) also keeps up to 7 previous values per ID for the sniffer page. It needs an HTTP server: add `web_server_base:` (or `web_server:`).
 
 ### Passive-only example
 
@@ -368,17 +370,12 @@ text_sensor:
 ### Full example (with active scan)
 
 ```yaml
-time:
-  - platform: homeassistant
-    id: ha_time
-
 text_sensor:
   - platform: sec_touch_sniffer
     sec_touch_id: sec_touch_component
     name: "Sniffer"
-    time_id: ha_time       # optional — uses device uptime when omitted
     scan_start: 1          # first property ID to query in active scan
-    scan_end: 250          # last property ID to query; must be >= scan_start
+    scan_end: 250          # last property ID to query; scan_start..255
     scan_switch:
       name: "Sniffer Scan Active"
 ```

@@ -113,9 +113,7 @@ void SecTouchSniffer::toggle_scan() {
     return;
   }
 
-  if (this->current_scan_id_ == 0 || this->current_scan_id_ > this->scan_end_) {
-    this->current_scan_id_ = this->scan_start_;
-  }
+  this->current_scan_id_ = scan_resume_id(this->scan_start_, this->scan_end_, this->current_scan_id_);
 
   ESP_LOGI(TAG, "Scan mode ON — scanning IDs %d to %d (resuming from %d)", this->scan_start_, this->scan_end_,
            this->current_scan_id_.load());
@@ -313,7 +311,8 @@ void SecTouchSniffer::serve_data_(httpd_req_t *req) {
 void SecTouchSniffer::serve_scan_(httpd_req_t *req, bool start) {
   this->request_scan(start);
   this->begin_json_response_(req);
-  write_scan_json(this->json_, scan_reply(this->scan_state_(), start));
+  write_scan_json(this->json_,
+                  scan_reply(this->scan_start_, this->scan_end_, this->current_scan_id_, this->is_scanning_, start));
   this->end_json_response_(req);
 }
 

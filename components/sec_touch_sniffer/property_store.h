@@ -9,18 +9,12 @@
 #include <new>
 #include <string_view>
 
-#include "../sec_touch/data_message.h"
 #include "../sec_touch/scan_outcome.h"
 #include "history_pool.h"
 #include "property_slots.h"
 
 namespace esphome {
 namespace sec_touch {
-
-/// Longest raw value kept, never truncated: the longest value the hub's frame buffer can deliver.
-constexpr size_t RAW_VALUE_CAP = MAX_DATA_VALUE_LEN;
-static_assert(RAW_VALUE_CAP <= UINT8_MAX,
-              "PropertyFields::raw_len and HistoryPool entries hold a raw length in a byte");
 
 enum class RecordResult : uint8_t {
   /// First message for the ID.

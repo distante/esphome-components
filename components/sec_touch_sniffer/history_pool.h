@@ -49,10 +49,10 @@ class HistoryPool {
 
   /// Adds a previous value of `id`, first seen at uptime `first_seen_s`. Drops that ID's oldest beyond
   /// MAX_PREVIOUS_PER_ID, and while the pool is full, the oldest entry of the ID with the most entries. A value longer
-  /// than an entry's byte-sized length is not kept.
+  /// than RAW_VALUE_CAP, which a property record can't hold either, is not kept.
   void push(uint8_t id, uint32_t first_seen_s, std::string_view raw) {
     const size_t size = ENTRY_HEADER_BYTES + raw.size();
-    if (this->buf_ == nullptr || raw.size() > UINT8_MAX || size > HISTORY_POOL_BYTES) {
+    if (this->buf_ == nullptr || raw.size() > RAW_VALUE_CAP || size > HISTORY_POOL_BYTES) {
       return;
     }
     if (this->counts_[id] >= MAX_PREVIOUS_PER_ID) {

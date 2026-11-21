@@ -93,7 +93,8 @@ class SecTouchSniffer : public Component,
   ScanState scan_state_() const {
     return scan_state(this->scan_start_, this->scan_end_, this->current_scan_id_, this->is_scanning_);
   }
-  /// Whether an entity registered a property ID, as the state builder takes it.
+  /// Whether an entity registered a property ID, as the state builder takes it. Safe from the httpd task: entities
+  /// register in their constructors or in setup() at a higher priority than the sniffer's, which starts the server.
   auto is_registered_() const {
     return [this](int id) { return this->parent_->is_property_registered(id); };
   }

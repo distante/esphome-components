@@ -21,6 +21,7 @@ using esphome::sec_touch::next_record_in_delta;
 using esphome::sec_touch::PropertyStore;
 using esphome::sec_touch::RecordSnapshot;
 using esphome::sec_touch::scan_reply;
+using esphome::sec_touch::scan_resume_id;
 using esphome::sec_touch::scan_state;
 using esphome::sec_touch::ScanOutcome;
 using esphome::sec_touch::ScanState;
@@ -291,18 +292,45 @@ TEST(SnifferData, AScanStartedAgainAfterARunIsNotDone) {
 
 // --- Scan start and stop replies ---
 
-TEST(SnifferData, AStartReplyIsActiveBeforeTheLoopStartsTheScan) {
-  EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, scan_reply(scan_state(1, 208, 42, false), true)); }),
-            R"({"active":true,"from":1,"to":208,"next":42,"done":false})");
+TEST(SnifferData, AScanBeginsAtFromTheFirstTime) { EXPECT_EQ(scan_resume_id(1, 208, 0), 1); }
+
+TEST(SnifferData, AScanResumesWhereItStopped) { EXPECT_EQ(scan_resume_id(1, 208, 42), 42); }
+
+TEST(SnifferData, AScanBeginsAgainAtFromAfterQueueingTheWholeRange) { EXPECT_EQ(scan_resume_id(1, 208, 209), 1); }
+
+std::string reply_json(int current_id, bool scanning, bool start) {
+  return written([&](JsonChunkWriter &w) { write_scan_json(w, scan_reply(1, 208, current_id, scanning, start)); });
 }
 
-TEST(SnifferData, AStopReplyIsInactiveBeforeTheLoopStopsTheScan) {
-  EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, scan_reply(scan_state(1, 208, 42, true), false)); }),
-            R"({"active":false,"from":1,"to":208,"next":42,"done":false})");
+TEST(SnifferData, AStartReplyResumesAStoppedScan) {
+  EXPECT_EQ(reply_json(42, false, true), R"({"active":true,"from":1,"to":208,"next":42,"done":false})");
+}
+
+TEST(SnifferData, AStartReplyAfterACompletedRunRestartsAtFrom) {
+  EXPECT_EQ(reply_json(209, false, true), R"({"active":true,"from":1,"to":208,"next":1,"done":false})");
+}
+
+TEST(SnifferData, AStopReplyMidScanKeepsThePosition) {
+  EXPECT_EQ(reply_json(42, true, false), R"({"active":false,"from":1,"to":208,"next":42,"done":false})");
+}
+
+// Stopped after queueing the last ID: the run counts as covering the range, so the next start begins at `from`.
+TEST(SnifferData, AStopReplyWithTheLastQueryInFlightIsDone) {
+  EXPECT_EQ(reply_json(209, true, false), R"({"active":false,"from":1,"to":208,"next":1,"done":true})");
+}
+
+TEST(SnifferData, AStartReplyDuringAScanIsTheRunningScan) {
+  EXPECT_EQ(reply_json(42, true, true), R"({"active":true,"from":1,"to":208,"next":42,"done":false})");
+  EXPECT_EQ(reply_json(209, true, true), R"({"active":true,"from":1,"to":208,"next":208,"done":false})");
+}
+
+TEST(SnifferData, AStopReplyWhileIdleIsTheIdleScan) {
+  EXPECT_EQ(reply_json(42, false, false), R"({"active":false,"from":1,"to":208,"next":42,"done":false})");
+  EXPECT_EQ(reply_json(209, false, false), R"({"active":false,"from":1,"to":208,"next":1,"done":true})");
 }
 
 TEST(SnifferData, WithoutAScanRangeAReplyIsNull) {
-  EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, scan_reply(NO_SCAN, true)); }), "null");
+  EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, scan_reply(1, 0, 0, false, true)); }), "null");
 }
 
 // --- Data response ---

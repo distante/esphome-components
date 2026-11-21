@@ -8,6 +8,7 @@
 #include "sec_touch_sniffer/history_pool.h"
 
 using esphome::sec_touch::HistoryPool;
+using esphome::sec_touch::RAW_VALUE_CAP;
 using Entry = sec_touch_test::HistoryEntry;
 using sec_touch_test::history_of;
 
@@ -72,6 +73,19 @@ TEST(HistoryPool, AFullPoolDropsTheOldestEntryOfTheIdWithTheMostEntries) {
   EXPECT_EQ(history_of(pool, BUSY_ID), (std::vector<Entry>{{5, filler}, {4, filler}}));
   EXPECT_EQ(history_of(pool, QUIET_ID), (std::vector<Entry>{{2, "quiet-new"}, {1, "quiet-old"}}));
   EXPECT_EQ(history_of(pool, id), (std::vector<Entry>{{7, filler}}));
+}
+
+// The pool keeps only what a property record can hold, so a copy into a RAW_VALUE_CAP buffer always fits.
+TEST(HistoryPool, KeepsAValueUpToTheRawCapAndNothingLonger) {
+  HistoryPool pool;
+  ASSERT_TRUE(pool.allocate());
+  const std::string longest(RAW_VALUE_CAP, 'v');
+
+  pool.push(1, 1, longest);
+  pool.push(2, 1, std::string(RAW_VALUE_CAP + 1, 'v'));
+
+  EXPECT_EQ(history_of(pool, 1), (std::vector<Entry>{{1, longest}}));
+  EXPECT_EQ(pool.count(2), 0);
 }
 
 TEST(HistoryPool, AnUnallocatedPoolKeepsNothing) {

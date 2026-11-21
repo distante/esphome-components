@@ -66,13 +66,15 @@
 </div>
 <div class="row">
   <input id="f-query" placeholder="ID, value or note…" style="width:170px">
-  <span id="f-types" class="row"></span>
-  <select id="f-status"></select>
   <label><input id="f-hide-reg" type="checkbox"> hide registered</label>
   <select id="f-changed"></select>
   colour by <select id="colour-by"><option>type</option><option>status</option></select>
-  <span id="legend" class="row"></span>
+  <span class="badge" style="border:2px solid #333">registered</span>
+  <span class="badge" style="border:1px dashed #bbb">never seen</span>
+  <span class="badge dim">filtered out</span>
 </div>
+<div id="f-types" class="row"></div>
+<div id="f-statuses" class="row"></div>
 <div id="main">
   <div id="grid"></div>
   <div id="side">
@@ -85,10 +87,9 @@
   </div>
 </div>
 <script type="module">
-import { TYPES } from "./type_guess.mjs";
 import { applyResponse, changeFeed, emptyCopy, rowsOf } from "./records.mjs";
 import { createPoller, resyncReason, sinceFor } from "./poll.mjs";
-import { allPass, matchesFilter, STATUSES } from "./filters.mjs";
+import { allPass, matchesFilter } from "./filters.mjs";
 import { scanProgress } from "./scan_progress.mjs";
 import { exportCsv, exportJson } from "./export.mjs";
 import { deviceKey, LAST_MAC_KEY, parseStored, storedText } from "./storage.mjs";
@@ -255,12 +256,8 @@ function buildStatic() {
     cells.push(cell);
     $("grid").append(cell);
   }
-  for (const type of TYPES) {
-    const box = el("input", { type: "checkbox", "data-type": type });
-    box.checked = true;
-    $("f-types").append(el("label", { class: "badge", style: `background:${TYPE_COLOURS[type]}` }, box, type));
-  }
-  $("f-status").append(...["all", ...STATUSES].map((status) => el("option", {}, status)));
+  addChips($("f-types"), TYPE_COLOURS, filter.types);
+  addChips($("f-statuses"), STATUS_COLOURS, filter.statuses);
   $("f-changed").append(...CHANGED_WITHIN_PRESETS.map(([ms, label]) => el("option", { value: ms }, label)));
 }
 
@@ -287,13 +284,9 @@ function renderScan() {
   $("scan-label").textContent = progress.label;
 }
 
-/** The colours of the current colour-by choice, by type or by status. */
-const palette = () => (colourBy === "type" ? TYPE_COLOURS : STATUS_COLOURS);
-
 function cellColour(row) {
-  const key = colourBy === "type" ? row.type : row.status;
   // An ID with no value has no type, so it shows its status colour.
-  return palette()[key] ?? STATUS_COLOURS[row.status];
+  return (colourBy === "type" && TYPE_COLOURS[row.type]) || STATUS_COLOURS[row.status];
 }
 
 function renderGrid(rowsById, visible) {
@@ -326,13 +319,21 @@ function renderGrid(rowsById, visible) {
   flashIds.clear();
 }
 
-function renderLegend() {
-  $("legend").replaceChildren(
-    ...Object.entries(palette()).map(([name, colour]) => el("span", { class: "badge", style: `background:${colour}` }, name)),
-    el("span", { class: "badge", style: "border:2px solid #333" }, "registered"),
-    el("span", { class: "badge", style: "border:1px dashed #bbb" }, "never seen"),
-    el("span", { class: "badge dim" }, "filtered out"),
-  );
+/** A filter chip per key of `colours`, in its colour, toggling the key in `chosen`: filter and legend in one. */
+function addChips(parent, colours, chosen) {
+  for (const [key, colour] of Object.entries(colours)) {
+    const box = el("input", { type: "checkbox" });
+    box.checked = true;
+    box.addEventListener("change", () => {
+      if (box.checked) {
+        chosen.add(key);
+      } else {
+        chosen.delete(key);
+      }
+      render();
+    });
+    parent.append(el("label", { class: "badge", style: `background:${colour}` }, box, key));
+  }
 }
 
 function renderFeed(visible) {
@@ -483,19 +484,6 @@ $("f-query").addEventListener("input", (event) => {
   filter.query = event.target.value;
   render();
 });
-$("f-types").addEventListener("change", (event) => {
-  const type = event.target.dataset.type;
-  if (event.target.checked) {
-    filter.types.add(type);
-  } else {
-    filter.types.delete(type);
-  }
-  render();
-});
-$("f-status").addEventListener("change", (event) => {
-  filter.status = event.target.value;
-  render();
-});
 $("f-hide-reg").addEventListener("change", (event) => {
   filter.hideRegistered = event.target.checked;
   render();
@@ -506,7 +494,6 @@ $("f-changed").addEventListener("change", (event) => {
 });
 $("colour-by").addEventListener("change", (event) => {
   colourBy = event.target.value;
-  renderLegend();
   render();
 });
 $("scan-toggle").addEventListener("click", toggleScan);
@@ -516,7 +503,6 @@ $("export-csv").addEventListener("click", () =>
   download("sec_touch_sniffer.csv", exportCsv(copy, notes), "text/csv"));
 
 buildStatic();
-renderLegend();
 const storedMac = lastMac();
 if (storedMac !== null) {
   // Shows (and exports) the stored copy even when the device is offline at page open.

@@ -43,10 +43,11 @@ test("the type filter keeps only the chosen types", () => {
   assert.equal(matchesFilter(row({ type: "text" }), filter, NOW_MS), false);
 });
 
-test("the status filter keeps only that query status", () => {
-  const filter = { ...allPass(), status: "timeout" };
+test("the status filter keeps only the chosen query statuses", () => {
+  const filter = { ...allPass(), statuses: new Set(["nak", "timeout"]) };
 
   assert.equal(matchesFilter(row({ status: "timeout" }), filter, NOW_MS), true);
+  assert.equal(matchesFilter(row({ status: "nak" }), filter, NOW_MS), true);
   assert.equal(matchesFilter(row({ status: "ok" }), filter, NOW_MS), false);
 });
 

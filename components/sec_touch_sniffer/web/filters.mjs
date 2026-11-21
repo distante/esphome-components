@@ -9,13 +9,13 @@ export const STATUSES = ["unqueried", "ok", "nak", "timeout"];
 
 /** @returns {object} a filter every row passes */
 export function allPass() {
-  return { query: "", types: new Set(TYPES), status: "all", hideRegistered: false, changedWithinMs: 0 };
+  return { query: "", types: new Set(TYPES), statuses: new Set(STATUSES), hideRegistered: false, changedWithinMs: 0 };
 }
 
 /**
  * @param {object} row a page row (see records.mjs, `rowsOf`)
- * @param {{query: string, types: Set<string>, status: string, hideRegistered: boolean, changedWithinMs: number}}
- *   filter `status` is "all" or one of STATUSES; `changedWithinMs` 0 means any time
+ * @param {{query: string, types: Set<string>, statuses: Set<string>, hideRegistered: boolean,
+ *   changedWithinMs: number}} filter `changedWithinMs` 0 means any time
  * @param {number} nowMs browser time (epoch ms)
  * @returns {boolean} whether the row passes every filter
  */
@@ -23,7 +23,7 @@ export function matchesFilter(row, filter, nowMs) {
   if (row.type !== null && !filter.types.has(row.type)) {
     return false;
   }
-  if (filter.status !== "all" && row.status !== filter.status) {
+  if (!filter.statuses.has(row.status)) {
     return false;
   }
   if (filter.hideRegistered && row.registered) {

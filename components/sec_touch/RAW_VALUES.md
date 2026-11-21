@@ -122,17 +122,18 @@ The sniffer keeps every value byte-exact as the panel sent it, and its page expo
 2. Open `http://<device>/sniffer` and press **Start scan**. Normal polling pauses while the
    scan runs; the label reads "Scanning ID n of 1–255" and then "Scan of 1–255 complete". The records live
    on the device, so the tab can be closed and reopened during the scan.
-3. Click an ID to see its raw value, guessed type, query status (`ok`, `nak`, `timeout`) and
-   previous values. Notes typed in the drawer stay in the browser and go into the export.
+3. Click an ID to see its raw value, guessed type, query status (`ok`, `nak`, `timeout`, or
+   `unqueried` for registered IDs, which the scan skips) and previous values. Notes typed in
+   the drawer stay in the browser and go into the export.
 4. Press **Export JSON** (`sec_touch_sniffer.json`: the full record per ID with history, wall
    times and notes, plus device uptime and scan state) or **Export CSV**
    (`sec_touch_sniffer.csv`: one row per ID with `id, raw, guessed_type, registered, status,
    change_count, first_seen, last_changed, note`).
 
-In the JSON, control bytes and bytes ≥ 0x80 are `\u00XX` escapes, one per byte, so the exact
-bytes can be recovered. Unlike the log capture this report used, nothing is dropped under
-load: every ID the scan queried is in the export, those that never answered with status
-`nak` or `timeout`.
+In the JSON, each raw value is a string with one code point per byte, so parsing it gives
+the exact bytes back. Unlike the log capture this report used, nothing is dropped under
+load: every ID the scan queried is in the export, and those without a value carry status
+`nak` (the panel refused the ID) or `timeout`.
 
-Without the page, the text sensor's state after the scan gives the same `id=raw` list as the
-one above, without registered IDs and capped at 2048 characters.
+The text sensor's state after the scan holds the same raw values as `id=raw` pairs, the
+format of the [Raw values](#raw-values) list, without registered IDs and capped at 2048 bytes.

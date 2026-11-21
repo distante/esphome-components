@@ -400,7 +400,7 @@ text_sensor:
 
 - **HTTP server:** the page needs `web_server_base:`, or `web_server:`, which loads it. Without either the config fails. The port is the server's; the sniffer has no port or auth options of its own.
 - **Sockets:** the page raises the HTTP server's client limit by 2, one for the page's polling and one spare for a reload.
-- **Open on the LAN without auth:** without `web_server: auth:`, anyone on your network can open the page and start or stop a scan, which pauses normal polling. With `auth:` set, it and `allowed_origins` also protect `/sniffer`, `/sniffer/data` and `/sniffer/scan/*`.
+- **Open on the LAN without auth:** without `web_server: auth:`, anyone on your network can open the page and start or stop a scan, which pauses normal polling. When set, `web_server: auth:` and `allowed_origins` also apply to `/sniffer`, `/sniffer/data` and `/sniffer/scan/*`.
 - **Captive portal:** while the device runs its captive-portal access point (the Wi-Fi fallback), the portal answers every GET request, so the page may be unreachable until the device is back on your network.
 - **Scripting a scan:** `curl -X POST -H 'Content-Length: 0' http://<device>/sniffer/scan/start` (or `/stop`). Without the explicit empty body the server answers `411`. Both are idempotent and move the scan switch like the page's button. The data endpoint and its JSON are described in the [spec](../../.specs/sniffer.md#devicepage-contract).
 
@@ -410,7 +410,7 @@ See [RAW_VALUES.md](RAW_VALUES.md#how-to-reproduce) for a capture walkthrough.
 
 These changes break existing sniffer configs or automations that read its text sensor:
 
-- **Text sensor format:** the state lists each ID's raw value as the panel sent it (`1=11.11.26, 5=0100`) instead of the `atoi` result (`1=11, 5=100`). It lists only IDs no component has registered that have a value; IDs that only ever failed to answer are left out. Templates or automations that parse the state need updating.
+- **Text sensor format:** the state lists each ID's raw value as the panel sent it (`1=11.11.26, 5=0100`) instead of the `atoi` result (`1=11, 5=100`). Templates or automations that parse the state need updating.
 - **`time_id` removed:** setting it is a config error. Delete it: sniffer timestamps are device uptime, and the page shows wall time.
 - **ESP32 only:** other targets (such as ESP8266) fail config validation.
 - **`scan_end` capped at 255:** a higher value is a config error. `scan_start` is capped at 255 as well.

@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-11
 **Device:** `esp32-power-meter` (sec_touch protocol, controller firmware `SWZ0021E21H`)
-**Method:** 1 active sniffer scan over property IDs 1–255, raw buffers taken from the `DEBUG` log
+**Method:** 1 active sniffer scan over property IDs 1–255, raw buffers taken from the `DEBUG` log. This predates the sniffer page; [How to reproduce](#how-to-reproduce) shows the current capture.
 
 ---
 
@@ -10,8 +10,9 @@
 
 **Property values are strings on the wire, and many of them are not integers.**
 The incoming parser runs every value through `atoi`, which stops at the first
-non-digit. The sniffer text sensor and the ID table in the [readme](readme.md#what-i-have-found-so-far)
-therefore show truncated values:
+non-digit. The sniffer text sensor of the time and the ID table in the
+[readme](readme.md#what-i-have-found-so-far) therefore show truncated values (the sniffer now
+keeps raw values, see [How to reproduce](#how-to-reproduce)):
 
 | ID | On the wire   | Parsed (`atoi`) |
 |----|---------------|-----------------|
@@ -102,15 +103,36 @@ which never answered. ID 193, which timed out in the upstream scan, answered thi
 
 ## How to reproduce
 
-The sniffer text sensor only sees the `atoi` result. The raw string is in the `DEBUG` log
-of `sec_touch` (control characters written as in [UART Messages](readme.md#uart-messages)):
+The sniffer keeps every value byte-exact as the panel sent it, and its page exports them.
 
-```log
-[D][sec_touch:453]:   [process_data] buffer: [STX]32[TAB]2[TAB]13:32:08[TAB]<crc>
-```
+1. Enable the sniffer with a scan range and the page (see [Sniffer page](readme.md#sniffer-page)):
 
-Enable the sniffer with an active scan (see [readme](readme.md#full-example-with-active-scan)),
-set `logger: level: DEBUG` with `sec_touch.uart: WARN` to keep the volume manageable, stream
-the log to a file (`esphome logs <config>.yaml > scan.log`) and extract the
-`[process_data] buffer:` lines. At `DEBUG`, the API log stream drops lines under load, so
-some IDs may be missing from a single scan.
+   ```yaml
+   web_server_base:   # or web_server:
+
+   text_sensor:
+     - platform: sec_touch_sniffer
+       sec_touch_id: sec_touch_component
+       name: "Sniffer"
+       scan_start: 1
+       scan_end: 255
+       web_page: true
+   ```
+
+2. Open `http://<device>/sniffer` and press **Start scan**. Normal polling pauses while the
+   scan runs; the label reads "Scanning ID n of 1–255" and then "Scan of 1–255 complete". The records live
+   on the device, so the tab can be closed and reopened during the scan.
+3. Click an ID to see its raw value, guessed type, query status (`ok`, `nak`, `timeout`) and
+   previous values. Notes typed in the drawer stay in the browser and go into the export.
+4. Press **Export JSON** (`sec_touch_sniffer.json`: the full record per ID with history, wall
+   times and notes, plus device uptime and scan state) or **Export CSV**
+   (`sec_touch_sniffer.csv`: one row per ID with `id, raw, guessed_type, registered, status,
+   change_count, first_seen, last_changed, note`).
+
+In the JSON, control bytes and bytes ≥ 0x80 are `\u00XX` escapes, one per byte, so the exact
+bytes can be recovered. Unlike the log capture this report used, nothing is dropped under
+load: every ID the scan queried is in the export, those that never answered with status
+`nak` or `timeout`.
+
+Without the page, the text sensor's state after the scan gives the same `id=raw` list as the
+one above, without registered IDs and capped at 2048 characters.

@@ -30,9 +30,11 @@
   .cell { aspect-ratio:1; font-size:10px; display:flex; flex-direction:column; align-items:center; justify-content:center;
     overflow:hidden; cursor:pointer; background:#f7f7f7; border:1px solid #e2e2e2; }
   .cell code { font-size:10px; max-width:100%; overflow:hidden; white-space:nowrap; }
+  .cell.unseen { background:#fff; border:1px dashed #bbb; }
   .cell.reg { border:2px solid #333; }
   .cell.stale { opacity:.45; font-style:italic; }
-  .cell.dim { opacity:.15; }
+  .dim { background-image:repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,0,0,.3) 4px 6px); }
+  .cell.dim { opacity:.5; }
   .cell.cursor { outline:3px solid var(--acc); }
   .cell.sel { outline:2px solid red; }
   .flash { animation:flash 2s; }
@@ -300,7 +302,9 @@ function renderGrid(rowsById, visible) {
     const cell = cells[id];
     const row = rowsById.get(id);
     cell.replaceChildren(el("span", { class: "mute" }, String(id)));
-    cell.style.background = row ? cellColour(row) : "";
+    // backgroundColor, not background, so the filtered-out stripes of .dim stay.
+    cell.style.backgroundColor = row ? cellColour(row) : "";
+    cell.classList.toggle("unseen", !row);
     cell.title = row ? `${id} = ${shown(row.raw)}` : String(id);
     if (row && row.raw !== null) {
       cell.append(el("code", {}, shown(row.raw).slice(0, CELL_CHARS)));
@@ -326,6 +330,8 @@ function renderLegend() {
   $("legend").replaceChildren(
     ...Object.entries(palette()).map(([name, colour]) => el("span", { class: "badge", style: `background:${colour}` }, name)),
     el("span", { class: "badge", style: "border:2px solid #333" }, "registered"),
+    el("span", { class: "badge", style: "border:1px dashed #bbb" }, "never seen"),
+    el("span", { class: "badge dim" }, "filtered out"),
   );
 }
 

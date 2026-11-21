@@ -144,11 +144,11 @@ text_sensor:
 Decided in [What should the sniffer HTML page look like and do?](https://github.com/distante/esphome-components/issues/26). The prototype lives on the throwaway branch [`prototype/sniffer-page`](https://github.com/distante/esphome-components/blob/prototype/sniffer-page/components/sec_touch_sniffer/prototype/sniffer_page.prototype.html) (variant C). Audience: reverse-engineers. Opt-in, function over polish, desktop only.
 
 **Layout:**
-- **ID map**: a 16×16 grid of IDs 0–255. Each cell shows its ID and the start of its trimmed raw value, coloured by guessed type or by scan status (user's choice). Registered IDs have a heavy border. A cell flashes on change. The scan cursor is outlined while a scan runs.
+- **ID map**: a 16×16 grid of IDs 0–255. Each cell shows its ID and the start of its trimmed raw value, coloured by guessed type or by scan status (user's choice). Registered IDs have a heavy border. A cell flashes on change. The scan cursor is outlined while a scan runs. A never-seen ID has a white cell with a dashed border, so it does not look like an `unqueried` one.
 - **Drawer** (click a cell): raw value (trimmed, with a marker when it was padded on the wire), type, registered flag, query status, change count, last change, history (newest first) and a note field.
 - **Change feed**: recent changes across IDs (`time ID old → new`), newest first. Clicking an entry selects its ID.
 - **Per-ID mute**: a drawer button removes the ID from the feed; its cell still updates. Exists because the polled clock (ID 2) would flood the feed.
-- **Filters**: search (ID, value, note), type, query status, hide registered, changed recently. They dim non-matching cells and apply to the feed.
+- **Filters**: search (ID, value, note), type, query status, hide registered, changed recently. They fade and stripe non-matching cells and apply to the feed.
 - **Scan control**: start/stop button with a progress bar and label: "Scanning ID n of a–b", "stopped at n, resumes there", or "complete". The range is read-only.
 - On narrow screens the side column stacks below the grid; no further mobile work.
 

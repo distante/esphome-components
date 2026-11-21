@@ -16,4 +16,4 @@ export const TYPE_COLOURS = {
 };
 
 /** A colour per status of STATUSES (filters.mjs). */
-export const STATUS_COLOURS = { ok: "#8fd4ae", nak: "#e88b80", timeout: "#f5cf74", unqueried: "#eee" };
+export const STATUS_COLOURS = { ok: "#8fd4ae", nak: "#e88b80", timeout: "#f5cf74", unqueried: "#c9d3df" };

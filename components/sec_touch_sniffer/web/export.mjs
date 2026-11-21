@@ -36,7 +36,8 @@ export function exportJson(copy, notes, browserNowMs) {
     {
       exported_at: new Date(browserNowMs).toISOString(),
       device: device === null ? null : { mac: device.mac, name: device.name, boot: copy.boot },
-      uptime_ms: device === null ? null : uptimeAtMs(device.anchor, browserNowMs),
+      // Only extrapolated from a response of this page load: a stored anchor may predate a reboot.
+      uptime_ms: device === null || copy.since === null ? null : uptimeAtMs(device.anchor, browserNowMs),
       scan: device === null ? null : device.scan,
       records,
     },

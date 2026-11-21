@@ -62,7 +62,8 @@ export function toStored(copy) {
   return { boot: copy.boot, device: copy.device, records: copy.records };
 }
 
-const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+/** @returns {boolean} whether the value is a plain JSON object (not null, not an array) */
+export const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
 const hasAnchor = (value) =>
   isObject(value) &&
@@ -70,10 +71,22 @@ const hasAnchor = (value) =>
   typeof value.anchor.browserNowMs === "number" &&
   typeof value.anchor.uptimeMs === "number";
 
-const isReadableRecord = (record) => hasAnchor(record) && typeof record.id === "number" && Array.isArray(record.hist);
+const isHistoryEntry = (entry) =>
+  Array.isArray(entry) && entry.length === 2 && typeof entry[0] === "number" && typeof entry[1] === "string";
+
+const isReadableRecord = (record) =>
+  hasAnchor(record) &&
+  typeof record.id === "number" &&
+  (record.raw === null || typeof record.raw === "string") &&
+  typeof record.status === "string" &&
+  typeof record.changes === "number" &&
+  typeof record.reg === "boolean" &&
+  Array.isArray(record.hist) &&
+  record.hist.every(isHistoryEntry);
 
 /**
  * Old or corrupted storage must not break the page: unreadable records and an unreadable device are dropped.
+ * The stored scan state is dropped too: it is not live, so the scan control waits for the device to answer.
  *
  * @param {unknown} stored what browser storage held, parsed
  * @returns {object} the copy it holds, polling from scratch (`since` unset), or an empty copy when unreadable
@@ -83,7 +96,7 @@ export function fromStored(stored) {
     return emptyCopy();
   }
   const records = Object.fromEntries(Object.entries(stored.records).filter(([, record]) => isReadableRecord(record)));
-  const device = hasAnchor(stored.device) ? stored.device : null;
+  const device = hasAnchor(stored.device) ? { ...stored.device, scan: null } : null;
   return { boot: stored.boot ?? null, since: null, device, records };
 }
 

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { exportCsv, exportJson } from "./export.mjs";
-import { applyResponse, emptyCopy } from "./records.mjs";
+import { applyResponse, emptyCopy, fromStored, toStored } from "./records.mjs";
 
 const BROWSER_NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
 const SCAN = { active: false, from: 1, to: 208, next: 1, done: true };
@@ -53,6 +53,15 @@ test("the JSON export holds the device, its uptime and scan at export time, and 
     stale: false,
     note: "Fan level?",
   });
+});
+
+test("a stored copy the device has not confirmed this page load exports no uptime", () => {
+  const reloaded = fromStored(JSON.parse(JSON.stringify(toStored(copyFromDevice()))));
+
+  const exported = JSON.parse(exportJson(reloaded, {}, BROWSER_NOW_MS + 2000));
+
+  assert.deepEqual(exported.device, { mac: "aabbccddeeff", name: "ventilation", boot: "9f2c41ab" });
+  assert.equal(exported.uptime_ms, null);
 });
 
 test("a record that only ever failed exports with null value and times", () => {

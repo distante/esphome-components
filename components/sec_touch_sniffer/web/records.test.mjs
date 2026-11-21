@@ -185,15 +185,33 @@ test("malformed stored records are dropped, the readable ones stay", () => {
     9: { ...good, id: 9, hist: "nope" },
     10: { ...good, id: 10, anchor: undefined },
     11: { ...good, id: 11, anchor: { browserNowMs: BROWSER_NOW_MS } },
+    12: { ...good, id: 12, raw: 12 },
+    13: { ...good, id: 13, status: null },
+    14: { ...good, id: 14, changes: "1" },
+    15: { ...good, id: 15, reg: "false" },
+    16: { ...good, id: 16, hist: ["0100"] },
+    17: { ...good, id: 17, hist: [[3000, 100]] },
+    18: { ...good, id: 18, hist: [["3000", "0100"]] },
+    19: { ...good, id: 19, raw: null, hist: [] },
   };
 
   const reloaded = fromStored(stored);
 
-  assert.deepEqual(Object.keys(reloaded.records), ["5"]);
+  assert.deepEqual(Object.keys(reloaded.records), ["5", "19"]);
   assert.deepEqual(
     rowsOf(reloaded, {}).map((row) => row.id),
-    [5],
+    [5, 19],
   );
+});
+
+test("a stored copy reloads without a scan state, so no stale scan shows as live", () => {
+  const scan = { active: true, from: 1, to: 208, next: 40, done: false };
+  const { copy } = applyResponse(emptyCopy(), response([], { scan }), BROWSER_NOW_MS);
+
+  const reloaded = fromStored(JSON.parse(JSON.stringify(toStored(copy))));
+
+  assert.equal(reloaded.device.mac, "aabbccddeeff");
+  assert.equal(reloaded.device.scan, null);
 });
 
 test("a stored device without a readable anchor is dropped", () => {

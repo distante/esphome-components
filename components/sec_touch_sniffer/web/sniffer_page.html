@@ -88,20 +88,16 @@
 </div>
 <script type="module">
 import { TYPES } from "./type_guess.mjs";
-import { applyResponse, changeFeed, emptyCopy, fromStored, rowsOf, toStored } from "./records.mjs";
+import { applyResponse, changeFeed, emptyCopy, rowsOf } from "./records.mjs";
 import { createPoller, resyncReason, sinceFor } from "./poll.mjs";
 import { allPass, matchesFilter, STATUSES } from "./filters.mjs";
 import { scanProgress } from "./scan_progress.mjs";
 import { exportCsv, exportJson } from "./export.mjs";
+import { deviceKey, LAST_MAC_KEY, parseStored, storedText } from "./storage.mjs";
+import { STATUS_COLOURS, TYPE_COLOURS } from "./colours.mjs";
 
 const ID_COUNT = 256;
 const FEED_LENGTH = 60;
-const LAST_MAC_KEY = "sec_touch_sniffer:last_mac";
-const TYPE_COLOURS = {
-  int: "#9cc3ea", "padded int": "#6fa3d8", decimal: "#8fd4ae", date: "#f0b48a", time: "#c9a2e6",
-  hex: "#f39ac2", "text or hex": "#f2c4d8", text: "#bbb", empty: "#fff",
-};
-const STATUS_COLOURS = { ok: "#8fd4ae", nak: "#e88b80", timeout: "#f5cf74", unqueried: "#eee" };
 
 // Empty on the device; `?device=http://<ip>` while working on the page from a local server.
 const DEVICE_URL = new URLSearchParams(location.search).get("device") ?? "";
@@ -125,7 +121,7 @@ function shown(raw) {
   return raw.trim().replace(/[\x00-\x1f\x7f]/g, (c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, "0")}`);
 }
 const isPadded = (raw) => raw !== null && raw !== raw.trim();
-const clock = (wallMs) => (wallMs === null ? "—" : new Date(wallMs).toLocaleString());
+const formatWall = (wallMs) => (wallMs === null ? "—" : new Date(wallMs).toLocaleString());
 
 // ───── state: the browser copy, notes and mutes, kept per device MAC ─────
 let mac = null;
@@ -139,19 +135,15 @@ const filter = allPass();
 let colourBy = "type";
 const flashIds = new Set();
 
-const storageKey = () => `sec_touch_sniffer:${mac}`;
-
 function load(newMac) {
   mac = newMac;
-  let stored = null;
+  let text = null;
   try {
-    stored = JSON.parse(localStorage.getItem(storageKey()));
+    text = localStorage.getItem(deviceKey(mac));
   } catch {
-    stored = null;
+    // Blocked storage: the device starts from an empty copy.
   }
-  copy = fromStored(stored?.copy ?? null);
-  notes = stored?.notes ?? {};
-  mutes = new Set(stored?.mutes ?? []);
+  ({ copy, notes, mutes } = parseStored(text));
 }
 
 /** The MAC of the last device that answered, so its copy shows at page open even while it is offline. */
@@ -173,7 +165,7 @@ function rememberMac() {
 
 function save() {
   try {
-    localStorage.setItem(storageKey(), JSON.stringify({ copy: toStored(copy), notes, mutes: [...mutes] }));
+    localStorage.setItem(deviceKey(mac), storedText(copy, notes, mutes));
   } catch {
     // Full or blocked storage: the page still works, the copy just does not survive a reload.
   }
@@ -204,6 +196,8 @@ async function pollOnce() {
   for (const id of result.changedIds) {
     flashIds.add(id);
   }
+  // The device answered, so a failed scan request no longer describes it.
+  scanRequestFailed = false;
   save();
   renderLogged();
 }
@@ -226,12 +220,13 @@ async function toggleScan() {
       throw new Error(`HTTP ${response.status}`);
     }
     scanRequestFailed = false;
+    poller.pollNow();
   } catch (error) {
+    // No poll at once: it would clear the failure before it shows. The next scheduled poll clears it.
     console.error(`scan ${action} request failed`, error);
     scanRequestFailed = true;
   }
   renderHeader();
-  poller.pollNow();
 }
 
 // ───── rendering ─────
@@ -369,16 +364,16 @@ function renderDrawer(rowsById) {
   }
   const facts = el("table", {},
     el("tr", {}, el("td", { class: "mute" }, "Query status"),
-      el("td", {}, el("span", { class: `s-${row.status}` }, row.status), row.statusAtMs === null ? "" : ` · ${clock(row.statusAtMs)}`)),
+      el("td", {}, el("span", { class: `s-${row.status}` }, row.status), row.statusAtMs === null ? "" : ` · ${formatWall(row.statusAtMs)}`)),
     el("tr", {}, el("td", { class: "mute" }, "Changes"), el("td", {}, String(row.changeCount))),
-    el("tr", {}, el("td", { class: "mute" }, "Last change"), el("td", {}, clock(row.changedAtMs))),
-    el("tr", {}, el("td", { class: "mute" }, "First / last seen"), el("td", {}, `${clock(row.firstSeenMs)} / ${clock(row.lastSeenMs)}`)),
+    el("tr", {}, el("td", { class: "mute" }, "Last change"), el("td", {}, formatWall(row.changedAtMs))),
+    el("tr", {}, el("td", { class: "mute" }, "First / last seen"), el("td", {}, `${formatWall(row.firstSeenMs)} / ${formatWall(row.lastSeenMs)}`)),
     el("tr", {}, el("td", { class: "mute" }, "Command id"), el("td", {}, String(row.cmd ?? "—"))),
   );
   const history = row.history.length === 0
     ? [el("div", { class: "mute" }, "no history")]
     : row.history.map((entry, i) =>
-      el("div", {}, el("span", { class: "mute" }, clock(entry.atMs)), " ", el("code", {}, shown(entry.raw)),
+      el("div", {}, el("span", { class: "mute" }, formatWall(entry.atMs)), " ", el("code", {}, shown(entry.raw)),
         i === 0 ? el("span", { class: "mute" }, " ← current") : null));
   $("drawer-info").replaceChildren(head, value, facts, el("b", {}, "History"), ...history);
 }
@@ -456,6 +451,8 @@ $("drawer").addEventListener("input", (event) => {
     delete notes[selected];
   }
   save();
+  // The note field is not rebuilt by render, so it keeps focus; the ✎ marker and note search update now.
+  render();
 });
 $("f-query").addEventListener("input", (event) => {
   filter.query = event.target.value;

@@ -193,15 +193,34 @@ test("malformed stored records are dropped, the readable ones stay", () => {
     17: { ...good, id: 17, hist: [[3000, 100]] },
     18: { ...good, id: 18, hist: [["3000", "0100"]] },
     19: { ...good, id: 19, raw: null, hist: [] },
+    20: { ...good, id: 20, first: "1000" },
+    21: { ...good, id: 21, last: "5000" },
+    22: { ...good, id: 22, changed: "3000" },
+    23: { ...good, id: 23, status_at: "4000" },
+    24: { ...good, id: 24, first: null, last: null, changed: null, status_at: 4000, cmd: null, status: "ok" },
+    25: { ...good, id: 25, cmd: "32" },
+    26: { ...good, id: 26, status: "maybe" },
+    27: { ...good, id: 99 },
   };
+  // JSON turns NaN into null, but a hand-edited or older store can still hold one.
+  stored.records[28] = { ...good, id: 28, first: Number.NaN };
 
   const reloaded = fromStored(stored);
 
-  assert.deepEqual(Object.keys(reloaded.records), ["5", "19"]);
+  assert.deepEqual(Object.keys(reloaded.records), ["5", "19", "24"]);
   assert.deepEqual(
     rowsOf(reloaded, {}).map((row) => row.id),
-    [5, 19],
+    [5, 19, 24],
   );
+});
+
+test("a stored device whose mac or name is not a string is dropped", () => {
+  const { copy } = applyResponse(emptyCopy(), response([]), BROWSER_NOW_MS);
+  const stored = JSON.parse(JSON.stringify(toStored(copy)));
+
+  assert.equal(fromStored({ ...stored, device: { ...stored.device, mac: 1 } }).device, null);
+  assert.equal(fromStored({ ...stored, device: { ...stored.device, name: null } }).device, null);
+  assert.equal(fromStored(stored).device.name, "ventilation");
 });
 
 test("a stored copy reloads without a scan state, so no stale scan shows as live", () => {

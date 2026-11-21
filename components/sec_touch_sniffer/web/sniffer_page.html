@@ -98,6 +98,8 @@ import { STATUS_COLOURS, TYPE_COLOURS } from "./colours.mjs";
 
 const ID_COUNT = 256;
 const FEED_LENGTH = 60;
+/** A grid cell previews this many characters of its value; the full value is in its tooltip. */
+const CELL_CHARS = 6;
 
 // Empty on the device; `?device=http://<ip>` while working on the page from a local server.
 const DEVICE_URL = new URLSearchParams(location.search).get("device") ?? "";
@@ -134,9 +136,13 @@ let scanRequestFailed = false;
 const filter = allPass();
 let colourBy = "type";
 const flashIds = new Set();
+// The ID whose note the drawer's note field holds.
+let drawerFor = null;
 
 function load(newMac) {
   mac = newMac;
+  // The selection stays, but the note field must refill from the new device's notes.
+  drawerFor = null;
   let text = null;
   try {
     text = localStorage.getItem(deviceKey(mac));
@@ -172,13 +178,21 @@ function save() {
 }
 
 // ───── device ─────
-async function fetchData(since) {
-  const response = await fetch(`${DEVICE_URL}/sniffer/data?since=${since}`, { cache: "no-store" });
+/** Fetches from the device; rejects on a network error and on a non-OK status alike. */
+async function fetchOk(path, options) {
+  const response = await fetch(`${DEVICE_URL}${path}`, options);
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
   }
+  return response;
+}
+
+async function fetchData(since) {
+  const response = await fetchOk(`/sniffer/data?since=${since}`, { cache: "no-store" });
   return response.json();
 }
+
+const currentScan = () => copy.device?.scan ?? null;
 
 async function pollOnce() {
   let response = await fetchData(sinceFor(copy));
@@ -187,7 +201,7 @@ async function pollOnce() {
     rememberMac();
     // The stored copy's `since` is unset, so this is a resync unless the response was full already.
   }
-  if (resyncReason(copy, response) !== null || (copy.since === null && !response.full)) {
+  if (resyncReason(copy, response) !== null) {
     copy = { ...copy, since: null };
     response = await fetchData(0);
   }
@@ -213,12 +227,9 @@ const poller = createPoller({
 });
 
 async function toggleScan() {
-  const action = copy.device?.scan?.active ? "stop" : "start";
+  const action = currentScan()?.active ? "stop" : "start";
   try {
-    const response = await fetch(`${DEVICE_URL}/sniffer/scan/${action}`, { method: "POST" });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
+    await fetchOk(`/sniffer/scan/${action}`, { method: "POST" });
     scanRequestFailed = false;
     poller.pollNow();
   } catch (error) {
@@ -258,7 +269,7 @@ function renderHeader() {
 }
 
 function renderScan() {
-  const scan = copy.device?.scan ?? null;
+  const scan = currentScan();
   $("scan").hidden = scan === null;
   if (scan === null) {
     return;
@@ -269,15 +280,17 @@ function renderScan() {
   $("scan-label").textContent = progress.label;
 }
 
+/** The colours of the current colour-by choice, by type or by status. */
+const palette = () => (colourBy === "type" ? TYPE_COLOURS : STATUS_COLOURS);
+
 function cellColour(row) {
-  if (colourBy === "type" && row.type !== null) {
-    return TYPE_COLOURS[row.type];
-  }
-  return STATUS_COLOURS[row.status];
+  const key = colourBy === "type" ? row.type : row.status;
+  // An ID with no value has no type, so it shows its status colour.
+  return palette()[key] ?? STATUS_COLOURS[row.status];
 }
 
 function renderGrid(rowsById, visible) {
-  const scan = copy.device?.scan ?? null;
+  const scan = currentScan();
   for (let id = 0; id < ID_COUNT; id++) {
     const cell = cells[id];
     const row = rowsById.get(id);
@@ -285,7 +298,7 @@ function renderGrid(rowsById, visible) {
     cell.style.background = row ? cellColour(row) : "";
     cell.title = row ? `${id} = ${shown(row.raw)}` : String(id);
     if (row && row.raw !== null) {
-      cell.append(el("code", {}, shown(row.raw).slice(0, 6)));
+      cell.append(el("code", {}, shown(row.raw).slice(0, CELL_CHARS)));
     }
     if (row && notes[id]) {
       cell.append(el("span", {}, "✎"));
@@ -305,9 +318,8 @@ function renderGrid(rowsById, visible) {
 }
 
 function renderLegend() {
-  const colours = colourBy === "type" ? TYPE_COLOURS : STATUS_COLOURS;
   $("legend").replaceChildren(
-    ...Object.entries(colours).map(([name, colour]) => el("span", { class: "badge", style: `background:${colour}` }, name)),
+    ...Object.entries(palette()).map(([name, colour]) => el("span", { class: "badge", style: `background:${colour}` }, name)),
     el("span", { class: "badge", style: "border:2px solid #333" }, "registered"),
   );
 }
@@ -326,8 +338,6 @@ function renderFeed(visible) {
         el("code", {}, shown(entry.from)), " → ", el("code", {}, shown(entry.to)))),
   );
 }
-
-let drawerFor = null;
 
 function renderDrawer(rowsById) {
   $("drawer").hidden = selected === null;

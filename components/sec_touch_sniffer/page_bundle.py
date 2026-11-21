@@ -19,7 +19,7 @@ PAGE_FILE = "sniffer_page.html"
 _SCRIPT = re.compile(r'(<script type="module">)(.*?)(</script>)', re.S)
 _IMPORT = re.compile(r'^import\s*\{([^}]*)\}\s*from\s*"\./([\w.-]+\.mjs)";[ \t]*\n?', re.M)
 _EXPORT = re.compile(r"^export (?=(?:async )?function |const |let |class )", re.M)
-_LEFTOVER = re.compile(r"^\s*(?:import|export)\b", re.M)
+_LEFTOVER = re.compile(r"^[ \t]*(?:import|export)\b", re.M)
 _TOP_LEVEL_NAME = re.compile(r"^(?:async )?(?:function\*?|const|let|class) (\w+)", re.M)
 
 

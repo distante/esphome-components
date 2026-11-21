@@ -17,8 +17,8 @@ export function sinceFor(copy) {
 }
 
 /**
- * A delta the page can't apply: the device rebooted, or its `seq` went below the page's `since`. The page then
- * polls again with `since=0`; a full response runs the reboot merge.
+ * A delta the page can't apply: the page has not polled yet, the device rebooted, or its `seq` went below the
+ * page's `since`. The page then polls again with `since=0`; a full response runs the reboot merge.
  *
  * @param {object} copy the browser copy
  * @param {object} response the parsed /sniffer/data JSON
@@ -27,6 +27,9 @@ export function sinceFor(copy) {
 export function resyncReason(copy, response) {
   if (response.full) {
     return null;
+  }
+  if (copy.since === null) {
+    return "first load";
   }
   if (response.boot !== copy.boot) {
     return "boot changed";

@@ -8,6 +8,7 @@
  * read its uptimes as wall time) and `stale` (only in the browser copy since the device rebooted).
  */
 
+import { STATUSES } from "./filters.mjs";
 import { guessIdType } from "./type_guess.mjs";
 import { wallTimeMs } from "./wall_time.mjs";
 
@@ -74,15 +75,26 @@ const hasAnchor = (value) =>
 const isHistoryEntry = (entry) =>
   Array.isArray(entry) && entry.length === 2 && typeof entry[0] === "number" && typeof entry[1] === "string";
 
-const isReadableRecord = (record) =>
+const isUptimeOrNull = (value) => value === null || Number.isFinite(value);
+
+const isReadableRecord = (record, key) =>
   hasAnchor(record) &&
   typeof record.id === "number" &&
+  String(record.id) === key &&
+  (record.cmd === null || typeof record.cmd === "number") &&
   (record.raw === null || typeof record.raw === "string") &&
-  typeof record.status === "string" &&
+  isUptimeOrNull(record.first) &&
+  isUptimeOrNull(record.last) &&
+  isUptimeOrNull(record.changed) &&
+  isUptimeOrNull(record.status_at) &&
+  STATUSES.includes(record.status) &&
   typeof record.changes === "number" &&
   typeof record.reg === "boolean" &&
   Array.isArray(record.hist) &&
   record.hist.every(isHistoryEntry);
+
+const isReadableDevice = (device) =>
+  hasAnchor(device) && typeof device.mac === "string" && typeof device.name === "string";
 
 /**
  * Old or corrupted storage must not break the page: unreadable records and an unreadable device are dropped.
@@ -95,8 +107,10 @@ export function fromStored(stored) {
   if (!isObject(stored) || !isObject(stored.records)) {
     return emptyCopy();
   }
-  const records = Object.fromEntries(Object.entries(stored.records).filter(([, record]) => isReadableRecord(record)));
-  const device = hasAnchor(stored.device) ? { ...stored.device, scan: null } : null;
+  const records = Object.fromEntries(
+    Object.entries(stored.records).filter(([key, record]) => isReadableRecord(record, key)),
+  );
+  const device = isReadableDevice(stored.device) ? { ...stored.device, scan: null } : null;
   return { boot: stored.boot ?? null, since: null, device, records };
 }
 

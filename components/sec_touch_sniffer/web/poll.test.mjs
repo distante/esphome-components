@@ -8,6 +8,12 @@ test("a page that has not polled yet asks for everything", () => {
   assert.equal(sinceFor({ boot: "9f2c41ab", since: 12, records: {} }), 12);
 });
 
+test("a delta to a page that has not polled yet needs a resync", () => {
+  const copy = { boot: "9f2c41ab", since: null, records: {} };
+  assert.equal(resyncReason(copy, { boot: "9f2c41ab", seq: 12, full: false }), "first load");
+  assert.equal(resyncReason(copy, { boot: "9f2c41ab", seq: 12, full: true }), null);
+});
+
 test("a delta from another boot needs a resync", () => {
   const copy = { boot: "9f2c41ab", since: 12, records: {} };
   assert.equal(resyncReason(copy, { boot: "00000001", seq: 30, full: false }), "boot changed");

@@ -396,7 +396,7 @@ text_sensor:
     web_page: true     # default false
 ```
 
-`web_page: true` serves a page for working out what the IDs mean at `http://<device>/sniffer`: a map of IDs 0–255 coloured by guessed type or by scan status, a drawer per ID with its raw value and up to 7 previous values, a feed of recent changes, filters, per-ID notes, scan start and stop, and a JSON and CSV export. Notes and a copy of the records are kept in the browser, keyed by the ESP's MAC, and never sent to the device. Without `scan_end` the page shows passive captures only, without scan controls.
+`web_page: true` serves, at `http://<device>/sniffer`, a page for working out what the IDs mean: a map of IDs 0–255 coloured by guessed type or by scan status, a drawer per ID with its raw value and up to 7 previous values, a feed of recent changes, filters, per-ID notes, scan start and stop, and a JSON and CSV export. Notes and a copy of the records are kept in the browser, keyed by the ESP's MAC, and never sent to the device. Without `scan_end` the page shows passive captures only, without scan controls.
 
 - **HTTP server:** the page needs `web_server_base:`, or `web_server:`, which loads it. Without either the config fails. The port is the server's; the sniffer has no port or auth options of its own.
 - **Sockets:** the page raises the HTTP server's client limit by 2, one for the page's polling and one spare for a reload.

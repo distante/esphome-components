@@ -10,6 +10,8 @@ from esphome.core import CORE
 
 from esphome.components.sec_touch import CONF_SEC_TOUCH_ID, sec_touch_ns, SECTouchComponent
 
+from .page_bundle import gzipped_page
+
 DEPENDENCIES = ["sec_touch"]
 AUTO_LOAD = ["switch"]
 
@@ -27,6 +29,9 @@ WEB_PAGE_CLIENTS = 2
 
 # Compiles the /sniffer handler; page-off builds carry no server code.
 WEB_PAGE_DEFINE = "USE_SEC_TOUCH_SNIFFER_WEB_PAGE"
+
+# The gzipped page in flash, and `<PAGE_ARRAY>_SIZE`; sec_touch_sniffer.h declares both extern.
+PAGE_ARRAY = "SEC_TOUCH_SNIFFER_PAGE"
 
 
 def _read_max_property_id():
@@ -115,6 +120,10 @@ async def to_code(config):
     cg.add(var.set_web_page(config[CONF_WEB_PAGE]))
     if config[CONF_WEB_PAGE]:
         cg.add_define(WEB_PAGE_DEFINE)
+        # Bundled and gzipped at every build, as web_server does with js_include, so flash always holds web/.
+        page = gzipped_page()
+        cg.extern_progmem_array(PAGE_ARRAY, cg.uint8, list(page))
+        cg.add_global(cg.RawExpression(f"constexpr size_t {PAGE_ARRAY}_SIZE = {len(page)}"))
 
     scan_end = config[CONF_SCAN_END]
     if scan_end > 0:

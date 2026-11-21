@@ -173,7 +173,7 @@ Decided in [What is the contract between the device and the page?](https://githu
 
 | Endpoint | Does |
 |---|---|
-| `GET /sniffer` | the page, gzipped, served from flash (`constexpr uint8_t[]`, no RAM copy). Until the page lands ([#35](https://github.com/distante/esphome-components/issues/35)), a plain placeholder from flash that links to the data. |
+| `GET /sniffer` | the page, gzipped, served from flash (no RAM copy). Every build bundles `web/` into one HTML file (`page_bundle.py`), gzips it and emits it as an `extern const uint8_t[]`, as `web_server` ships `js_include`. |
 | `GET /sniffer/data?since=S` | JSON, see below |
 | `POST /sniffer/scan/start` | start scan; empty body; 200 with the `scan` object |
 | `POST /sniffer/scan/stop` | stop scan; empty body; 200 with the `scan` object |

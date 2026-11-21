@@ -13,6 +13,10 @@
 
 #ifdef USE_SEC_TOUCH_SNIFFER_WEB_PAGE
 #include "esphome/components/web_server_base/web_server_base.h"
+
+/// The sniffer page, gzipped, in flash. The codegen (__init__.py, PAGE_ARRAY) bundles web/ and emits both.
+extern const uint8_t SEC_TOUCH_SNIFFER_PAGE[] PROGMEM;
+extern const size_t SEC_TOUCH_SNIFFER_PAGE_SIZE;
 #endif
 
 namespace esphome {
@@ -117,6 +121,7 @@ class SecTouchSniffer : public Component,
   static bool send_chunk_(void *request, const char *data, size_t len);
   void begin_json_response_(httpd_req_t *req);
   void end_json_response_(httpd_req_t *req);
+  void serve_page_(AsyncWebServerRequest *request);
   void serve_data_(httpd_req_t *req);
   void serve_scan_(httpd_req_t *req, bool start);
 #endif

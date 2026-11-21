@@ -224,10 +224,6 @@ void SecTouchSniffer::on_message_(int command_id, int property_id, const std::st
 
 #ifdef USE_SEC_TOUCH_SNIFFER_WEB_PAGE
 
-/// Until the page lands (issue #35).
-static constexpr char PLACEHOLDER_PAGE[] = "<!doctype html><meta charset=utf-8><title>SEC-Touch sniffer</title>"
-                                           "<p>The sniffer page is not built yet.";
-
 static SnifferRoute route_of(AsyncWebServerRequest *request) {
   SnifferMethod method = SnifferMethod::METHOD_OTHER;
   if (request->method() == HTTP_GET) {
@@ -250,7 +246,7 @@ bool SecTouchSniffer::canHandle(AsyncWebServerRequest *request) const {
 void SecTouchSniffer::handleRequest(AsyncWebServerRequest *request) {
   switch (route_of(request)) {
     case SnifferRoute::ROUTE_PAGE:
-      request->send(200, "text/html", PLACEHOLDER_PAGE);
+      this->serve_page_(request);
       return;
     case SnifferRoute::ROUTE_DATA:
       this->serve_data_(*request);
@@ -264,6 +260,14 @@ void SecTouchSniffer::handleRequest(AsyncWebServerRequest *request) {
     case SnifferRoute::ROUTE_NONE:
       return;
   }
+}
+
+// Straight from flash, as web_server serves its own page.
+void SecTouchSniffer::serve_page_(AsyncWebServerRequest *request) {
+  AsyncWebServerResponse *response =
+      request->beginResponse(200, "text/html", SEC_TOUCH_SNIFFER_PAGE, SEC_TOUCH_SNIFFER_PAGE_SIZE);
+  response->addHeader("Content-Encoding", "gzip");
+  request->send(response);
 }
 
 bool SecTouchSniffer::send_chunk_(void *request, const char *data, size_t len) {

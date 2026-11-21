@@ -191,7 +191,7 @@ Decided in [What is the contract between the device and the page?](https://githu
 
 **Concurrency and RAM.** Handlers run on the httpd task while the main loop writes records.
 - A mutex (ESPHome's `Mutex`, a FreeRTOS mutex on ESP32) guards the record store. Only the store's writes take it on the main loop; the main loop reads without it, being the only writer. The scan fields the handler reads (scanning flag and position) are separate atomics, so a poll that races a scan step can show them out of step; the next poll corrects it.
-- Per record, the handler copies the record **in binary** (fields, raw value and its history entries, ≤ ~512 B) into static scratch under the lock, releases the lock, then formats JSON into a ~256 B chunk buffer and sends it with `httpd_resp_send_chunk` on the raw request. It sets status, content type and `Access-Control-Allow-Origin` itself and ends with the empty chunk.
+- Per record, the handler copies the record **in binary** (fields, raw value and its history entries, ≤ ~540 B) into static scratch under the lock, releases the lock, then formats JSON into a ~256 B chunk buffer and sends it with `httpd_resp_send_chunk` on the raw request. It sets status, content type and `Access-Control-Allow-Origin` itself and ends with the empty chunk.
 - Peak RAM ~800 B, no heap growth per request, independent of escaping. The query string is parsed in place, not through the server's heap-allocated parameters.
 - A response is not an atomic snapshot. A record changed mid-response is caught by the next poll through `seq`.
 

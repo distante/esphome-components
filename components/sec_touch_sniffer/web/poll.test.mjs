@@ -141,3 +141,68 @@ test("polling now while idle cancels the scheduled poll and polls at once", asyn
   assert.equal(device.calls.length, 2);
   assert.equal(timers.pending.length, 0);
 });
+
+/** Runs `body` with console.error captured instead of printed, and returns what it was called with. */
+async function capturingConsoleError(body) {
+  const original = console.error;
+  const logged = [];
+  console.error = (...args) => logged.push(args);
+  try {
+    await body();
+  } finally {
+    console.error = original;
+  }
+  return logged;
+}
+
+/** A poller whose onOnline records each call and then throws. */
+function pollerWithThrowingOnOnline() {
+  const timers = fakeTimers();
+  const device = controlledPoll();
+  const online = [];
+  const poller = createPoller({
+    poll: device.poll,
+    ...timers,
+    onOnline: (isOnline) => {
+      online.push(isOnline);
+      throw new Error("render failed");
+    },
+  });
+  // The page never awaits start(); the assertions below check what a failing run would break.
+  const start = () => Promise.resolve(poller.start()).catch(() => {});
+  return { timers, device, online, start };
+}
+
+test("an onOnline that throws after a good poll is logged, and the next poll is still 1 s later", async () => {
+  const { timers, device, online, start } = pollerWithThrowingOnOnline();
+
+  const logged = await capturingConsoleError(async () => {
+    start();
+    device.calls[0].resolve();
+    await settle();
+  });
+
+  assert.deepEqual(
+    timers.pending.map((t) => t.ms),
+    [POLL_INTERVAL_MS],
+  );
+  assert.deepEqual(online, [true]);
+  assert.equal(logged.length, 1);
+});
+
+test("an onOnline that throws after a failed poll is logged, and the retry is still 5 s later", async () => {
+  const { timers, device, online, start } = pollerWithThrowingOnOnline();
+
+  const logged = await capturingConsoleError(async () => {
+    start();
+    device.calls[0].reject(new Error("offline"));
+    await settle();
+  });
+
+  assert.deepEqual(
+    timers.pending.map((t) => t.ms),
+    [OFFLINE_RETRY_MS],
+  );
+  assert.deepEqual(online, [false]);
+  assert.equal(logged.length, 1);
+});

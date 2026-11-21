@@ -58,15 +58,20 @@ export function createPoller({ poll, setTimer, clearTimer, onOnline }) {
   async function run() {
     timer = null;
     inFlight = true;
-    let delayMs = POLL_INTERVAL_MS;
+    let ok = true;
     try {
       await poll();
-      onOnline(true);
     } catch {
-      onOnline(false);
-      delayMs = OFFLINE_RETRY_MS;
+      ok = false;
+    }
+    try {
+      onOnline(ok);
+    } catch (error) {
+      // A failing listener is a page bug, not an offline device: log it and keep polling.
+      console.error("sniffer: onOnline failed", error);
     }
     inFlight = false;
+    const delayMs = ok ? POLL_INTERVAL_MS : OFFLINE_RETRY_MS;
     if (pollAgain) {
       pollAgain = false;
       run();

@@ -67,11 +67,7 @@
   <span id="f-types" class="row"></span>
   <select id="f-status"></select>
   <label><input id="f-hide-reg" type="checkbox"> hide registered</label>
-  <select id="f-changed">
-    <option value="0">changed any time</option>
-    <option value="300000">changed &lt; 5 min</option>
-    <option value="3600000">changed &lt; 1 h</option>
-  </select>
+  <select id="f-changed"></select>
   colour by <select id="colour-by"><option>type</option><option>status</option></select>
   <span id="legend" class="row"></span>
 </div>
@@ -100,6 +96,14 @@ const ID_COUNT = 256;
 const FEED_LENGTH = 60;
 /** A grid cell previews this many characters of its value; the full value is in its tooltip. */
 const CELL_CHARS = 6;
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+/** The "changed recently" filter's choices, as [window in ms, label]; 0 means any time. */
+const CHANGED_WITHIN_PRESETS = [
+  [0, "changed any time"],
+  [5 * MINUTE_MS, "changed < 5 min"],
+  [HOUR_MS, "changed < 1 h"],
+];
 
 // Empty on the device; `?device=http://<ip>` while working on the page from a local server.
 const DEVICE_URL = new URLSearchParams(location.search).get("device") ?? "";
@@ -255,6 +259,7 @@ function buildStatic() {
     $("f-types").append(el("label", { class: "badge", style: `background:${TYPE_COLOURS[type]}` }, box, type));
   }
   $("f-status").append(...["all", ...STATUSES].map((status) => el("option", {}, status)));
+  $("f-changed").append(...CHANGED_WITHIN_PRESETS.map(([ms, label]) => el("option", { value: ms }, label)));
 }
 
 function renderHeader() {
@@ -372,13 +377,14 @@ function renderDrawer(rowsById) {
   if (isPadded(row.raw)) {
     value.append(el("span", { class: "mute", title: `padded on the wire: "${row.raw}"` }, " ␣ padded"));
   }
+  const fact = (label, ...value) => el("tr", {}, el("td", { class: "mute" }, label), el("td", {}, ...value));
   const facts = el("table", {},
-    el("tr", {}, el("td", { class: "mute" }, "Query status"),
-      el("td", {}, el("span", { class: `s-${row.status}` }, row.status), row.statusAtMs === null ? "" : ` · ${formatWall(row.statusAtMs)}`)),
-    el("tr", {}, el("td", { class: "mute" }, "Changes"), el("td", {}, String(row.changeCount))),
-    el("tr", {}, el("td", { class: "mute" }, "Last change"), el("td", {}, formatWall(row.changedAtMs))),
-    el("tr", {}, el("td", { class: "mute" }, "First / last seen"), el("td", {}, `${formatWall(row.firstSeenMs)} / ${formatWall(row.lastSeenMs)}`)),
-    el("tr", {}, el("td", { class: "mute" }, "Command id"), el("td", {}, String(row.cmd ?? "—"))),
+    fact("Query status",
+      el("span", { class: `s-${row.status}` }, row.status), row.statusAtMs === null ? "" : ` · ${formatWall(row.statusAtMs)}`),
+    fact("Changes", String(row.changeCount)),
+    fact("Last change", formatWall(row.changedAtMs)),
+    fact("First / last seen", `${formatWall(row.firstSeenMs)} / ${formatWall(row.lastSeenMs)}`),
+    fact("Command id", String(row.cmd ?? "—")),
   );
   const history = row.history.length === 0
     ? [el("div", { class: "mute" }, "no history")]
@@ -411,8 +417,11 @@ function renderLogged() {
 
 function download(name, text, type) {
   const link = el("a", { href: URL.createObjectURL(new Blob([text], { type })), download: name });
+  // Safari can cancel a download from a detached link, or one whose URL is revoked right after the click.
+  document.body.append(link);
   link.click();
-  URL.revokeObjectURL(link.href);
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 0);
 }
 
 // ───── events ─────

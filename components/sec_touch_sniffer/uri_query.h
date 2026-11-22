@@ -5,6 +5,7 @@
 // Reads a request URI's query string in place, without the server's heap-allocated parameters
 // (.specs/sniffer.md, "Concurrency and RAM").
 
+#include <cstdint>
 #include <optional>
 #include <string_view>
 
@@ -28,6 +29,26 @@ inline std::optional<std::string_view> query_value(std::string_view uri, std::st
     }
   }
   return std::nullopt;
+}
+
+/// `text` read as a decimal number of 1+ ASCII digits (no sign, no spaces; leading zeros allowed) that is at most
+/// `max`; nullopt otherwise.
+constexpr std::optional<uint64_t> parse_bounded_uint(std::string_view text, uint64_t max) {
+  if (text.empty()) {
+    return std::nullopt;
+  }
+  uint64_t value = 0;
+  for (char c : text) {
+    if (c < '0' || c > '9') {
+      return std::nullopt;
+    }
+    const uint64_t digit = static_cast<uint64_t>(c - '0');
+    if (digit > max || value > (max - digit) / 10) {
+      return std::nullopt;
+    }
+    value = value * 10 + digit;
+  }
+  return value;
 }
 
 }  // namespace sec_touch

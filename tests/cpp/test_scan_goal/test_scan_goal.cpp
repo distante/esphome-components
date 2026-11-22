@@ -22,6 +22,7 @@ using esphome::sec_touch::last_scan_id;
 using esphome::sec_touch::MAX_PROPERTY_ID;
 using esphome::sec_touch::next_scan_id;
 using esphome::sec_touch::NO_SCAN_ID;
+using esphome::sec_touch::query_value;
 using esphome::sec_touch::scan_goal_name;
 using esphome::sec_touch::scan_start_from_uri;
 using esphome::sec_touch::ScanGoal;
@@ -140,6 +141,12 @@ TEST(ScanGoal, AMissingOrUnknownGoalMeansDiscover) {
   expect_start("?goal=CHECK", DEFAULT_DISCOVER_RUN);
   expect_start("?goal=checks", DEFAULT_DISCOVER_RUN);
   expect_start("?from=3&to=9", discover(3, 9));
+}
+
+TEST(ScanGoal, AKeyThatOnlyStartsWithAParameterNameIsNotThatParameter) {
+  EXPECT_EQ(query_value("?token=5&to=9", "to"), "9");
+  expect_start("?goals=check", DEFAULT_DISCOVER_RUN);
+  expect_start("?from=3&token=5&to=9", discover(3, 9));
 }
 
 TEST(ScanGoal, GoalCheckStartsACheck) {

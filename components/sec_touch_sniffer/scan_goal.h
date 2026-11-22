@@ -6,6 +6,7 @@
 // order, and the start request that picks them ("Device/page contract", start parameters).
 
 #include <cstdint>
+#include <optional>
 #include <string_view>
 
 #include "../sec_touch/known_property_meaning.h"
@@ -104,20 +105,8 @@ namespace scan_goal_detail {
 
 /// `text` read as a property ID (1+ ASCII digits, at most MAX_PROPERTY_ID), or NO_SCAN_ID.
 constexpr int property_id_from(std::string_view text) {
-  if (text.empty()) {
-    return NO_SCAN_ID;
-  }
-  int value = 0;
-  for (char c : text) {
-    if (c < '0' || c > '9') {
-      return NO_SCAN_ID;
-    }
-    value = value * 10 + (c - '0');
-    if (value > MAX_PROPERTY_ID) {
-      return NO_SCAN_ID;
-    }
-  }
-  return value;
+  const std::optional<uint64_t> value = parse_bounded_uint(text, MAX_PROPERTY_ID);
+  return value.has_value() ? static_cast<int>(*value) : NO_SCAN_ID;
 }
 
 }  // namespace scan_goal_detail

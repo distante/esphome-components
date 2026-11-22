@@ -41,11 +41,19 @@ std::vector<int> known_ids_ascending() {
   return ids;
 }
 
+/// The sniffer, with the scan object its page handler serves.
+class TestableSniffer : public SecTouchSniffer {
+ public:
+  using SecTouchSniffer::SecTouchSniffer;
+  /// The scan object the page would get now.
+  ScanState scan() const { return scan_state(this->scan_fields_()); }
+};
+
 /// A hub and a set-up sniffer on a fake UART, with every state the sniffer publishes.
 struct SnifferRig {
   FakeUART uart;
   TestableSECTouch hub;
-  SecTouchSniffer sniffer{&hub};
+  TestableSniffer sniffer{&hub};
   SecTouchSnifferScanSwitch scan_switch;
   std::vector<std::string> published;
 
@@ -259,6 +267,27 @@ TEST(SecTouchSnifferTest, AStartAfterAStopBeginsAtTheFirstIdAgain) {
 
   EXPECT_EQ(rig.gets_sent(),
             (std::vector<int>{UNREGISTERED_ID, UNREGISTERED_ID, NEXT_UNREGISTERED_ID, NEXT_UNREGISTERED_ID + 1}));
+}
+
+TEST(SecTouchSnifferTest, DuringTheGapBeforeAQueryNextNamesThatId) {
+  SnifferRig rig;
+  rig.start_scan(discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID + 1));
+  EXPECT_EQ(rig.sniffer.scan().next, UNREGISTERED_ID);
+
+  rig.answer_scan_query(UNREGISTERED_ID, "10");
+
+  EXPECT_EQ(rig.sniffer.scan().next, NEXT_UNREGISTERED_ID);
+}
+
+TEST(SecTouchSnifferTest, AStopDuringTheGapReportsTheIdItNeverQueried) {
+  SnifferRig rig;
+  rig.start_scan(discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID + 1));
+  rig.answer_scan_query(UNREGISTERED_ID, "10");
+
+  rig.sniffer.stop_scan();
+
+  EXPECT_EQ(rig.gets_sent(), std::vector<int>{UNREGISTERED_ID});
+  EXPECT_EQ(rig.sniffer.scan().next, NEXT_UNREGISTERED_ID);
 }
 
 // --- Scan start and stop from the page: queued by request_scan(), applied by loop() ---

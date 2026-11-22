@@ -173,12 +173,12 @@ void SecTouchSniffer::on_queue_empty_() {
     this->end_scan_(/*completed=*/true);
     return;
   }
-  const int id_to_query = this->take_next_scan_id_();
-  this->set_timeout("scan_next", SCAN_NEXT_DELAY_MS, [this, id_to_query]() {
+  // current_scan_id_ stays at the ID for the wait, so the page's `next` names it until the query is queued.
+  this->set_timeout("scan_next", SCAN_NEXT_DELAY_MS, [this]() {
     if (!this->is_scanning_) {
       return;
     }
-    this->query_(id_to_query);
+    this->query_(this->take_next_scan_id_());
   });
 }
 

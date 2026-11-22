@@ -154,8 +154,9 @@ struct ScanFields {
   bool completed;
   /// The running or last run.
   ScanRun run;
-  /// The first ID of `run` not queued yet, NO_SCAN_ID once the last one is. The sniffer moves past an ID when it
-  /// queues the query, so while the last ID's query is in flight a running scan is at NO_SCAN_ID.
+  /// The first ID of `run` not queued yet, NO_SCAN_ID once the last one is. During the wait before a query it names
+  /// that query's ID; the sniffer moves past an ID only when it queues the query, so while the last ID's query is in
+  /// flight a running scan is at NO_SCAN_ID.
   int current;
 };
 
@@ -302,20 +303,10 @@ bool write_data_json(JsonChunkWriter &w, const PropertyStore &store, const Devic
 /// The `since` query parameter of a request URI, 0 (a full response) when missing or not a valid number.
 inline uint32_t since_from_uri(std::string_view uri) {
   const auto digits = query_value(uri, "since");
-  if (!digits.has_value() || digits->empty()) {
+  if (!digits.has_value()) {
     return 0;
   }
-  uint64_t value = 0;
-  for (char c : *digits) {
-    if (c < '0' || c > '9') {
-      return 0;
-    }
-    value = value * 10 + static_cast<uint64_t>(c - '0');
-    if (value > UINT32_MAX) {
-      return 0;
-    }
-  }
-  return static_cast<uint32_t>(value);
+  return static_cast<uint32_t>(parse_bounded_uint(*digits, UINT32_MAX).value_or(0));
 }
 
 enum class SnifferMethod : uint8_t { METHOD_GET, METHOD_POST, METHOD_OTHER };

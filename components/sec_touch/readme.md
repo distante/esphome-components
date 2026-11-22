@@ -378,9 +378,9 @@ The sniffer serves, at `http://<device>/sniffer`, a page for working out what th
 
 For a known property, the drawer also shows what its value means. Known properties are the fan levels (173–178), fan labels (78–83), summer ventilation (48), date (1) and clock (2). Levels and labels show their name ("level 3", "Burst", "Bad"), summer ventilation shows `0A00` as "on" and `0800` as "off", and date and clock show the value as sent. A value that matches none of these shows as `unexpected value x` in red. The names come from [`fan_level.h`](fan_level.h) (levels) and [`protocol_ids.h`](protocol_ids.h) (labels and summer ventilation), the same tables the component uses.
 
-| Fan level (173) | Fan label (78) | Summer ventilation (48) | Date (1) |
-|---|---|---|---|
-| <img src="images/sniffer-drawer-level.png" alt="ID 173: raw 10, meaning Automatic Time" width="220" /> | <img src="images/sniffer-drawer-label.png" alt="ID 78: raw 35, meaning Kellerraum" width="220" /> | <img src="images/sniffer-drawer-summer.png" alt="ID 48: raw 0800, meaning off" width="220" /> | <img src="images/sniffer-drawer-date.png" alt="ID 1: the date as sent" width="220" /> |
+| Fan level (173) and label (78) | Summer ventilation (48), date (1) and clock (2) |
+|---|---|
+| <img src="images/sniffer-check-fan.png" alt="Check card Fan 1: level 173 = 10 meaning Automatic Time, label 78 = 35 meaning Kellerraum" width="300" /> | <img src="images/sniffer-check-global.png" alt="Check card Global: summer ventilation 48 = 0800 meaning off, date 1 and clock 2 as sent" width="300" /> |
 
 - **HTTP server:** the page needs `web_server_base:`, or `web_server:`, which loads it. Without either the config fails. The port is the server's; the sniffer has no port or auth options of its own.
 - **Sockets:** the page raises the HTTP server's client limit by 2, one for the page's polling and one spare for a reload.

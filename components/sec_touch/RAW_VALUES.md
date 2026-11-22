@@ -105,16 +105,12 @@ which never answered. ID 193, which timed out in the upstream scan, answered thi
 
 The sniffer keeps every value byte-exact as the panel sent it, and its page exports them.
 
-1. Enable the sniffer with the page (see [Sniffer page](readme.md#sniffer-page)):
+1. Enable the sniffer (see [Sniffer page](readme.md#sniffer-page)):
 
    ```yaml
    web_server_base:   # or web_server:
 
-   text_sensor:
-     - platform: sec_touch_sniffer
-       sec_touch_id: sec_touch_component
-       name: "Sniffer"
-       web_page: true
+   sec_touch_sniffer:
    ```
 
 2. Open `http://<device>/sniffer` and press **Start scan**. Normal polling pauses while the
@@ -133,6 +129,3 @@ In the JSON, each raw value is a string with one code point per byte, so parsing
 the exact bytes back. Unlike the log capture this report used, nothing is dropped under
 load: every ID the scan queried is in the export, and those without a value carry status
 `nak` (the panel refused the ID) or `timeout`.
-
-The text sensor's state after the scan holds the same raw values as `id=raw` pairs, the
-format of the [Raw values](#raw-values) list, without registered IDs and capped at 2048 bytes.

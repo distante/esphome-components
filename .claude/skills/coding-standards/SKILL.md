@@ -7,6 +7,7 @@ Single source for this repo's coding standards; every rule lives here once. Else
 
 - `components/sec_touch*/` rules: [sec-touch](../sec-touch/SKILL.md)
 - PR title and body: [pr-body](../pr-body/SKILL.md)
+- Review checks: [review](../review/SKILL.md)
 - Test and lint commands: [readme.md](../../../readme.md#tests)
 - Domain terms: [GLOSSARY.md](../../../GLOSSARY.md)
 - Feature specs: `.specs/`
@@ -32,7 +33,8 @@ Done when each new name in the diff has a grep behind it and each added heap all
 
 1. Start every reviewer and subagent prompt with this line, plus the issue and spec: `Read .claude/skills/coding-standards/SKILL.md first; it is, or links to, every standard of this repo.`
 2. Give the reviewer the whole diff and every acceptance criterion. Known gaps go in as facts ("criterion 6 is deferred to #34"), and the reviewer decides whether to flag them.
-3. Fix every hard violation a reviewer reports, or tell the user why not. Only findings the reviewer itself called judgement calls may be skipped.
+3. Run every check in [review](../review/SKILL.md), and have each reviewer brief say to run them too.
+4. Fix every hard violation a reviewer reports, or tell the user why not. Only findings the reviewer itself called judgement calls may be skipped.
 
 Done when every reported finding is fixed, or named to the user with a reason.
 

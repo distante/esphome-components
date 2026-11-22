@@ -241,6 +241,8 @@ let showKnown = false;
 const flashIds = new Set();
 // The ID whose note the drawer's note field holds.
 let drawerFor = null;
+// Counts the device clears this page made, so a poll fetched before one is dropped.
+let clears = 0;
 
 function load(newMac) {
   mac = newMac;
@@ -308,6 +310,7 @@ async function fetchData(since) {
 const currentScan = () => copy.device?.scan ?? null;
 
 async function pollOnce() {
+  const clearsBefore = clears;
   let response = await fetchData(sinceFor(copy));
   if (response.mac !== mac) {
     load(response.mac);
@@ -317,6 +320,10 @@ async function pollOnce() {
   if (resyncReason(copy, response) !== null) {
     copy = { ...copy, since: null };
     response = await fetchData(0);
+  }
+  // A clear landed while this poll was out: its response holds the records just cleared. The next poll is a full one.
+  if (clears !== clearsBefore) {
+    return;
   }
   const result = applyResponse(copy, response, Date.now());
   copy = result.copy;
@@ -378,12 +385,17 @@ async function stopScan() {
 
 /** Empties the device's records, then the browser copy; notes, mutes and the range stay. */
 async function clearData() {
+  // No device known yet: nothing to clear.
+  if (mac === null) {
+    return;
+  }
   if (!confirm("Clear every captured value on the device and in this browser? Notes and mutes stay.")) {
     return;
   }
   const requestMac = mac;
   try {
     await fetchOk("/sniffer/clear", { method: "POST" });
+    clears += 1;
   } catch (error) {
     console.error("clear request failed", error);
     alert("The device did not clear its records; nothing was cleared.");

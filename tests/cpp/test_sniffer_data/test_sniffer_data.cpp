@@ -383,7 +383,7 @@ TEST(SnifferData, SinceZeroIsAFullResponse) {
   record_spec_example(store);
 
   EXPECT_EQ(
-      data_json(store, 0, scan_state(ScanFields{true, true, false, {ScanGoal::SCAN_GOAL_DISCOVER, 1, 208}, 42})),
+      data_json(store, 0, scan_state(running(DISCOVER_1_208, MID_RANGE_ID))),
       R"({"mac":"aabbccddeeff","name":"esp32-power-meter","boot":"9f2c41ab","uptime":812000,)"
       R"("seq":4,"full":true,"dropped":0,"scan":{"active":true,"goal":"discover","from":1,"to":208,"next":42,"done":false},)"
       R"("records":[{"id":5,"cmd":32,"raw":"0100","first":1000,"last":5000,"changed":3000,"changes":1,)"

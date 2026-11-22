@@ -186,6 +186,7 @@ TEST(SecTouchSnifferTest, ACompletedScanPublishesOnceWithEverythingItFound) {
   rig.answer_scan_query(NEXT_UNREGISTERED_ID, "11");
 
   EXPECT_FALSE(rig.sniffer.is_scanning());
+  EXPECT_TRUE(rig.sniffer.scan().done);
   EXPECT_EQ(rig.published, (std::vector<std::string>{UNREGISTERED_STATE + STATE_SEPARATOR +
                                                      std::to_string(NEXT_UNREGISTERED_ID) + "=11"}));
 }
@@ -198,6 +199,7 @@ TEST(SecTouchSnifferTest, StoppingAScanPublishesOnceWithWhatItFoundSoFar) {
   rig.sniffer.stop_scan();
 
   EXPECT_FALSE(rig.sniffer.is_scanning());
+  EXPECT_FALSE(rig.sniffer.scan().done);
   EXPECT_EQ(rig.published, (std::vector<std::string>{UNREGISTERED_STATE}));
 }
 
@@ -267,6 +269,18 @@ TEST(SecTouchSnifferTest, AStartAfterAStopBeginsAtTheFirstIdAgain) {
 
   EXPECT_EQ(rig.gets_sent(),
             (std::vector<int>{UNREGISTERED_ID, UNREGISTERED_ID, NEXT_UNREGISTERED_ID, NEXT_UNREGISTERED_ID + 1}));
+}
+
+TEST(SecTouchSnifferTest, AStartAfterACompletedRunIsNotDone) {
+  SnifferRig rig;
+  const ScanRun run = discover(UNREGISTERED_ID, UNREGISTERED_ID);
+  rig.start_scan(run);
+  rig.answer_scan_query(UNREGISTERED_ID, "10");
+  ASSERT_TRUE(rig.sniffer.scan().done);
+
+  rig.start_scan(run);
+
+  EXPECT_FALSE(rig.sniffer.scan().done);
 }
 
 TEST(SecTouchSnifferTest, DuringTheGapBeforeAQueryNextNamesThatId) {

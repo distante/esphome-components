@@ -4,27 +4,10 @@ import assert from "node:assert/strict";
 import { changedSinceMark, markChanges, markNow, markRaw } from "./mark.mjs";
 import { applyResponse, emptyCopy, fromStored, toStored } from "./records.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
+import { deviceRecord } from "./fixture_records.mjs";
 
 const BROWSER_NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
 const [LEVEL] = FIXTURE_CATALOGUE.levelIds;
-
-/** A record as /sniffer/data serves it (.specs/sniffer.md, "JSON shape"); a null raw only ever failed. */
-function deviceRecord(id, raw) {
-  const seen = raw === null ? null : 1000;
-  return {
-    id,
-    cmd: raw === null ? null : 32,
-    raw,
-    first: seen,
-    last: seen,
-    changed: seen,
-    changes: 0,
-    status: raw === null ? "nak" : "ok",
-    status_at: 1000,
-    reg: false,
-    hist: raw === null ? [] : [[1000, raw]],
-  };
-}
 
 function response(records, full) {
   return {

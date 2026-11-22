@@ -12,26 +12,9 @@ import {
   wholeDecimal,
   withScan,
 } from "./records.mjs";
+import { deviceRecord } from "./fixture_records.mjs";
 
 const BROWSER_NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
-
-/** A record as /sniffer/data serves it (.specs/sniffer.md, "JSON shape"). */
-function deviceRecord(id, raw, overrides = {}) {
-  return {
-    id,
-    cmd: 32,
-    raw,
-    first: 1000,
-    last: 5000,
-    changed: 3000,
-    changes: 0,
-    status: "unqueried",
-    status_at: null,
-    reg: false,
-    hist: [[3000, raw]],
-    ...overrides,
-  };
-}
 
 function response(records, overrides = {}) {
   return {

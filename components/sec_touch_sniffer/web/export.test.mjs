@@ -5,6 +5,7 @@ import { exportCsv, exportJson } from "./export.mjs";
 import { markNow } from "./mark.mjs";
 import { applyResponse, emptyCopy, fromStored, toStored } from "./records.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
+import { deviceRecord } from "./fixture_records.mjs";
 
 const BROWSER_NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
 const SCAN = { active: false, goal: "discover", from: 1, to: 208, next: 1, done: true };
@@ -41,10 +42,7 @@ function copyFromDevice() {
 
 /** After the mark: 5 changes, the date gets its first value, 40 is new. */
 function changedAfterMark(copy) {
-  const record = (id, raw) => ({
-    id, cmd: 32, raw, first: 11_000, last: 11_000, changed: 11_000,
-    changes: 1, status: "ok", status_at: 11_000, reg: false, hist: [[11_000, raw]],
-  });
+  const record = (id, raw) => deviceRecord(id, raw, { seenAt: 11_000, changes: 1 });
   const delta = { ...JSON.parse(DEVICE_JSON), uptime: 12_000, seq: 9, full: false,
     records: [record(5, "0090"), record(DATE, "21.11.26"), record(40, "1")] };
   return applyResponse(copy, delta, BROWSER_NOW_MS + 2000).copy;

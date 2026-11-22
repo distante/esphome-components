@@ -1,0 +1,721 @@
+<!doctype html>
+<!--
+  PROTOTYPE, throwaway. Wayfinder ticket "What does the experiment panel look like in discover?" (#97).
+  Three variants of discover's experiment panel, switchable via ?variant=A|B|C and the bottom bar (or ← →).
+  Standalone on purpose: the real page needs a device and the bundled catalogue, so this file copies the discover
+  page's shell and CSS and fakes the device. The floating "Simulated panel" box stands in for the real panel: change
+  a setting there, then capture. Candidate rules follow #96 (round trip A,B,A; consistency; 2 labels × 2 captures).
+  Open it by double-clicking; nothing is stored.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · experiment panel</title>
+<style>
+  :root { --bg:#fafafa; --fg:#1d1d1f; --mute:#6e6e73; --line:#ddd; --acc:#0a66c2; --bad:#c0392b; --ok:#1e8449;
+    --mark:#e67e22; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; font:13px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--fg); padding:0 12px 60px;
+    min-height:100vh; display:flex; flex-direction:column; }
+  h1 { font-size:15px; margin:10px 0; }
+  button, input, select, textarea { font:inherit; }
+  button { padding:3px 9px; cursor:pointer; }
+  button.primary { background:var(--acc); color:#fff; border:1px solid var(--acc); border-radius:3px; }
+  button.link { border:none; background:none; color:var(--acc); padding:0 2px; text-decoration:underline; }
+  button:disabled { opacity:.5; cursor:default; }
+  code { font-family:ui-monospace, Menlo, monospace; }
+  .mute { color:var(--mute); }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0; }
+  .row .row { margin:0; }
+  .grow { flex:1; }
+  .badge { display:inline-block; padding:0 5px; border-radius:3px; font-size:11px; border:1px solid var(--line); background:#fff; }
+  .badge.ok { background:var(--ok); color:#fff; border-color:var(--ok); }
+  .badge.cand { background:#fdebd0; border-color:var(--mark); }
+  .badge.out { background:#eee; color:#888; }
+  .badge.bad { background:var(--bad); color:#fff; border-color:var(--bad); }
+  .bar { height:8px; background:#e5e5e5; border-radius:4px; overflow:hidden; min-width:120px; }
+  .bar > i { display:block; height:100%; background:var(--acc); }
+  #discover-view { display:flex; flex-direction:column; }
+  #main { min-height:520px; display:flex; gap:12px; }
+  #main.short { min-height:340px; }
+  #grid { flex:1; min-width:0; display:grid; gap:2px;
+    grid-template-columns:repeat(16, minmax(0, 1fr)); grid-template-rows:repeat(16, minmax(0, 1fr)); }
+  .cell { font-size:10px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    overflow:hidden; cursor:pointer; background:#f7f7f7; border:1px solid #e2e2e2; position:relative; }
+  .cell code { font-size:10px; max-width:100%; overflow:hidden; white-space:nowrap; }
+  .cell.unseen { background:#fff; border:1px dashed #bbb; }
+  .cell.gone { background:transparent; border:none; cursor:default; }
+  .cell.dim { opacity:.25; }
+  .cell.cursor { outline:3px solid var(--acc); }
+  .cell.sel { outline:2px solid red; }
+  .ring-prev { box-shadow:inset 0 0 0 3px var(--mark); }
+  .ring-cand { box-shadow:inset 0 0 0 3px var(--mark); }
+  .ring-corr { box-shadow:inset 0 0 0 3px var(--ok); }
+  .cell .star { position:absolute; top:0; right:2px; font-size:10px; }
+  #side { width:360px; flex:none; overflow:auto; }
+  .box { background:#fff; border:1px solid var(--line); padding:8px; margin-bottom:10px; }
+  .list div { cursor:pointer; border-bottom:1px solid var(--line); padding:2px 0; }
+  .bigtabs { display:flex; margin:8px 0; border-bottom:2px solid var(--line); }
+  .bigtabs button { flex:1; border:none; background:none; padding:8px 16px; font-size:14px;
+    border-bottom:3px solid transparent; margin-bottom:-2px; text-align:left; }
+  .bigtabs button.on { border-bottom-color:var(--acc); font-weight:600; }
+  .bigtabs small { font-weight:400; color:var(--mute); font-size:12px; }
+  #range input { width:4em; }
+  table.lr { border-collapse:collapse; margin:4px 0; }
+  table.lr td, table.lr th { padding:1px 8px 1px 0; text-align:left; font-weight:400; }
+  table.lr th { color:var(--mute); font-size:11px; }
+  .chip { display:inline-flex; gap:4px; align-items:center; border:1px solid var(--line); border-radius:10px;
+    padding:0 4px 0 8px; background:#fff; font-size:12px; }
+  .chip button { border:none; background:none; padding:0 3px; color:var(--mute); }
+  .chip.narrow { border-style:dashed; }
+  .cand-block { border-top:1px solid var(--line); padding:6px 0; }
+  .probe-res { font-size:12px; margin-top:3px; }
+  .probe-res.ok { color:var(--ok); } .probe-res.bad { color:var(--bad); }
+  .s-nak { color:var(--bad); } .s-timeout { color:#b9770e; }
+
+  /* Variant B: the bench */
+  #exp-top { margin:4px 0 8px; }
+  .bench { background:#fff; border:1px solid var(--line); padding:8px; }
+  .pilltabs { display:flex; gap:4px; flex-wrap:wrap; }
+  .pilltabs button { border:1px solid var(--line); background:#fff; border-radius:12px; padding:2px 10px; }
+  .pilltabs button.on { background:var(--fg); color:#fff; border-color:var(--fg); }
+  .matrix-wrap { overflow:auto; max-height:300px; margin-top:6px; }
+  table.matrix { border-collapse:collapse; font-size:12px; }
+  table.matrix th, table.matrix td { border:1px solid #eee; padding:2px 6px; text-align:center; white-space:nowrap; }
+  table.matrix th { background:#f4f4f4; position:sticky; top:0; z-index:1; font-weight:500; }
+  table.matrix th.lbl { min-width:64px; }
+  table.matrix td.diff { background:#fdebd0; }
+  table.matrix td.skip { color:#bbb; }
+  table.matrix tr.out td { color:#aaa; }
+  table.matrix tr.out td.id { text-decoration:line-through; }
+  table.matrix td.id { text-align:right; font-weight:600; cursor:pointer; }
+  table.matrix tr.sel td { background:#eaf2fb; }
+
+  /* Variant C: the coach */
+  .subtabs { display:flex; gap:0; border-bottom:1px solid var(--line); margin:2px 0 8px; }
+  .subtabs button { border:none; background:none; padding:5px 12px; border-bottom:2px solid transparent; margin-bottom:-1px; }
+  .subtabs button.on { border-bottom-color:var(--mark); font-weight:600; }
+  .coach { background:#fffaf2; border:1px solid #f3d9b5; padding:10px; margin-bottom:10px; }
+  .coach .step { font-size:15px; margin-bottom:8px; }
+  .coach input.label { font-size:16px; padding:4px 6px; width:150px; }
+  .coach button.primary { font-size:15px; padding:4px 14px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:6px; padding:8px; margin-bottom:8px; }
+  .card.corr { border-color:var(--ok); }
+  .card h3 { margin:0 0 4px; font-size:14px; display:flex; gap:6px; align-items:center; }
+  .timeline { border-left:2px solid var(--line); margin-left:6px; padding-left:10px; }
+  .timeline div { position:relative; padding:2px 0; }
+  .timeline div::before { content:""; position:absolute; left:-15px; top:8px; width:8px; height:8px; border-radius:50%;
+    background:var(--mute); }
+  .timeline div.narrow::before { background:#fff; border:2px solid var(--mute); width:4px; height:4px; }
+
+  /* Prototype-only chrome: deliberately loud so it is not part of the design. */
+  #sim { position:fixed; bottom:12px; left:12px; background:#2b2b2b; color:#eee; padding:8px 10px; border-radius:8px;
+    font-size:12px; z-index:50; box-shadow:0 4px 18px rgba(0,0,0,.3); width:220px; }
+  #sim b { color:#ffcf6b; }
+  #sim select { width:100%; margin:2px 0 6px; }
+  #switcher { position:fixed; bottom:12px; left:50%; transform:translateX(-50%); background:#111; color:#fff;
+    border-radius:20px; padding:6px 8px; display:flex; gap:8px; align-items:center; z-index:60;
+    box-shadow:0 6px 20px rgba(0,0,0,.35); font-size:13px; }
+  #switcher button { background:#333; color:#fff; border:none; border-radius:50%; width:28px; height:28px; }
+  #switcher span { min-width:220px; text-align:center; }
+</style>
+</head>
+<body>
+<div class="row">
+  <h1>SEC-Touch sniffer · ventilation-controller</h1>
+  <span class="badge">live</span>
+  <span class="mute">AA:BB:CC:DD:EE:FF · <span id="id-count">0</span> IDs</span>
+  <span class="grow"></span>
+  <button disabled>Export JSON</button>
+  <button disabled>Export CSV</button>
+  <button disabled>Clear data</button>
+</div>
+<div class="bigtabs">
+  <button class="on">Discover <small>— find unknown properties</small></button>
+  <button disabled>Check <small>— confirm known properties</small></button>
+</div>
+<div id="scan" class="row">
+  <button id="scan-toggle">Start scan</button>
+  <span id="range">IDs <input id="range-from" value="17"> – <input id="range-to" value="255"></span>
+  <div class="bar grow"><i id="scan-bar" style="width:0"></i></div>
+  <span id="scan-label" class="mute">idle</span>
+</div>
+<div id="exp-top"></div>
+<div id="discover-view">
+  <div class="row">
+    <input id="f-query" placeholder="ID, value or note…" style="width:170px">
+    <select disabled><option>changed any time</option></select>
+    <span id="filter-extra" class="row"></span>
+    <span class="badge" style="border:1px dashed #bbb">never seen</span>
+    <span class="badge" style="opacity:.4">filtered out</span>
+    <span id="legend" class="row"></span>
+  </div>
+  <div id="main">
+    <div id="grid"></div>
+    <div id="side"></div>
+  </div>
+</div>
+
+<div id="sim">
+  <b>Simulated panel</b> <span style="opacity:.7">(prototype only)</span>
+  <div style="margin-top:4px">Fan 1 mode</div>
+  <select id="sim-fan1"><option>normal</option><option>eco</option><option>boost</option><option>off</option></select>
+  <div>Fan 2 mode</div>
+  <select id="sim-fan2"><option>normal</option><option>eco</option><option>boost</option><option>off</option></select>
+  <div style="opacity:.75">Device: ID 77 and 160 track fan 1, 131 only flips on boost (read-only), 78 tracks fan 2,
+    200 is a counter, 90 flickers, ~2% timeouts.</div>
+</div>
+<div id="switcher">
+  <button id="sw-prev" title="previous variant (←)">‹</button>
+  <span id="sw-label"></span>
+  <button id="sw-next" title="next variant (→)">›</button>
+</div>
+
+<script>
+// ═════════════ shared: simulated device ═════════════
+const ID_COUNT = 256;
+const KNOWN = new Set([1, 2, ...Array.from({ length: 14 }, (_, i) => 3 + i), 40, 41, 42, 43, 44, 45, 110, 111]);
+const FAN_RAW = { normal: "01", eco: "02", boost: "03", off: "00" };
+const FAN_TEXT = { normal: "NORMAL", eco: "ECO", boost: "BOOST", off: "OFF" };
+const panel = { fan1: "normal", fan2: "normal" };
+let scanNo = 0;
+const hash = (n) => ((n * 2654435761) >>> 0) % 1000;
+const baseline = (id) => (hash(id) % 3 === 0 ? String(hash(id) % 100) : (hash(id) % 5 === 0 ? `T${hash(id) % 17}` : String(hash(id) % 8)));
+const alwaysNak = (id) => hash(id) % 23 === 0;
+const neverSeen = (id) => hash(id) % 31 === 0;
+const writable = new Set([77, 78, 160]);
+
+/** What the device answers for an ID right now: {raw} | {nak:true} | {timeout:true}. */
+function answer(id) {
+  if (Math.random() < 0.02) return { timeout: true };
+  if (alwaysNak(id)) return { nak: true };
+  if (id === 77) return { raw: FAN_RAW[panel.fan1] };
+  if (id === 160) return { raw: FAN_TEXT[panel.fan1] };
+  if (id === 131) return { raw: panel.fan1 === "boost" ? "01" : "00" };
+  if (id === 78) return { raw: FAN_RAW[panel.fan2] };
+  if (id === 200) return { raw: String(1000 + scanNo) };
+  if (id === 90) return { raw: Math.random() < 0.5 ? "0" : "1" };
+  return { raw: baseline(id) };
+}
+
+// The browser copy: latest value per ID (what the grid shows), from any scan.
+const latest = new Map();
+
+// ═════════════ shared: experiments (#96 rules) ═════════════
+let experiments = [];
+let activeIdx = -1;
+let selected = null;
+let onlyCandidates = false;
+let scanning = null; // {label, total, done, cancel}
+const probesRunning = new Set();
+
+const active = () => experiments[activeIdx] ?? null;
+const keyOf = (label) => label.trim().toLowerCase();
+const fmt = (e) => (e === undefined ? "·" : e.timeout ? "⏱" : e.nak ? "NAK" : e.raw);
+
+function labelsOf(exp) {
+  const seen = new Map();
+  for (const c of exp.captures) if (!seen.has(keyOf(c.label))) seen.set(keyOf(c.label), c.label.trim());
+  return seen; // key -> first spelling
+}
+
+/** Per ID: {id, status: candidate|corroborated|inconsistent|changed|steady, table: Map key->raw, reason} */
+function analyse(exp) {
+  const result = new Map();
+  if (!exp) return result;
+  const ids = new Set();
+  for (const c of exp.captures) for (const id of c.values.keys()) ids.add(id);
+  for (const id of ids) {
+    const walk = [];
+    for (const c of exp.captures) {
+      const e = c.values.get(id);
+      if (e === undefined || e.timeout) continue;
+      walk.push({ key: keyOf(c.label), v: e.nak ? "\u0000nak" : e.raw });
+    }
+    const byKey = new Map();
+    let consistent = true;
+    for (const w of walk) {
+      if (!byKey.has(w.key)) byKey.set(w.key, []);
+      const list = byKey.get(w.key);
+      if (list.length && list[0] !== w.v) consistent = false;
+      list.push(w.v);
+    }
+    let roundTrip = false;
+    for (let i = 0; i + 2 < walk.length; i++) {
+      const [x, y, z] = [walk[i], walk[i + 1], walk[i + 2]];
+      if ([x, y, z].some((w) => w.v === "\u0000nak")) continue;
+      if (x.key === z.key && x.key !== y.key && x.v === z.v && y.v !== x.v) roundTrip = true;
+    }
+    const changed = new Set(walk.map((w) => w.v)).size > 1;
+    let status = "steady";
+    if (!consistent) status = "inconsistent";
+    else if (roundTrip) {
+      const repeated = [...byKey.values()].filter((l) => l.length >= 2).length;
+      status = repeated >= 2 ? "corroborated" : "candidate";
+    } else if (changed) status = "changed";
+    const table = new Map([...byKey].map(([k, l]) => [k, l[0] === "\u0000nak" ? "NAK" : l[0]]));
+    const counts = new Map([...byKey].map(([k, l]) => [k, l.length]));
+    result.set(id, { id, status, table, counts });
+  }
+  return result;
+}
+
+const isCand = (a) => a && (a.status === "candidate" || a.status === "corroborated");
+function candidatesOf(exp) {
+  return [...analyse(exp).values()].filter(isCand).sort((a, b) =>
+    (b.status === "corroborated") - (a.status === "corroborated") || a.id - b.id);
+}
+function nextScope(exp, forceFull = false) {
+  const cands = candidatesOf(exp);
+  if (forceFull || cands.length === 0) {
+    const r = exp?.range ?? currentRange();
+    return { full: true, ids: rangeIds(r), text: `full range ${r.from}–${r.to}` };
+  }
+  return { full: false, ids: cands.map((c) => c.id), text: `${cands.length} candidate${cands.length === 1 ? "" : "s"}` };
+}
+const currentRange = () => ({ from: Number(document.getElementById("range-from").value), to: Number(document.getElementById("range-to").value) });
+function rangeIds(r) {
+  const out = [];
+  for (let id = r.from; id <= r.to; id++) if (!KNOWN.has(id)) out.push(id);
+  return out;
+}
+/** Changed vs previous capture: the ID's entry in the last capture that has it differs from the one before. */
+function changedVsPrev(exp) {
+  const out = new Set();
+  if (!exp || exp.captures.length < 2) return out;
+  const last = exp.captures[exp.captures.length - 1];
+  for (const [id, e] of last.values) {
+    if (e.timeout) continue;
+    for (let i = exp.captures.length - 2; i >= 0; i--) {
+      const p = exp.captures[i].values.get(id);
+      if (p === undefined || p.timeout) continue;
+      if (fmt(p) !== fmt(e)) out.add(id);
+      break;
+    }
+  }
+  return out;
+}
+
+function newExperiment(name) {
+  if (!name.trim()) return;
+  experiments.push({ name: name.trim(), range: null, captures: [], probes: new Map() });
+  activeIdx = experiments.length - 1;
+  render();
+}
+
+function capture(label, forceFull = false) {
+  const exp = active();
+  if (!exp || !label.trim() || scanning) return;
+  if (!exp.range) exp.range = currentRange();
+  const scope = nextScope(exp, forceFull);
+  const values = new Map();
+  let i = 0;
+  scanNo++;
+  scanning = { label: label.trim(), total: scope.ids.length, done: 0, full: scope.full, timer: null };
+  const step = () => {
+    for (let k = 0; k < 6 && i < scope.ids.length; k++, i++) {
+      const id = scope.ids[i];
+      if (neverSeen(id)) { values.set(id, { timeout: true }); continue; }
+      const a = answer(id);
+      values.set(id, a);
+      if (a.raw !== undefined) latest.set(id, a.raw);
+    }
+    scanning.done = i;
+    if (i >= scope.ids.length) {
+      exp.captures.push({ label: label.trim(), atMs: Date.now(), full: scope.full, values });
+      scanning = null;
+      lastLabelInput = "";
+    } else {
+      scanning.timer = setTimeout(step, 25);
+    }
+    render();
+  };
+  step();
+}
+function stopCapture() {
+  if (!scanning) return;
+  clearTimeout(scanning.timer);
+  scanning = null; // a stopped scan stores no capture; the label stays in the input
+  render();
+}
+function deleteCapture(index) {
+  active().captures.splice(index, 1);
+  render();
+}
+
+/** Simulated write probe: SET another observed value, GET it back, restore. */
+function probe(id, targetKey) {
+  const exp = active();
+  const a = analyse(exp).get(id);
+  const labels = labelsOf(exp);
+  const lastCap = [...exp.captures].reverse().find((c) => c.values.get(id)?.raw !== undefined);
+  const originalKey = keyOf(lastCap.label);
+  const target = a.table.get(targetKey);
+  const original = a.table.get(originalKey);
+  probesRunning.add(id);
+  exp.probes.set(id, { running: true, steps: [`SET ${id} = ${target} (${labels.get(targetKey)})…`] });
+  render();
+  setTimeout(() => {
+    const ok = writable.has(id);
+    const steps = [
+      `SET ${target} → ${ok ? "ACK" : "NAK"}`,
+      `GET → ${ok ? target : original}`,
+      `restore SET ${original} → ${ok ? "ACK" : "NAK"}, GET → ${original}`,
+    ];
+    exp.probes.set(id, { running: false, writable: ok, steps, target: labels.get(targetKey), atMs: Date.now() });
+    probesRunning.delete(id);
+    render();
+  }, 1200);
+}
+
+// ═════════════ shared: page shell ═════════════
+const $ = (id) => document.getElementById(id);
+function el(tag, attrs = {}, ...children) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (v !== false && v !== null && v !== undefined) n.setAttribute(k, v === true ? "" : v);
+  }
+  n.append(...children.flat().filter((c) => c !== null && c !== undefined && c !== false));
+  return n;
+}
+let lastLabelInput = "";
+const cells = [];
+for (let id = 0; id < ID_COUNT; id++) {
+  const c = el("div", { class: "cell" });
+  c.addEventListener("click", () => { if (!KNOWN.has(id)) { selected = selected === id ? null : id; render(); } });
+  cells.push(c);
+  $("grid").append(c);
+}
+$("scan-toggle").addEventListener("click", () => {
+  // The plain scan stays for browsing; experiments capture through their own button.
+  if (scanning) return stopCapture();
+  rangeIds(currentRange()).forEach((id) => { const a = answer(id); if (a.raw !== undefined) latest.set(id, a.raw); });
+  render();
+});
+$("sim-fan1").addEventListener("change", (e) => { panel.fan1 = e.target.value; });
+$("sim-fan2").addEventListener("change", (e) => { panel.fan2 = e.target.value; });
+$("f-query").addEventListener("input", render);
+
+function renderScanRow() {
+  const exp = active();
+  if (scanning) {
+    $("scan-toggle").textContent = "Stop";
+    $("scan-bar").style.width = `${(100 * scanning.done) / scanning.total}%`;
+    $("scan-label").textContent = `capturing “${scanning.label}” for ${exp?.name} · ${scanning.done}/${scanning.total}` +
+      (scanning.full ? " · full range" : " · candidates only");
+  } else {
+    $("scan-toggle").textContent = "Start scan";
+    $("scan-bar").style.width = "0";
+    $("scan-label").textContent = exp ? `${exp.name} · ${exp.captures.length} captures` : "idle";
+  }
+  $("id-count").textContent = latest.size;
+}
+
+/** Grid: `decor(id)` returns {ring, star, dim} for the variant. */
+function renderGrid(decor) {
+  const q = $("f-query").value.trim();
+  for (let id = 0; id < ID_COUNT; id++) {
+    const c = cells[id];
+    c.className = "cell";
+    if (KNOWN.has(id)) { c.classList.add("gone"); c.replaceChildren(); continue; }
+    const raw = latest.get(id);
+    c.replaceChildren(el("span", { class: "mute" }, String(id)));
+    if (raw === undefined) c.classList.add("unseen");
+    else {
+      c.append(el("code", {}, raw.slice(0, 6)));
+      c.style.backgroundColor = /^\d+$/.test(raw) ? "#dbeafe" : "#dcfce7";
+    }
+    if (raw === undefined) c.style.backgroundColor = "";
+    const d = decor(id);
+    if (d.ring) c.classList.add(d.ring);
+    if (d.star) c.append(el("span", { class: "star" }, d.star));
+    const qMiss = q && !String(id).includes(q) && !(raw ?? "").includes(q);
+    if (d.dim || qMiss) c.classList.add("dim");
+    if (selected === id) c.classList.add("sel");
+  }
+}
+
+function labelInput(id, cls) {
+  const exp = active();
+  const dl = el("datalist", { id: `${id}-dl` }, [...labelsOf(exp).values()].map((l) => el("option", { value: l })));
+  const input = el("input", { id, list: `${id}-dl`, placeholder: "value label, e.g. boost", class: cls ?? "",
+    value: lastLabelInput, oninput: (e) => { lastLabelInput = e.target.value; } });
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") capture(input.value); });
+  return [input, dl];
+}
+function captureButtons(inputId, big) {
+  return [
+    el("button", { class: "primary", disabled: Boolean(scanning), onclick: () => capture($(inputId).value) },
+      scanning ? "Capturing…" : "Capture"),
+    scanning ? el("button", { onclick: stopCapture }, "Stop") : null,
+    el("button", { class: "link", disabled: Boolean(scanning), title: "Scan the experiment's whole range this time",
+      onclick: () => capture($(inputId).value, true) }, "full rescan"),
+  ];
+}
+function labelValueTable(exp, a) {
+  const labels = labelsOf(exp);
+  return el("table", { class: "lr" },
+    el("tr", {}, el("th", {}, "label"), el("th", {}, "raw"), el("th", {}, "seen")),
+    [...a.table].map(([k, raw]) => el("tr", {}, el("td", {}, labels.get(k)), el("td", {}, el("code", {}, raw)),
+      el("td", { class: "mute" }, `${a.counts.get(k)}×`))));
+}
+function statusBadge(a) {
+  if (a.status === "corroborated") return el("span", { class: "badge ok", title: "2 labels × 2 agreeing captures" }, "corroborated");
+  if (a.status === "candidate") return el("span", { class: "badge cand", title: "round trip seen; needs 2 labels × 2 captures" }, "candidate");
+  if (a.status === "inconsistent") return el("span", { class: "badge out", title: "a repeated label gave another value" }, "out: inconsistent");
+  return el("span", { class: "badge out" }, a.status);
+}
+function probeControl(exp, a, compact) {
+  const pr = exp.probes.get(a.id);
+  if (a.status !== "corroborated") {
+    return compact ? el("span", { class: "mute" }, "—") : el("div", { class: "mute", style: "font-size:12px" },
+      "write probe once corroborated");
+  }
+  const labels = labelsOf(exp);
+  const sel = el("select", { title: "value to write: only values already observed" },
+    [...a.table.keys()].map((k) => el("option", { value: k }, labels.get(k))));
+  const lastCap = [...exp.captures].reverse().find((c) => c.values.get(a.id)?.raw !== undefined);
+  const otherKey = [...a.table.keys()].find((k) => k !== keyOf(lastCap.label));
+  if (otherKey) sel.value = otherKey;
+  const btn = el("button", { disabled: probesRunning.has(a.id) || Boolean(scanning), onclick: () => probe(a.id, sel.value),
+    title: "SET the chosen value, GET it back, then restore the original" }, pr?.running ? "Probing…" : "Write probe");
+  const res = !pr ? null : pr.running
+    ? el("div", { class: "probe-res mute" }, pr.steps.join(" · "))
+    : el("div", { class: `probe-res ${pr.writable ? "ok" : "bad"}` },
+      pr.writable ? "✓ writable" : "✗ not writable", el("span", { class: "mute" }, ` · wrote ${pr.target}: ${pr.steps.join(" · ")}`));
+  if (compact) return el("span", {}, sel, " ", btn, pr && !pr.running ? (pr.writable ? " ✓" : " ✗") : "");
+  return el("div", {}, el("div", { class: "row" }, "write ", sel, btn), res);
+}
+function drawerBox() {
+  if (selected === null) return null;
+  const exp = active();
+  const a = analyse(exp).get(selected);
+  return el("div", { class: "box" },
+    el("div", { class: "row" }, el("b", {}, `ID ${selected}`), a ? statusBadge(a) : null, el("span", { class: "grow" }),
+      el("button", { onclick: () => { selected = null; render(); } }, "×")),
+    el("div", { style: "font-size:20px" }, el("code", {}, latest.get(selected) ?? "never seen")),
+    a && exp ? [el("div", { class: "mute" }, `in “${exp.name}”:`), labelValueTable(exp, a)] : null,
+    el("textarea", { placeholder: `Note for ID ${selected}`, style: "width:100%;min-height:40px" }));
+}
+function newExperimentForm(compact) {
+  const input = el("input", { placeholder: "setting, e.g. fan 1 mode", style: "width:170px" });
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") newExperiment(input.value); });
+  return el("span", { class: "row" }, input, el("button", { onclick: () => newExperiment(input.value) },
+    compact ? "+ New" : "Start experiment"));
+}
+
+// ═════════════ Variant A: side box (replaces the mark box in place) ═════════════
+function renderA() {
+  $("exp-top").replaceChildren();
+  $("main").classList.remove("short");
+  const exp = active();
+  const an = analyse(exp);
+  const prev = changedVsPrev(exp);
+  $("filter-extra").replaceChildren(el("label", {}, el("input", { type: "checkbox", checked: onlyCandidates,
+    onchange: (e) => { onlyCandidates = e.target.checked; render(); } }), " only candidates"));
+  $("legend").replaceChildren(el("span", { class: "badge ring-prev" }, "changed vs previous capture"),
+    el("span", { class: "badge" }, "★ candidate"), el("span", { class: "badge" }, "✔ corroborated"));
+  renderGrid((id) => {
+    const a = an.get(id);
+    return { ring: prev.has(id) ? "ring-prev" : null, star: a?.status === "corroborated" ? "✔" : isCand(a) ? "★" : null,
+      dim: onlyCandidates && !isCand(a) };
+  });
+
+  const box = el("div", { class: "box" });
+  box.append(el("div", { class: "row" }, el("b", {}, "Experiment"),
+    experiments.length ? el("select", { onchange: (e) => { activeIdx = Number(e.target.value); render(); } },
+      experiments.map((x, i) => el("option", { value: i, selected: i === activeIdx }, x.name))) : null,
+    el("span", { class: "grow" }),
+    experiments.length ? el("button", { class: "link", onclick: () => { activeIdx = -1; render(); } }, "+ new") : null));
+  if (!exp) {
+    box.append(el("div", { class: "mute" }, "Name the setting you are about to change on the panel."), newExperimentForm(false));
+  } else {
+    const scope = nextScope(exp);
+    box.append(el("div", { class: "row" }, ...labelInput("a-label"), ...captureButtons("a-label")),
+      el("div", { class: "mute", style: "font-size:12px" }, `next capture: ${scope.text}`),
+      el("div", { class: "row" }, exp.captures.length === 0 ? el("span", { class: "mute" }, "no captures yet") :
+        exp.captures.map((c, i) => el("span", { class: `chip ${c.full ? "" : "narrow"}`,
+          title: `${new Date(c.atMs).toLocaleTimeString()} · ${c.full ? "full range" : "candidates only"}` },
+          `${i + 1} ${c.label}`, el("button", { title: "delete capture", onclick: () => deleteCapture(i) }, "×")))));
+    const cands = candidatesOf(exp);
+    const out = [...an.values()].filter((a) => a.status === "inconsistent");
+    box.append(el("div", { style: "margin-top:6px" }, el("b", {}, `Candidates (${cands.length})`)));
+    if (cands.length === 0) box.append(el("div", { class: "mute" },
+      exp.captures.length < 3 ? "need a round trip: A, B, back to A" : "none: the next capture scans the full range again"));
+    for (const a of cands) {
+      box.append(el("div", { class: "cand-block" },
+        el("div", { class: "row" }, el("button", { class: "link", onclick: () => { selected = a.id; render(); } }, `ID ${a.id}`),
+          statusBadge(a)),
+        labelValueTable(exp, a), probeControl(exp, a, false)));
+    }
+    if (out.length) box.append(el("details", {}, el("summary", { class: "mute" }, `${out.length} disqualified`),
+      el("div", { class: "mute" }, out.map((a) => a.id).join(", "))));
+  }
+  $("side").replaceChildren(box, drawerBox() ?? "",
+    el("b", {}, "Changes"), el("span", { class: "mute" }, " (newest first)"),
+    el("div", { class: "list mute" }, "feed as today"));
+}
+
+// ═════════════ Variant B: the bench (full-width matrix above the grid) ═════════════
+function renderB() {
+  $("main").classList.add("short");
+  const exp = active();
+  const an = analyse(exp);
+  $("filter-extra").replaceChildren(el("label", {}, el("input", { type: "checkbox", checked: onlyCandidates,
+    onchange: (e) => { onlyCandidates = e.target.checked; render(); } }), " only experiment rows"));
+  $("legend").replaceChildren(el("span", { class: "badge ring-cand" }, "candidate"), el("span", { class: "badge ring-corr" }, "corroborated"));
+  renderGrid((id) => {
+    const a = an.get(id);
+    return { ring: a?.status === "corroborated" ? "ring-corr" : isCand(a) ? "ring-cand" : null,
+      dim: onlyCandidates && !(a && a.status !== "steady") };
+  });
+
+  const bench = el("div", { class: "bench" });
+  bench.append(el("div", { class: "row" }, el("b", {}, "Experiments"),
+    el("div", { class: "pilltabs" }, experiments.map((x, i) =>
+      el("button", { class: i === activeIdx ? "on" : "", onclick: () => { activeIdx = i; render(); } },
+        `${x.name} · ${x.captures.length}`))),
+    newExperimentForm(true)));
+  if (exp) {
+    const scope = nextScope(exp);
+    bench.append(el("div", { class: "row" }, el("b", {}, exp.name), "— set the panel, label the value:",
+      ...labelInput("b-label"), ...captureButtons("b-label"),
+      el("span", { class: "mute" }, `next capture queries ${scope.text}`)));
+    // Rows: candidates first, then IDs that changed or were disqualified; steady IDs are hidden.
+    const rows = [...an.values()].filter((a) => a.status !== "steady").sort((x, y) => {
+      const rank = { corroborated: 0, candidate: 1, changed: 2, inconsistent: 3 };
+      return rank[x.status] - rank[y.status] || x.id - y.id;
+    });
+    const head = el("tr", {}, el("th", {}, "ID"),
+      exp.captures.map((c, i) => el("th", { class: "lbl", title: c.full ? "full range" : "candidates only" },
+        `${i + 1}${c.full ? "" : "·"} `, el("b", {}, c.label), " ",
+        el("button", { class: "link", title: "delete capture", onclick: () => deleteCapture(i) }, "×"))),
+      el("th", {}, "state"), el("th", {}, "write probe"));
+    const body = rows.map((a) => {
+      let prevV;
+      const tds = exp.captures.map((c) => {
+        const e = c.values.get(a.id);
+        const v = fmt(e);
+        const diff = e && !e.timeout && prevV !== undefined && v !== prevV;
+        if (e && !e.timeout) prevV = v;
+        return el("td", { class: `${diff ? "diff" : ""} ${!e || e.timeout ? "skip" : ""}`.trim(),
+          title: !e ? "not queried" : e.timeout ? "timeout" : "" }, v);
+      });
+      return el("tr", { class: `${a.status === "inconsistent" ? "out" : ""} ${selected === a.id ? "sel" : ""}` },
+        el("td", { class: "id", onclick: () => { selected = a.id; render(); } }, String(a.id)),
+        tds, el("td", {}, statusBadge(a)), el("td", {}, probeControl(exp, a, true)));
+    });
+    bench.append(el("div", { class: "matrix-wrap" }, rows.length === 0 && exp.captures.length
+      ? el("div", { class: "mute" }, "no ID changed yet") : el("table", { class: "matrix" }, head, body)));
+    const probed = [...exp.probes].filter(([, p]) => !p.running);
+    if (probed.length) bench.append(el("div", { class: "mute", style: "font-size:12px;margin-top:4px" },
+      probed.map(([id, p]) => `ID ${id}: ${p.writable ? "writable" : "not writable"} (${p.steps.join(" · ")})`).join("  ·  ")));
+  } else {
+    bench.append(el("div", { class: "mute" }, "Start an experiment: name the setting you are about to change on the panel."));
+  }
+  $("exp-top").replaceChildren(bench);
+  $("side").replaceChildren(drawerBox() ?? "", el("b", {}, "Changes"), el("span", { class: "mute" }, " (newest first)"),
+    el("div", { class: "list mute" }, "feed as today"));
+}
+
+// ═════════════ Variant C: the coach (experiment sub-tabs, next-step prompt, cards) ═════════════
+function coachStep(exp) {
+  const n = exp.captures.length;
+  const labels = [...labelsOf(exp).values()];
+  const cands = candidatesOf(exp);
+  if (n === 0) return `Set <b>${exp.name}</b> on the panel to any value, name that value, and capture.`;
+  if (cands.length === 0 && n === 1) return `Change <b>${exp.name}</b> to a <i>different</i> value, label it, capture.`;
+  if (cands.length === 0 && n === 2 && labels.length >= 2) {
+    return `Now go back to <b>${exp.captures[0].label}</b> and capture: a round trip finds candidates.`;
+  }
+  if (cands.length === 0) return `No candidate yet (or none survived). The next capture scans the full range again.`;
+  const corr = cands.filter((c) => c.status === "corroborated");
+  if (corr.length) {
+    return `<b>ID ${corr.map((c) => c.id).join(", ")}</b> corroborated. Run a write probe, or capture other values to fill the tables.`;
+  }
+  const a = cands[0];
+  const need = [...a.counts].filter(([, k]) => k < 2).map(([k]) => labelsOf(exp).get(k));
+  return `${cands.length} candidate${cands.length > 1 ? "s" : ""}. To corroborate, capture <b>${need.slice(0, 2).join("</b> and <b>")}</b> again.`;
+}
+function renderC() {
+  $("main").classList.remove("short");
+  const exp = active();
+  const an = analyse(exp);
+  $("filter-extra").replaceChildren(el("label", {}, el("input", { type: "checkbox", checked: onlyCandidates,
+    onchange: (e) => { onlyCandidates = e.target.checked; render(); } }), " only candidates"));
+  $("legend").replaceChildren(el("span", { class: "badge ring-cand" }, "candidate"), el("span", { class: "badge ring-corr" }, "corroborated"));
+  renderGrid((id) => {
+    const a = an.get(id);
+    return { ring: a?.status === "corroborated" ? "ring-corr" : isCand(a) ? "ring-cand" : null,
+      dim: onlyCandidates && !isCand(a) };
+  });
+  $("exp-top").replaceChildren(el("div", { class: "subtabs" },
+    el("span", { class: "mute", style: "padding:5px 8px 0 0" }, "Experiments:"),
+    experiments.map((x, i) => el("button", { class: i === activeIdx ? "on" : "", onclick: () => { activeIdx = i; render(); } },
+      x.name, " ", el("span", { class: "mute" }, `(${candidatesOf(x).length})`))),
+    el("button", { class: activeIdx === -1 ? "on" : "", onclick: () => { activeIdx = -1; render(); } }, "+ new experiment")));
+
+  const side = [];
+  if (!exp) {
+    side.push(el("div", { class: "coach" }, el("div", { class: "step" }, "What setting will you change on the panel?"),
+      newExperimentForm(false)));
+  } else {
+    const step = el("div", { class: "step" });
+    step.innerHTML = coachStep(exp);
+    side.push(el("div", { class: "coach" }, step,
+      el("div", { class: "row" }, ...labelInput("c-label", "label"), ...captureButtons("c-label")),
+      el("div", { class: "mute", style: "font-size:12px" }, `next capture: ${nextScope(exp).text}`)));
+    const cands = candidatesOf(exp);
+    for (const a of cands) {
+      side.push(el("div", { class: `card ${a.status === "corroborated" ? "corr" : ""}` },
+        el("h3", {}, el("button", { class: "link", onclick: () => { selected = a.id; render(); } }, `ID ${a.id}`), statusBadge(a),
+          el("span", { class: "grow" }), el("code", { class: "mute" }, latest.get(a.id) ?? "")),
+        labelValueTable(exp, a), probeControl(exp, a, false)));
+    }
+    const out = [...an.values()].filter((a) => a.status === "inconsistent").length;
+    if (out) side.push(el("div", { class: "mute", style: "font-size:12px" }, `${out} ID(s) disqualified (a repeated label gave another value)`));
+    side.push(el("b", {}, "Captures"), el("div", { class: "timeline" }, exp.captures.length === 0
+      ? el("div", { class: "mute" }, "none yet")
+      : exp.captures.map((c, i) => el("div", { class: c.full ? "" : "narrow" },
+        el("b", {}, c.label), el("span", { class: "mute" }, ` · ${new Date(c.atMs).toLocaleTimeString()} · ${c.full ? "full" : `${c.values.size} IDs`} `),
+        el("button", { class: "link", onclick: () => deleteCapture(i) }, "delete"))).reverse()));
+  }
+  $("side").replaceChildren(...side, drawerBox() ?? "");
+}
+
+// ═════════════ switcher ═════════════
+const VARIANTS = { A: ["Side box", renderA], B: ["Bench matrix", renderB], C: ["Coach", renderC] };
+const KEYS = Object.keys(VARIANTS);
+let variant = new URLSearchParams(location.search).get("variant") ?? "A";
+if (!VARIANTS[variant]) variant = "A";
+function go(delta) {
+  variant = KEYS[(KEYS.indexOf(variant) + delta + KEYS.length) % KEYS.length];
+  const url = new URL(location.href);
+  url.searchParams.set("variant", variant);
+  history.replaceState(null, "", url);
+  render();
+}
+$("sw-prev").addEventListener("click", () => go(-1));
+$("sw-next").addEventListener("click", () => go(1));
+document.addEventListener("keydown", (e) => {
+  if (e.target.closest("input, textarea, select, [contenteditable]")) return;
+  if (e.key === "ArrowLeft") go(-1);
+  if (e.key === "ArrowRight") go(1);
+});
+
+function render() {
+  const focusId = document.activeElement?.id;
+  $("sw-label").textContent = `${variant} (${VARIANTS[variant][0]})`;
+  renderScanRow();
+  VARIANTS[variant][1]();
+  if (focusId && $(focusId)) { const f = $(focusId); f.focus(); if (f.setSelectionRange && f.value) f.setSelectionRange(f.value.length, f.value.length); }
+}
+// Starts with one plain scan so the grid is filled, like a page that has seen the device before.
+rangeIds({ from: 17, to: 255 }).forEach((id) => { if (!neverSeen(id)) { const a = answer(id); if (a.raw !== undefined) latest.set(id, a.raw); } });
+render();
+</script>
+</body>
+</html>

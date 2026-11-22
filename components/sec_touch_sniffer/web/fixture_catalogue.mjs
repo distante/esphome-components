@@ -13,4 +13,5 @@ export const FIXTURE_CATALOGUE = {
   labelNames: ["-", "Bad", "Küche"],
   summerVentilationNames: { "0A00": "on", "0800": "off" },
   discoverRange: { from: 1, to: 255 },
+  goals: { discover: "discover", check: "check" },
 };

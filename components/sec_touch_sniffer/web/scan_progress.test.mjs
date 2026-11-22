@@ -3,20 +3,11 @@ import assert from "node:assert/strict";
 
 import { knownIds } from "./known_meaning.mjs";
 import { scanProgress } from "./scan_progress.mjs";
+import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
 
-// A small catalogue in the shape catalogue.mjs has, with made-up IDs: its known IDs are 3, 5, 10, 11, 20, 21, 30.
-const CATALOGUE = {
-  levelIds: [10, 11],
-  labelIds: [20, 21],
-  summerVentilationId: 30,
-  dateId: 3,
-  clockId: 5,
-  levelNames: {},
-  labelNames: [],
-  summerVentilationNames: {},
-  discoverRange: { from: 1, to: 255 },
-  goals: { discover: "discover", check: "check" },
-};
+// The date and clock moved below the levels, so a check has known IDs before ID 10 as well as after it: the known
+// IDs are 3, 5, 10, 11, 20, 21, 30.
+const CATALOGUE = { ...FIXTURE_CATALOGUE, dateId: 3, clockId: 5 };
 const KNOWN_COUNT = knownIds(CATALOGUE).length;
 const { discover: DISCOVER, check: CHECK } = CATALOGUE.goals;
 

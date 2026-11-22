@@ -6,13 +6,6 @@ namespace sec_touch {
 
 const char *const SecTouchSummerVentilationSwitch::TAG = "sec_touch.switch";
 
-// Device-side encoding of the toggle. The controller expects the raw string values
-// "0A00" (on) / "0800" (off) — the same the panel sends. Reads report these too, but
-// the incoming parser runs them through atoi, so a listener sees 0 / 800 (see below).
-// Writing the atoi'd "0"/"800" is silently ignored by the device.
-static constexpr const char *VALUE_ON = "0A00";
-static constexpr const char *VALUE_OFF = "0800";
-
 SecTouchSummerVentilationSwitch::SecTouchSummerVentilationSwitch(SECTouchComponent *parent) : parent_(parent) {
   this->parent_->register_global_setting_recursive_listener(SUMMER_VENTILATION_PROPERTY_ID, [this](int property_id,
                                                                                                    int new_value) {
@@ -23,6 +16,7 @@ SecTouchSummerVentilationSwitch::SecTouchSummerVentilationSwitch(SECTouchCompone
       return;
     }
 
+    // atoi turns SUMMER_VENTILATION_ON ("0A00") into 0 and SUMMER_VENTILATION_OFF ("0800") into 800.
     bool new_state = (new_value == 0);
     if (this->state == new_state && this->has_state()) {
       return;
@@ -33,7 +27,7 @@ SecTouchSummerVentilationSwitch::SecTouchSummerVentilationSwitch(SECTouchCompone
 }
 
 void SecTouchSummerVentilationSwitch::write_state(bool state) {
-  const char *value = state ? VALUE_ON : VALUE_OFF;
+  const char *value = state ? SUMMER_VENTILATION_ON : SUMMER_VENTILATION_OFF;
   ESP_LOGI(TAG, "Setting summer ventilation to %s (raw=%s)", state ? "ON" : "OFF", value);
   this->parent_->add_set_task(
       SetDataTask::create(TaskTargetType::GLOBAL_SETTING, SUMMER_VENTILATION_PROPERTY_ID, value));

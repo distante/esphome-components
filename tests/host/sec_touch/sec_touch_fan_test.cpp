@@ -56,23 +56,23 @@ TEST_F(SecTouchFanTest, SplitBurstWritesItsLevelAndShowsTheSliderAtMax) {
   this->fan_.state = true;
   this->fan_.speed = 3;
 
-  this->fan_.make_call().set_preset_mode("Burst").perform();
+  this->fan_.make_call().set_preset_mode(BURST_NAME).perform();
   this->send_next_task();
 
   EXPECT_EQ(this->uart_.tx, set_frame(LEVEL_ID, std::to_string(BURST_LEVEL)));
   EXPECT_EQ(this->fan_.speed, MAX_NORMAL_LEVEL);
-  EXPECT_EQ(std::string(this->fan_.get_preset_mode().c_str()), "Burst");
+  EXPECT_EQ(std::string(this->fan_.get_preset_mode().c_str()), BURST_NAME);
 }
 
 // Without waiting for the panel's echo, a plain speed puts a special preset back to Normal.
 TEST_F(SecTouchFanTest, ASpeedAfterAPresetPutsThePresetBackToNormal) {
   this->fan_.state = true;
   this->fan_.speed = 3;
-  this->fan_.make_call().set_preset_mode("Sleep").perform();
+  this->fan_.make_call().set_preset_mode(SLEEP_NAME).perform();
 
   this->fan_.make_call().set_speed(2).perform();
 
-  EXPECT_EQ(std::string(this->fan_.get_preset_mode().c_str()), "Normal");
+  EXPECT_EQ(std::string(this->fan_.get_preset_mode().c_str()), NORMAL_PRESET_NAME);
   EXPECT_EQ(this->fan_.speed, 2);
 }
 

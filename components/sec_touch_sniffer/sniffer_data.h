@@ -14,6 +14,8 @@
 #include "json_chunk_writer.h"
 #include "property_slots.h"
 #include "property_store.h"
+#include "scan_goal.h"
+#include "uri_query.h"
 
 namespace esphome {
 namespace sec_touch {
@@ -143,69 +145,93 @@ inline void write_record_json(JsonChunkWriter &w, const RecordSnapshot &record, 
   w.raw("]}");
 }
 
-/// The scan as the page sees it.
-struct ScanState {
-  /// False without a scan range: the scan is then `null` and the page hides the controls.
-  bool available;
+/// The sniffer's scan fields, as the page's handler reads them.
+struct ScanFields {
+  /// A scan was started since boot.
+  bool ran;
   bool active;
-  int from;
-  int to;
-  /// The ID the scan queries next, or resumes at after a stop. While the last ID's query finishes a run, that ID.
+  /// The last run covered all of its IDs. A start clears it.
+  bool completed;
+  /// The running or last run.
+  ScanRun run;
+  /// The first ID of `run` not queued yet, NO_SCAN_ID once the last one is. The sniffer moves past an ID when it
+  /// queues the query, so while the last ID's query is in flight a running scan is at NO_SCAN_ID.
+  int current;
+};
+
+/// The scan as the page sees it: the `scan` object of the contract.
+struct ScanState {
+  bool active;
+  ScanGoal goal;
+  /// False makes `from` and `to` null: the run is a check, or no scan ran yet.
+  bool has_range;
+  uint8_t from;
+  uint8_t to;
+  /// The ID the scan queries next; the last ID's while its query is in flight; while idle, the ID the last run
+  /// stopped at. NO_SCAN_ID (null) before any run and after a completed one.
   int next;
-  /// The last run covered the whole range and the scan is idle; the next start begins again at `from`.
+  /// Idle after a run that covered all of its IDs.
   bool done;
 };
 
-/// Where a scan starting now begins: the saved position, or `scan_start` before the first run and after a run that
-/// queued the whole range.
-inline int scan_resume_id(int scan_start, int scan_end, int current_id) {
-  if (current_id == 0 || current_id > scan_end) {
-    return scan_start;
+/// The scan state from the sniffer's scan fields.
+inline ScanState scan_state(const ScanFields &fields) {
+  if (!fields.ran) {
+    return ScanState{false, DEFAULT_DISCOVER_RUN.goal, false, 0, 0, NO_SCAN_ID, false};
   }
-  return current_id;
-}
-
-/// The scan state from the sniffer's scan fields. `current_id` is the first ID not queued yet, 0 before the first
-/// scan. The sniffer moves past an ID when it queues the query, so a running scan reaches scan_end + 1 while the last
-/// query is still in flight.
-inline ScanState scan_state(int scan_start, int scan_end, int current_id, bool scanning) {
-  const bool past_end = current_id > scan_end;
-  int next = scan_resume_id(scan_start, scan_end, current_id);
-  if (scanning) {
-    next = past_end ? scan_end : current_id;
+  const bool done = !fields.active && fields.completed;
+  int next = NO_SCAN_ID;
+  if (!done) {
+    next = fields.current == NO_SCAN_ID ? last_scan_id(fields.run) : fields.current;
   }
   return ScanState{
-      .available = scan_end > 0,
-      .active = scanning,
-      .from = scan_start,
-      .to = scan_end,
+      .active = fields.active,
+      .goal = fields.run.goal,
+      .has_range = fields.run.goal == ScanGoal::SCAN_GOAL_DISCOVER,
+      .from = fields.run.from,
+      .to = fields.run.to,
       .next = next,
-      .done = !scanning && past_end,
+      .done = done,
   };
 }
 
-/// The scan object a start or stop replies with: the state loop() reaches once it applies the request.
-inline ScanState scan_reply(int scan_start, int scan_end, int current_id, bool scanning, bool start) {
-  // Only a start that turns the scan on moves the position; a repeated start or any stop leaves it.
-  const bool starts = start && !scanning;
-  return scan_state(scan_start, scan_end, starts ? scan_resume_id(scan_start, scan_end, current_id) : current_id,
-                    start);
+/// The scan object a start or stop replies with: the state loop() reaches once it applies the request. A start while
+/// idle begins `requested` at its first ID; a start while scanning leaves the running scan as it is.
+inline ScanState scan_reply(ScanFields fields, bool start, const ScanRun &requested) {
+  if (start && !fields.active) {
+    return scan_state(ScanFields{
+        .ran = true, .active = true, .completed = false, .run = requested, .current = first_scan_id(requested)});
+  }
+  if (!start) {
+    fields.active = false;
+  }
+  return scan_state(fields);
 }
 
-/// Writes the scan object, or `null` when no scan range is configured.
+/// Writes the scan object.
 inline void write_scan_json(JsonChunkWriter &w, const ScanState &scan) {
-  if (!scan.available) {
-    w.null();
-    return;
-  }
   w.raw("{\"active\":");
   w.boolean(scan.active);
+  w.raw(",\"goal\":");
+  w.string(scan_goal_name(scan.goal));
   w.raw(",\"from\":");
-  w.number(static_cast<uint64_t>(scan.from));
+  if (scan.has_range) {
+    w.number(scan.from);
+  } else {
+    w.null();
+  }
   w.raw(",\"to\":");
-  w.number(static_cast<uint64_t>(scan.to));
+  if (scan.has_range) {
+    w.number(scan.to);
+  } else {
+    w.null();
+  }
   w.raw(",\"next\":");
-  w.number(static_cast<uint64_t>(scan.next));
+  if (scan.next != NO_SCAN_ID) {
+    w.number(static_cast<uint64_t>(scan.next));
+  } else {
+    w.null();
+  }
   w.raw(",\"done\":");
   w.boolean(scan.done);
   w.raw("}");
@@ -275,36 +301,21 @@ bool write_data_json(JsonChunkWriter &w, const PropertyStore &store, const Devic
 
 /// The `since` query parameter of a request URI, 0 (a full response) when missing or not a valid number.
 inline uint32_t since_from_uri(std::string_view uri) {
-  static constexpr std::string_view KEY = "since=";
-  const size_t query = uri.find('?');
-  if (query == std::string_view::npos) {
+  const auto digits = query_value(uri, "since");
+  if (!digits.has_value() || digits->empty()) {
     return 0;
   }
-  std::string_view rest = uri.substr(query + 1);
-  while (!rest.empty()) {
-    const size_t end = rest.find('&');
-    const std::string_view pair = rest.substr(0, end);
-    rest = end == std::string_view::npos ? std::string_view() : rest.substr(end + 1);
-    if (pair.substr(0, KEY.size()) != KEY) {
-      continue;
-    }
-    const std::string_view digits = pair.substr(KEY.size());
-    if (digits.empty()) {
+  uint64_t value = 0;
+  for (char c : *digits) {
+    if (c < '0' || c > '9') {
       return 0;
     }
-    uint64_t value = 0;
-    for (char c : digits) {
-      if (c < '0' || c > '9') {
-        return 0;
-      }
-      value = value * 10 + static_cast<uint64_t>(c - '0');
-      if (value > UINT32_MAX) {
-        return 0;
-      }
+    value = value * 10 + static_cast<uint64_t>(c - '0');
+    if (value > UINT32_MAX) {
+      return 0;
     }
-    return static_cast<uint32_t>(value);
   }
-  return 0;
+  return static_cast<uint32_t>(value);
 }
 
 enum class SnifferMethod : uint8_t { METHOD_GET, METHOD_POST, METHOD_OTHER };

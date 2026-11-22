@@ -4,10 +4,15 @@
  */
 
 /**
- * @param {{active: boolean, from: number, to: number, next: number, done: boolean}} scan the device's scan state
+ * @param {{active: boolean, goal: "discover" | "check", from: number | null, to: number | null, next: number | null,
+ *   done: boolean}} scan the device's scan state; `from`/`to` are null for check and before any run, `next` is null
+ *   before any run and after a completed one
  * @returns {{label: string, percent: number}} the label and how much of the range is behind the scan (0–100)
  */
 export function scanProgress(scan) {
+  if (scan.next === null && !scan.done) {
+    return { label: "Not scanned yet", percent: 0 };
+  }
   if (scan.done) {
     return { label: `Scan of ${scan.from}–${scan.to} complete`, percent: 100 };
   }
@@ -15,5 +20,5 @@ export function scanProgress(scan) {
   if (scan.active) {
     return { label: `Scanning ID ${scan.next} of ${scan.from}–${scan.to}`, percent };
   }
-  return { label: `Stopped at ID ${scan.next}, resumes there`, percent };
+  return { label: `Stopped at ID ${scan.next}`, percent };
 }

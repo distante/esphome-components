@@ -46,35 +46,27 @@ void SecTouchSniffer::setup() {
 
 void SecTouchSniffer::dump_config() {
   ESP_LOGCONFIG(TAG, "SEC-Touch-Sniffer:");
-  if (this->scan_end_ > 0) {
-    ESP_LOGCONFIG(TAG, "  Scan range: %d - %d", this->scan_start_, this->scan_end_);
-  } else {
-    ESP_LOGCONFIG(TAG, "  Scan: not configured (passive mode only)");
-  }
   ESP_LOGCONFIG(TAG, "  Web page: %s", YESNO(this->web_page_));
   ESP_LOGCONFIG(TAG, "  History: %s", this->store_.history().is_allocated() ? "on" : "off");
 }
 
-void SecTouchSniffer::request_scan(bool start) {
-  if (this->scan_end_ == 0) {
-    return;
-  }
-  this->scan_request_.store(start ? ScanRequest::SCAN_REQUEST_START : ScanRequest::SCAN_REQUEST_STOP);
+void SecTouchSniffer::request_scan(bool start, const ScanRun &run) {
+  this->scan_request_.store(
+      PendingScanRequest{start ? ScanRequest::SCAN_REQUEST_START : ScanRequest::SCAN_REQUEST_STOP, run});
   this->enable_loop_soon_any_context();
 }
 
 void SecTouchSniffer::loop() {
   // Disabled before the request is taken, so a request queued after this point enables the loop again.
   this->disable_loop();
-  const ScanRequest request = this->scan_request_.exchange(ScanRequest::SCAN_REQUEST_NONE);
-  if (request == ScanRequest::SCAN_REQUEST_NONE) {
+  const PendingScanRequest request = this->scan_request_.exchange(NO_SCAN_REQUEST);
+  if (request.kind == ScanRequest::SCAN_REQUEST_START) {
+    this->start_scan(request.run);
     return;
   }
-  const bool start = request == ScanRequest::SCAN_REQUEST_START;
-  if (start == this->is_scanning_) {
-    return;
+  if (request.kind == ScanRequest::SCAN_REQUEST_STOP) {
+    this->stop_scan();
   }
-  this->toggle_scan();
 }
 
 void SecTouchSniffer::update_scan_switch_() {
@@ -88,41 +80,55 @@ void SecTouchSniffer::publish_records_() {
   this->publish_state(this->state_);
 }
 
-void SecTouchSniffer::toggle_scan() {
+void SecTouchSniffer::start_scan(const ScanRun &run) {
   if (this->is_scanning_) {
-    if (this->current_scan_id_ > this->scan_start_) {
-      ESP_LOGI(TAG, "Scan mode OFF — last queued ID: %d", this->current_scan_id_ - 1);
-    } else {
-      ESP_LOGI(TAG, "Scan mode OFF — no IDs were queued");
-    }
-    this->cancel_timeout("scan_retry");
-    this->cancel_timeout("scan_next");
-    this->scan_retry_pending_ = false;
-    this->pending_query_id_ = NO_PENDING_QUERY;
-    this->is_scanning_ = false;
-    this->update_scan_switch_();
-    this->publish_records_();
-    this->parent_->exit_scan_mode();
     return;
   }
-
-  if (this->scan_end_ == 0) {
-    ESP_LOGW(TAG, "toggle_scan() called but no scan range configured — ignoring");
-    this->is_scanning_ = false;
-    this->update_scan_switch_();
-    return;
+  if (run.goal == ScanGoal::SCAN_GOAL_CHECK) {
+    ESP_LOGI(TAG, "Scan mode ON — check: every known property ID");
+  } else {
+    ESP_LOGI(TAG, "Scan mode ON — discover: IDs %d to %d, known IDs skipped", run.from, run.to);
   }
-
-  this->current_scan_id_ = scan_resume_id(this->scan_start_, this->scan_end_, this->current_scan_id_);
-
-  ESP_LOGI(TAG, "Scan mode ON — scanning IDs %d to %d (resuming from %d)", this->scan_start_, this->scan_end_,
-           this->current_scan_id_.load());
+  // No resume: every run begins at its goal's first ID.
+  this->scan_goal_ = run.goal;
+  this->scan_from_ = run.from;
+  this->scan_to_ = run.to;
+  this->current_scan_id_ = first_scan_id(run);
+  this->scan_completed_ = false;
+  this->scan_ran_ = true;
+  this->scan_retry_pending_ = false;
   this->pending_query_id_ = NO_PENDING_QUERY;
   this->is_scanning_ = true;
   this->update_scan_switch_();
   this->parent_->enter_scan_mode();
   // First task is submitted by on_queue_empty_() which fires immediately because
   // enter_scan_mode() cleared the queue and reset the running task state
+}
+
+void SecTouchSniffer::stop_scan() {
+  if (!this->is_scanning_) {
+    return;
+  }
+  ESP_LOGI(TAG, "Scan mode OFF — stopped");
+  this->end_scan_(/*completed=*/false);
+}
+
+void SecTouchSniffer::end_scan_(bool completed) {
+  this->cancel_timeout("scan_retry");
+  this->cancel_timeout("scan_next");
+  this->scan_retry_pending_ = false;
+  this->pending_query_id_ = NO_PENDING_QUERY;
+  this->scan_completed_ = completed;
+  this->is_scanning_ = false;
+  this->update_scan_switch_();
+  this->publish_records_();
+  this->parent_->exit_scan_mode();
+}
+
+int SecTouchSniffer::take_next_scan_id_() {
+  const int id = this->current_scan_id_;
+  this->current_scan_id_ = next_scan_id(this->scan_run_(), id + 1);
+  return id;
 }
 
 void SecTouchSniffer::query_(int property_id) {
@@ -144,13 +150,13 @@ void SecTouchSniffer::on_queue_empty_() {
       ESP_LOGW(TAG, "Scan: property_id %d timed out, retrying in %" PRIu32 "s", queried,
                SCAN_RETRY_DELAY_MS / MS_PER_S);
       this->scan_retry_pending_ = true;
-      // Rewound, so a scan stopped during the wait resumes at this ID.
+      // Back at the timed-out ID for the wait, so the page's `next` names the ID the retry queries.
       this->current_scan_id_ = queried;
       this->set_timeout("scan_retry", SCAN_RETRY_DELAY_MS, [this]() {
         if (!this->is_scanning_) {
           return;
         }
-        this->query_(this->current_scan_id_++);
+        this->query_(this->take_next_scan_id_());
       });
       return;
     }
@@ -162,20 +168,12 @@ void SecTouchSniffer::on_queue_empty_() {
     this->store_.record_query(queried, outcome, uptime_s());
   }
 
-  while (this->current_scan_id_ <= this->scan_end_ && this->parent_->is_property_registered(this->current_scan_id_)) {
-    ESP_LOGI(TAG, "Scan: skipping registered property_id %d", this->current_scan_id_.load());
-    this->current_scan_id_++;
-  }
-
-  if (this->current_scan_id_ > this->scan_end_) {
+  if (this->current_scan_id_ == NO_SCAN_ID) {
     ESP_LOGI(TAG, "Scan complete.");
-    this->is_scanning_ = false;
-    this->update_scan_switch_();
-    this->publish_records_();
-    this->parent_->exit_scan_mode();
+    this->end_scan_(/*completed=*/true);
     return;
   }
-  int id_to_query = this->current_scan_id_++;
+  const int id_to_query = this->take_next_scan_id_();
   this->set_timeout("scan_next", SCAN_NEXT_DELAY_MS, [this, id_to_query]() {
     if (!this->is_scanning_) {
       return;
@@ -276,8 +274,8 @@ bool SecTouchSniffer::send_chunk_(void *request, const char *data, size_t len) {
 
 // Chunked on the raw request: the server's response objects buffer the whole body. So the status and headers,
 // Access-Control-Allow-Origin included, are set here.
-void SecTouchSniffer::begin_json_response_(httpd_req_t *req) {
-  httpd_resp_set_status(req, HTTPD_200);
+void SecTouchSniffer::begin_json_response_(httpd_req_t *req, const char *status) {
+  httpd_resp_set_status(req, status);
   httpd_resp_set_type(req, "application/json");
   // Mirrors web_server_base's DefaultHeaders, which the raw response bypasses; its guard enforces allowed_origins.
   httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
@@ -303,7 +301,8 @@ void SecTouchSniffer::serve_data_(httpd_req_t *req) {
   };
   this->begin_json_response_(req);
   write_data_json(
-      this->json_, this->store_, device, this->scan_state_(), since_from_uri(req->uri), this->record_scratch_,
+      this->json_, this->store_, device, scan_state(this->scan_fields_()), since_from_uri(req->uri),
+      this->record_scratch_,
       [this](auto read) {
         LockGuard guard(this->store_lock_);
         read();
@@ -313,10 +312,22 @@ void SecTouchSniffer::serve_data_(httpd_req_t *req) {
 }
 
 void SecTouchSniffer::serve_scan_(httpd_req_t *req, bool start) {
-  this->request_scan(start);
+  ScanRun run = DEFAULT_DISCOVER_RUN;
+  if (start) {
+    const ScanStart parsed = scan_start_from_uri(req->uri);
+    if (!parsed.valid) {
+      // Nothing starts.
+      this->begin_json_response_(req, HTTPD_400);
+      this->json_.raw(R"({"error":"from and to must both be given, 0-255, with from <= to"})");
+      this->end_json_response_(req);
+      return;
+    }
+    run = parsed.run;
+  }
+  const ScanFields fields = this->scan_fields_();
+  this->request_scan(start, run);
   this->begin_json_response_(req);
-  write_scan_json(this->json_,
-                  scan_reply(this->scan_start_, this->scan_end_, this->current_scan_id_, this->is_scanning_, start));
+  write_scan_json(this->json_, scan_reply(fields, start, run));
   this->end_json_response_(req);
 }
 

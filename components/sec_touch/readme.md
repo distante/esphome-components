@@ -350,7 +350,7 @@ The sniffer records every data message the SEC-Touch sends, registered property 
 Two modes are available:
 
 - **Passive** (always on): unknown IDs that arrive during normal polling are captured automatically.
-- **Active scan** (optional): iterates through a configured range of property IDs, querying each one in turn. Normal polling is paused while scanning.
+- **Active scan** (optional): queries property IDs one at a time, in one of two goals. **Discover** goes through a range (1–255 unless the start names one) and skips the known properties; **check** queries exactly the known properties, registered ones included. Normal polling is paused while scanning. Every start begins at the goal's first ID; a stopped scan does not resume.
 
 Results are published as a text sensor and visible in Home Assistant: `id=raw` pairs such as `1=11.11.26, 3=SWZ0021E21H, 5=0100`, for the IDs no component has registered. Registered IDs (fan levels and labels) are recorded but left out of the text sensor. The state is capped at 2048 bytes; a cut state ends with `, …+N more`. A message that repeats the same value does not republish it, and during an active scan the sensor is published once, when the scan ends or is stopped. An optional switch reflects whether a scan is currently running and can be toggled from Home Assistant. An optional web page (`web_page: true`) shows every captured ID, registered ones included; see [Sniffer page](#sniffer-page).
 
@@ -372,13 +372,11 @@ text_sensor:
   - platform: sec_touch_sniffer
     sec_touch_id: sec_touch_component
     name: "Sniffer"
-    scan_start: 1          # first property ID to query in active scan
-    scan_end: 250          # last property ID to query; scan_start..255
     scan_switch:
       name: "Sniffer Scan Active"
 ```
 
-Turning the switch on starts a scan from `scan_start`. Turning it off stops the scan immediately, publishes the results discovered so far, and saves the current position. Turning it on again resumes from where it left off. When the full range has been scanned, polling resumes automatically, the full result is published to the text sensor, and the switch turns off.
+Turning the switch on starts a discover scan of IDs 1–255, skipping the known properties. Turning it off stops the scan immediately and publishes the results discovered so far. Turning it on again starts over at the first ID. When the scan has queried all its IDs, polling resumes automatically, the full result is published to the text sensor, and the switch turns off.
 
 If a property ID does not respond within 2 seconds the scan retries it once. If it times out again the ID is skipped and a warning is logged.
 
@@ -391,12 +389,10 @@ text_sensor:
   - platform: sec_touch_sniffer
     sec_touch_id: sec_touch_component
     name: "Sniffer"
-    scan_start: 1
-    scan_end: 255
     web_page: true     # default false
 ```
 
-`web_page: true` serves, at `http://<device>/sniffer`, a page for working out what the IDs mean: a map of IDs 0–255 coloured by guessed type or by scan status, a drawer per ID with its raw value and up to 7 previous values, a feed of recent changes, filters, per-ID notes, scan start and stop, and a JSON and CSV export. Notes and a copy of the records are kept in the browser, keyed by the ESP's MAC, and never sent to the device. Without `scan_end` the page shows passive captures only, without scan controls.
+`web_page: true` serves, at `http://<device>/sniffer`, a page for working out what the IDs mean: a map of IDs 0–255 coloured by guessed type or by scan status, a drawer per ID with its raw value and up to 7 previous values, a feed of recent changes, filters, per-ID notes, scan start and stop, and a JSON and CSV export. Notes and a copy of the records are kept in the browser, keyed by the ESP's MAC, and never sent to the device.
 
 <p align="center">
   <img src="images/sniffer-overview.png" alt="Sniffer page: ID map, drawer and change feed" width="900" />
@@ -412,7 +408,7 @@ For a known property, the drawer also shows what its value means. Known properti
 - **Sockets:** the page raises the HTTP server's client limit by 2, one for the page's polling and one spare for a reload.
 - **Open on the LAN without auth:** without `web_server: auth:`, anyone on your network can open the page and start or stop a scan, which pauses normal polling. When set, `web_server: auth:` and `allowed_origins` also apply to `/sniffer`, `/sniffer/data` and `/sniffer/scan/*`.
 - **Captive portal:** while the device runs its captive-portal access point (the Wi-Fi fallback), the portal answers every GET request, so the page may be unreachable until the device is back on your network.
-- **Scripting a scan:** `curl -X POST -H 'Content-Length: 0' http://<device>/sniffer/scan/start` (or `/stop`). Without the explicit empty body the server answers `411`. Both are idempotent and move the scan switch like the page's button. The data endpoint and its JSON are described in the [spec](../../.specs/sniffer.md#devicepage-contract).
+- **Scripting a scan:** `curl -X POST -H 'Content-Length: 0' 'http://<device>/sniffer/scan/start?goal=discover&from=1&to=208'` (or `?goal=check`, or `/stop`). Without the explicit empty body the server answers `411`. A missing or unknown `goal` means discover; without `from` and `to` discover covers 1–255. Discover with only one of them, a non-numeric one, one above 255 or `from` above `to` gets a `400` and starts nothing; check ignores them. Both are idempotent (a start while a scan runs leaves it running, whatever its goal) and move the scan switch like the page's button. The data endpoint and its JSON are described in the [spec](../../.specs/sniffer.md#devicepage-contract).
 
 See [RAW_VALUES.md](RAW_VALUES.md#how-to-reproduce) for a capture walkthrough.
 
@@ -423,7 +419,9 @@ These changes break existing sniffer configs or automations that read its text s
 - **Text sensor format:** the state lists each ID's raw value as the panel sent it (`1=11.11.26, 5=0100`) instead of the `atoi` result (`1=11, 5=100`), and a cut state ends with `, …+N more` instead of `, ...`. Templates or automations that parse the state need updating.
 - **`time_id` removed:** setting it is a config error. Delete it: sniffer timestamps are device uptime, and the page shows wall time.
 - **ESP32 only:** other targets (such as ESP8266) fail config validation.
-- **`scan_end` capped at 255:** a higher value is a config error. `scan_start` is capped at 255 as well.
+- **`scan_start` and `scan_end` no longer pick the scan range:** they are still checked (0–255, a higher value is a config error) but ignored. The scan switch and the page start a discover of 1–255; a script can name a range ([Scripting a scan](#sniffer-page)).
+- **No resume:** a stopped scan starts over at the first ID instead of where it stopped.
+- **Discover skips every known property**, not only the registered ones; a check scan queries them.
 - **`web_page: true` needs an HTTP server:** `web_server_base` is not loaded automatically; add `web_server_base:` or `web_server:`.
 
 ### What I have found so far

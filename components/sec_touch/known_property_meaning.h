@@ -12,7 +12,7 @@ namespace esphome {
 namespace sec_touch {
 
 enum class MeaningKind {
-  /// A name from the meaning tables in protocol_ids.h.
+  /// A name from the meaning tables in protocol_ids.h and fan_level.h.
   NAME,
   /// Date and clock: the trimmed value is its own meaning.
   AS_SENT,

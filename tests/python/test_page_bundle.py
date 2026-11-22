@@ -105,13 +105,13 @@ def test_reads_the_headers_from_the_given_directory(header_dir: Path) -> None:
     ("file", "old", "new", "error"),
     [
         pytest.param(PROTOCOL_IDS, '    "leer"              // 68\n', "", "NAME_MAPPING", id="label count off"),
-        pytest.param(PROTOCOL_IDS, "{BURST_LEVEL, BURST_NAME}", "{BURST_LEVEL, BURSTY_NAME}", "BURSTY_NAME",
+        pytest.param(FAN_LEVEL, "{BURST_LEVEL, BURST_NAME}", "{BURST_LEVEL, BURSTY_NAME}", "BURSTY_NAME",
                      id="unknown name"),
-        pytest.param(PROTOCOL_IDS, '{3, "level 3"}', '{MIN_NORMAL_LEVEL + 2, "level 3"}', "LEVEL_NAMES",
+        pytest.param(FAN_LEVEL, '{3, "level 3"}', '{MIN_NORMAL_LEVEL + 2, "level 3"}', "LEVEL_NAMES",
                      id="expression entry"),
-        pytest.param(PROTOCOL_IDS, "LEVEL_NAMES = {{", "LEVEL_NAMES_RENAMED = {{", "LEVEL_NAMES",
+        pytest.param(FAN_LEVEL, "LEVEL_NAMES = {{", "LEVEL_NAMES_RENAMED = {{", "LEVEL_NAMES",
                      id="missing table"),
-        pytest.param(PROTOCOL_IDS, "std::array<LevelName, 13>", "std::array<LevelName, 14>", "LEVEL_NAMES",
+        pytest.param(FAN_LEVEL, "std::array<LevelName, 13>", "std::array<LevelName, 14>", "LEVEL_NAMES",
                      id="table size off"),
         pytest.param(PROTOCOL_IDS, '"Bad",', '"B\\"ad",', "escape", id="escaped string"),
         pytest.param(PROTOCOL_IDS, "FAN_LEVEL_IDS = {173,", "FAN_LEVEL_IDS = {0xAD,", "FAN_LEVEL_IDS",
@@ -145,15 +145,40 @@ def test_fails_on_a_char_literal_outside_strings_and_comments(header_dir: Path) 
         parse_catalogue(header_dir)
 
 
+def test_fails_on_a_char_literal_in_fan_level_too(header_dir: Path) -> None:
+    edit(header_dir / FAN_LEVEL, "constexpr int OFF_LEVEL", "constexpr char SEPARATOR = ',';\nconstexpr int OFF_LEVEL")
+
+    with pytest.raises(ValueError, match=re.escape("fan_level.h: char literals (') are not supported")):
+        parse_catalogue(header_dir)
+
+
+@pytest.mark.parametrize(
+    ("file", "old", "new", "error"),
+    [
+        pytest.param(FAN_LEVEL, '{3, "level 3"}', '{2, "level 3"}', "fan_level.h: LEVEL_NAMES: 2 appears twice",
+                     id="level names"),
+        pytest.param(PROTOCOL_IDS, '{SUMMER_VENTILATION_OFF, "off"}', '{SUMMER_VENTILATION_ON, "off"}',
+                     "protocol_ids.h: SUMMER_VENTILATION_NAMES: 0A00 appears twice", id="summer ventilation names"),
+    ],
+)
+def test_a_repeated_key_names_the_header_that_declares_the_table(
+    header_dir: Path, file: str, old: str, new: str, error: str
+) -> None:
+    edit(header_dir / file, old, new)
+
+    with pytest.raises(ValueError, match=re.escape(error)):
+        parse_catalogue(header_dir)
+
+
 def test_a_missing_name_names_the_headers_it_was_looked_for_in(header_dir: Path) -> None:
-    edit(header_dir / PROTOCOL_IDS, "LEVEL_NAMES = {{", "LEVEL_NAMES_RENAMED = {{")
+    edit(header_dir / FAN_LEVEL, "LEVEL_NAMES = {{", "LEVEL_NAMES_RENAMED = {{")
 
     with pytest.raises(ValueError, match=re.escape("no LEVEL_NAMES in the parsed headers (fan_level.h, protocol_ids.h)")):
         parse_catalogue(header_dir)
 
 
 def test_a_header_it_cannot_parse_fails_the_page_build(header_dir: Path) -> None:
-    edit(header_dir / PROTOCOL_IDS, "{BURST_LEVEL, BURST_NAME}", "{BURST_LEVEL, BURSTY_NAME}")
+    edit(header_dir / FAN_LEVEL, "{BURST_LEVEL, BURST_NAME}", "{BURST_LEVEL, BURSTY_NAME}")
 
     with pytest.raises(ValueError, match="BURSTY_NAME"):
         bundle_page(header_dir=header_dir)

@@ -1,6 +1,7 @@
 /**
  * Known properties and the expected meaning of their raw values (.specs/sniffer.md, "Known-property catalogue").
- * The page passes the generated CATALOGUE (catalogue.mjs, built by page_bundle.py from sec_touch's protocol_ids.h);
+ * The page passes the generated CATALOGUE (catalogue.mjs, built by page_bundle.py from sec_touch's protocol_ids.h
+ * and fan_level.h);
  * the rules match known_property_meaning() in components/sec_touch/known_property_meaning.h.
  */
 

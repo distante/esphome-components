@@ -1,10 +1,12 @@
 #pragma once
 
-// Plain C++, no ESPHome includes: the command and property ids of the SEC-Touch protocol and the meaning tables of the
-// known properties, shared by _definitions.h, the host-built tests in tests/cpp and the sniffer page.
-// components/sec_touch_sniffer/page_bundle.py parses this file and fan_level.h at every build, so keep each
-// declaration it reads in its current form: `constexpr [const] int`, `constexpr const char *`, a `std::array` of ints
-// or of {value, name} pairs, and the NAME_MAPPING string table. Anything it cannot read fails the build. Its limits:
+// Plain C++, no ESPHome includes: the command and property ids of the SEC-Touch protocol and the label and summer
+// ventilation meaning tables, shared by _definitions.h, the host-built tests in tests/cpp and the sniffer page. The
+// level and preset names live in fan_level.h, beside the level constants they are keyed by.
+// components/sec_touch_sniffer/page_bundle.py parses this file and fan_level.h at every build, so in both headers keep
+// each declaration it reads in its current form: `constexpr [const] int`, `constexpr const char *`, a `std::array` of
+// ints or of {value, name} pairs, and the NAME_MAPPING string table. Anything it cannot read fails the build.
+// Its limits:
 // - no comma inside the string of a {value, name} entry: the entry is split at commas;
 // - no constexpr locals in a function body of either header: the declaration regexes would read them as constants;
 // - no char literals ('x') or digit separators in either header: a ' outside strings and comments fails the build.
@@ -42,40 +44,6 @@ struct RawValueName {
 constexpr std::array<RawValueName, 2> SUMMER_VENTILATION_NAMES = {{
     {SUMMER_VENTILATION_ON, "on"},
     {SUMMER_VENTILATION_OFF, "off"},
-}};
-
-// Names of the fan presets (FanModeEnum) and of the level each one carries, keyed by fan_level.h.
-constexpr const char *NORMAL_PRESET_NAME = "Normal";
-constexpr const char *BURST_NAME = "Burst";
-constexpr const char *AUTOMATIC_HUMIDITY_NAME = "Automatic Humidity";
-constexpr const char *AUTOMATIC_CO2_NAME = "Automatic CO2";
-constexpr const char *AUTOMATIC_TIME_NAME = "Automatic Time";
-constexpr const char *SLEEP_NAME = "Sleep";
-constexpr const char *OFF_NAME = "off";
-constexpr const char *NOT_CONNECTED_NAME = "not connected";
-
-/// A fan level value and its name.
-struct LevelName {
-  int level;
-  const char *name;
-};
-
-// Every level a fan's level property can report. Levels 2 to 5 have no constant in fan_level.h: they sit inside
-// MIN_NORMAL_LEVEL..MAX_NORMAL_LEVEL, so their entries spell the level out.
-constexpr std::array<LevelName, 13> LEVEL_NAMES = {{
-    {OFF_LEVEL, OFF_NAME},
-    {MIN_NORMAL_LEVEL, "level 1"},
-    {2, "level 2"},
-    {3, "level 3"},
-    {4, "level 4"},
-    {5, "level 5"},
-    {MAX_NORMAL_LEVEL, "level 6"},
-    {BURST_LEVEL, BURST_NAME},
-    {AUTOMATIC_HUMIDITY_LEVEL, AUTOMATIC_HUMIDITY_NAME},
-    {AUTOMATIC_CO2_LEVEL, AUTOMATIC_CO2_NAME},
-    {AUTOMATIC_TIME_LEVEL, AUTOMATIC_TIME_NAME},
-    {SLEEP_LEVEL, SLEEP_NAME},
-    {NOT_CONNECTED_LEVEL, NOT_CONNECTED_NAME},
 }};
 
 // Names a fan's label property selects, by value.

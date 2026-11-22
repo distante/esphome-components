@@ -85,6 +85,7 @@ class _Header:
 
     def __init__(self):
         self.files: list[str] = []
+        self.defined_in: dict[str, str] = {}
         self.ints: dict[str, int] = {}
         self.strings: dict[str, str] = {}
         self.int_arrays: dict[str, list[int]] = {}
@@ -96,6 +97,7 @@ class _Header:
         if any(name in kind for kind in kinds):
             raise ValueError(f"{where}: {name} is defined twice")
         table[name] = value
+        self.defined_in[name] = where
 
     def _int(self, token: str, where: str) -> int:
         if re.fullmatch(r"\d+", token):
@@ -161,14 +163,16 @@ class _Header:
         return table[name]
 
 
-def _names_by(entries: list, name: str, key_type: type) -> dict:
-    """{key: name} from a table of {key, name} pairs, failing on a wrong type or a repeated key."""
+def _names_by(header: _Header, name: str, key_type: type) -> dict:
+    """{key: name} from the header's table `name` of {key, name} pairs, failing on a wrong type or a repeated key."""
+    entries = header.get(header.pair_tables, name)
+    where = f"{header.defined_in[name]}: {name}"
     names = {}
     for key, text in entries:
         if not isinstance(key, key_type) or not isinstance(text, str):
-            raise ValueError(f"{PROTOCOL_IDS_FILE}: {name}: entry {{{key}, {text}}} has the wrong types")
+            raise ValueError(f"{where}: entry {{{key}, {text}}} has the wrong types")
         if str(key) in names:
-            raise ValueError(f"{PROTOCOL_IDS_FILE}: {name}: {key} appears twice")
+            raise ValueError(f"{where}: {key} appears twice")
         names[str(key)] = text
     return names
 
@@ -184,11 +188,9 @@ def parse_catalogue(header_dir: Path = HEADER_DIR) -> dict:
         "summerVentilationId": header.get(header.ints, "SUMMER_VENTILATION_PROPERTY_ID"),
         "dateId": header.get(header.ints, "DATE_PROPERTY_ID"),
         "clockId": header.get(header.ints, "CLOCK_PROPERTY_ID"),
-        "levelNames": _names_by(header.get(header.pair_tables, "LEVEL_NAMES"), "LEVEL_NAMES", int),
+        "levelNames": _names_by(header, "LEVEL_NAMES", int),
         "labelNames": header.get(header.string_tables, "NAME_MAPPING"),
-        "summerVentilationNames": _names_by(
-            header.get(header.pair_tables, "SUMMER_VENTILATION_NAMES"), "SUMMER_VENTILATION_NAMES", str
-        ),
+        "summerVentilationNames": _names_by(header, "SUMMER_VENTILATION_NAMES", str),
     }
 
 

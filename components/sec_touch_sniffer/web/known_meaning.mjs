@@ -79,12 +79,19 @@ export function knownMeaning(catalogue, id, raw) {
 export const NOT_SEEN = "not seen";
 
 /**
+ * @param {{ text: string, unexpected: boolean } | null} meaning a meaning of knownMeaning(), null for none
+ * @returns {string} the meaning as shown: its text with control bytes as \xNN, or NOT_SEEN for none
+ */
+export function meaningText(meaning) {
+  return meaning === null ? NOT_SEEN : escapeControlBytes(meaning.text);
+}
+
+/**
  * @param {object} catalogue the CATALOGUE of catalogue.mjs
  * @param {number} id a known property ID
  * @param {string | null} raw the raw value as received, null when never seen
  * @returns {string} the tooltip of the ID's cell in discover's map under "show known": `ID = value · meaning`
  */
 export function knownCellTitle(catalogue, id, raw) {
-  const meaning = knownMeaning(catalogue, id, raw);
-  return `${id} = ${shown(raw)} · ${meaning === null ? NOT_SEEN : escapeControlBytes(meaning.text)}`;
+  return `${id} = ${shown(raw)} · ${meaningText(knownMeaning(catalogue, id, raw))}`;
 }

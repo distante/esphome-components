@@ -167,8 +167,8 @@ import { checkCards } from "./check_cards.mjs";
 import { exportCsv, exportJson } from "./export.mjs";
 import { deviceKey, LAST_MAC_KEY, parseStored, storedText } from "./storage.mjs";
 import { STATUS_COLOURS, TYPE_COLOURS } from "./colours.mjs";
-import { knownCellTitle, knownIds, NOT_SEEN } from "./known_meaning.mjs";
-import { escapeControlBytes, shown } from "./control_bytes.mjs";
+import { knownCellTitle, knownIds, meaningText } from "./known_meaning.mjs";
+import { shown } from "./control_bytes.mjs";
 import { CATALOGUE } from "./catalogue.mjs";
 
 const ID_COUNT = 256;
@@ -493,10 +493,10 @@ function renderTabs() {
 /** A known property's meaning: red when unexpected, "not seen" while it has no value. */
 function meaningView(meaning, size = "") {
   if (meaning === null) {
-    return el("span", { class: `mute ${size}`.trim() }, NOT_SEEN);
+    return el("span", { class: `mute ${size}`.trim() }, meaningText(meaning));
   }
   const classes = `${meaning.unexpected ? "unexpected" : ""} ${size}`.trim();
-  return el("span", classes ? { class: classes } : {}, escapeControlBytes(meaning.text));
+  return el("span", classes ? { class: classes } : {}, meaningText(meaning));
 }
 
 const registeredBadge = () => el("span", { class: "badge", title: REGISTERED_TITLE }, "registered");

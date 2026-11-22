@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { isKnownId, knownCellTitle, knownIds, knownMeaning, NOT_SEEN } from "./known_meaning.mjs";
+import { isKnownId, knownCellTitle, knownIds, knownMeaning, meaningText, NOT_SEEN } from "./known_meaning.mjs";
+import { escapeControlBytes } from "./control_bytes.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
 
 const CATALOGUE = FIXTURE_CATALOGUE;
@@ -95,4 +96,10 @@ test("a known cell's tooltip is its ID, its shown value and its meaning", () => 
 
 test("a known cell with no value yet is not seen in its tooltip", () => {
   assert.equal(knownCellTitle(CATALOGUE, LEVEL, null), `${LEVEL} = — · ${NOT_SEEN}`);
+});
+
+test("no meaning is shown as not seen, a meaning as its text with control bytes escaped", () => {
+  assert.equal(meaningText(null), NOT_SEEN);
+  assert.equal(meaningText(named("Burst")), "Burst");
+  assert.equal(meaningText(unexpected("9\x01")), escapeControlBytes("unexpected value 9\x01"));
 });

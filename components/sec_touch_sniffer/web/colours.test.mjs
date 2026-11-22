@@ -12,3 +12,10 @@ test("every guessed type has a colour, and only those", () => {
 test("every query status has a colour, and only those", () => {
   assert.deepEqual(Object.keys(STATUS_COLOURS).sort(), [...STATUSES].sort());
 });
+
+// Colouring by type or by status must not make a type and a status look the same.
+test("no colour is both a type's and a status's", () => {
+  const typeColours = new Set(Object.values(TYPE_COLOURS).map((colour) => colour.toLowerCase()));
+  const shared = Object.values(STATUS_COLOURS).filter((colour) => typeColours.has(colour.toLowerCase()));
+  assert.deepEqual(shared, []);
+});

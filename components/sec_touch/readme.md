@@ -376,7 +376,7 @@ The sniffer serves, at `http://<device>/sniffer`, a page for working out what th
   <img src="images/sniffer-overview.png" alt="Sniffer page: ID map, drawer and change feed" width="900" />
 </p>
 
-For a known property, the drawer also shows what its value means. Known properties are the fan levels (173–178), fan labels (78–83), summer ventilation (48), date (1) and clock (2). Levels and labels show their name ("level 3", "Burst", "Bad"), summer ventilation shows `0A00` as "on" and `0800` as "off", and date and clock show the value as sent. A value that matches none of these shows as `unexpected value x` in red. The names come from [`fan_level.h`](fan_level.h) (levels) and [`protocol_ids.h`](protocol_ids.h) (labels and summer ventilation), the same tables the component uses.
+For a known property, the Check tab shows what its value means. Known properties are the fan levels (173–178), fan labels (78–83), summer ventilation (48), date (1) and clock (2). Levels and labels show their name ("level 3", "Burst", "Bad"), summer ventilation shows `0A00` as "on" and `0800` as "off", and date and clock show the value as sent. A value that matches none of these shows as `unexpected value x` in red. The names come from [`fan_level.h`](fan_level.h) (levels) and [`protocol_ids.h`](protocol_ids.h) (labels and summer ventilation), the same tables the component uses.
 
 | Fan level (173) and label (78) | Summer ventilation (48), date (1) and clock (2) |
 |---|---|

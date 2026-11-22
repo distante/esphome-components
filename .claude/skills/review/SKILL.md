@@ -15,3 +15,12 @@ Enforces [Reuse existing definitions](../coding-standards/SKILL.md#reuse-existin
 4. For each value Python and C++ both need, confirm one side reads it from the other. Example: `text_sensor.py` reads `MAX_PROPERTY_ID` from `property_slots.h`; `page_bundle.py` parses `protocol_ids.h`.
 
 Done when every added literal, list, bound and helper has a grep behind it, and each duplicate is reported with its `file:line` and the existing definition it duplicates.
+
+## Removed state has no reader left
+
+Enforces [Tests](../coding-standards/SKILL.md#tests): a removal is a change, so it lands with a test or with proof that nothing reads what it removed.
+
+1. For every assignment, reset or field the diff removes because "no test can see it" or "it is redundant", grep every reader of that state, not only the main computation. Include paths that copy the state and override part of it before reading. Example: a start's `scan_completed_ = false` reset looked redundant because `done` is `!active && completed`, but the stop reply forces `active = false` on a copy and then read the stale `completed` as `done: true`.
+2. For each reader the removal changes, ask for a test that reads the state through that path.
+
+Done when every removed piece of state has its readers listed, and each reader the removal changes has a test.

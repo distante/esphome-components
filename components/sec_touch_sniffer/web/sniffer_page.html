@@ -51,6 +51,8 @@
   .cell.cursor { outline:3px solid var(--acc); }
   .cell.sel { outline:2px solid red; }
   .flash { animation:flash 2s; }
+  /* The chips of the group "colour by" does not use: their colour is not on the map, so it fades. */
+  .faded > .badge { background-image:linear-gradient(rgba(255,255,255,.7), rgba(255,255,255,.7)); }
   /* No `to`: the flash fades into the cell's own box-shadow, the mark's ring on a marked cell. */
   @keyframes flash { from { box-shadow:inset 0 0 0 40px #ffe58a; } }
   #side { width:340px; flex:none; overflow:auto; }
@@ -585,7 +587,8 @@ function addChips(parent, colours, chosen) {
       }
       render();
     });
-    parent.append(el("label", { class: "badge", style: `background:${colour}` }, box, key));
+    // background-color, not background, so the fading overlay of .faded stays.
+    parent.append(el("label", { class: "badge", style: `background-color:${colour}` }, box, key));
   }
 }
 
@@ -698,6 +701,8 @@ function render() {
   const now = Date.now();
   const visible = visibleIds(CATALOGUE, rows, filter, now, mark);
   $("known-gap-legend").textContent = `${showKnown ? "grey" : "blank"}: ${KNOWN_GAP_TEXT}`;
+  $("f-types").classList.toggle("faded", colourBy !== "type");
+  $("f-statuses").classList.toggle("faded", colourBy !== "status");
   renderGrid(rowsById, visible);
   renderMark();
   renderFeed(visible);

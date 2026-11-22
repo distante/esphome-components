@@ -128,10 +128,9 @@ struct SnifferRig {
   /// The property ID of every GET the hub sent, in order.
   std::vector<int> gets_sent() const {
     const std::string sent(this->uart.tx.begin(), this->uart.tx.end());
-    const std::string get_head = std::string(1, static_cast<char>(STX)) + std::to_string(COMMANDID_GET) + tab;
     std::vector<int> ids;
-    for (size_t at = sent.find(get_head); at != std::string::npos; at = sent.find(get_head, at + 1)) {
-      ids.push_back(std::atoi(sent.c_str() + at + get_head.size()));
+    for (size_t at = sent.find(get_start); at != std::string::npos; at = sent.find(get_start, at + 1)) {
+      ids.push_back(std::atoi(sent.c_str() + at + get_start.size()));
     }
     return ids;
   }
@@ -139,10 +138,10 @@ struct SnifferRig {
   /// How many GETs for `property_id` the hub sent.
   int gets_sent_for(int property_id) const {
     const std::string sent(this->uart.tx.begin(), this->uart.tx.end());
-    const std::string get_head = std::string(1, static_cast<char>(STX)) + std::to_string(COMMANDID_GET) + tab +
-                                 std::to_string(property_id) + tab;
+    const std::vector<uint8_t> get = get_frame(property_id);
+    const std::string get_bytes(get.begin(), get.end());
     int count = 0;
-    for (size_t at = sent.find(get_head); at != std::string::npos; at = sent.find(get_head, at + 1)) {
+    for (size_t at = sent.find(get_bytes); at != std::string::npos; at = sent.find(get_bytes, at + 1)) {
       count++;
     }
     return count;

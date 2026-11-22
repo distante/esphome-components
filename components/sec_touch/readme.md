@@ -670,7 +670,7 @@ With the flag enabled:
 
 By default, every response from the SEC-Touch is expected to contain four TAB-delimited fields: `command_id`, `property_id`, `value`, and `crc`. If the CRC field is absent the component logs an error and discards the message.
 
-The CRC is always checked when the field is there. A message whose CRC doesn't match (a bit flipped on the wire) is logged as a `CRC mismatch` warning and discarded, the same as any other malformed message. The hub still sends its `ACK` for it, because the panel ignores the next request until it gets one, and it never resends a message. The next poll reads the value again.
+The CRC is always checked when the field is there. A message whose CRC doesn't match (a bit flipped on the wire) is logged as a `CRC mismatch` warning and discarded, the same as any other malformed message. The hub still sends its `ACK` for it, because the panel ignores the next request until it gets one, and it never resends a message. Instead, the hub sends that GET once more right after the `ACK` (not in scan mode). If the second reply is bad too, it is dropped the same way and the next poll reads the value again (for labels: the next boot or press of the `program_text_update` button).
 
 The panels seen so far always send a CRC, so `false` (the default) is the safe choice. Leave it there unless your logs show the symptom below.
 

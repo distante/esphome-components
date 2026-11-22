@@ -139,6 +139,8 @@ struct BaseTask {
   virtual TaskType get_task_type() const = 0;
   TaskTargetType targetType;
   int property_id;
+  /// Already sent once more after its reply was dropped (should_retry_get).
+  bool retried{false};
 };
 
 struct SetDataTask : public BaseTask {

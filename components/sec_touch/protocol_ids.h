@@ -4,7 +4,8 @@
 // known properties, shared by _definitions.h, the host-built tests in tests/cpp and the sniffer page.
 // components/sec_touch_sniffer/page_bundle.py parses this file and fan_level.h at every build, so keep each
 // declaration it reads in its current form: `constexpr [const] int`, `constexpr const char *`, a `std::array` of ints
-// or of {value, name} pairs, and the NAME_MAPPING string table. Anything it cannot read fails the build.
+// or of {value, name} pairs, and the NAME_MAPPING string table. Anything it cannot read fails the build. Keep char
+// literals ('x') out of both headers: the bundler's string and comment stripper does not know them.
 
 #include <array>
 #include <cstddef>
@@ -150,7 +151,7 @@ constexpr const char *NAME_MAPPING[NAME_MAPPING_COUNT] = {
 };
 
 /// Whether `arr` holds `value`.
-template<typename T, size_t N> constexpr bool contains(const std::array<T, N> &arr, int value) {
+template<typename T, std::size_t N> constexpr bool contains(const std::array<T, N> &arr, int value) {
   for (const T &item : arr) {
     if (item == value) {
       return true;

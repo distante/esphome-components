@@ -97,7 +97,7 @@ Decided in [Where does the known-property catalogue live, and how does the page 
 | Date | 1 | the value as sent |
 | Clock | 2 | the value as sent |
 
-- **Moves into the header:** `GLOBAL_SETTING_IDS`, the 48/1/2 ID constants and `NAME_MAPPING` out of `_definitions.h`, and the six preset names of `FanModeList` (`fan/_fan_mode.cpp`, behind an ESPHome include), keyed by the `fan/fan_level.h` constants. The header also names levels 1–6 and 0 (off) and 255 (not connected), which have no names today. The component keeps using them from there.
+- **Moves into the header:** `GLOBAL_SETTING_IDS`, the 48/1/2 ID constants and `NAME_MAPPING` out of `_definitions.h`, and the six preset names of `FanModeList` (`fan/_fan_mode.cpp`, behind an ESPHome include), keyed by the constants of `components/sec_touch/fan_level.h` (moved out of `fan/`, which ESPHome copies only into builds that load the fan platform). The header also names levels 1–6 and 0 (off) and 255 (not connected), which have no names today. The component keeps using them from there.
 - **Left as is:** the Python copy of the fan IDs in `sec_touch/__init__.py`.
 - **Matching.** Levels and labels match the trimmed raw value read as a whole decimal integer. Property 48 matches the raw string `0A00`/`0800`, not the `0`/`800` the component's `atoi` parse yields. Date and clock always match and show the trimmed value.
 - **Unexpected value.** A known property whose value matches no entry shows as `unexpected value x` (`x` the trimmed raw value). That also covers corrupted values. There are no further decode rules.

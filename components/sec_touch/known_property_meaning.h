@@ -31,6 +31,14 @@ constexpr bool is_known_property(int id) {
   return contains(FAN_LEVEL_IDS, id) || contains(FAN_LABEL_IDS, id) || contains(GLOBAL_SETTING_IDS, id);
 }
 
+/// The NAME_MAPPING name a fan's label property selects with `value`, or nullptr when `value` is outside NAME_MAPPING.
+constexpr const char *label_name(int value) {
+  if (value < 0 || value >= NAME_MAPPING_COUNT) {
+    return nullptr;
+  }
+  return NAME_MAPPING[value];
+}
+
 namespace known_property_detail {
 
 constexpr bool is_ascii_space(char c) {
@@ -78,12 +86,18 @@ constexpr const char *level_name(int level) {
   return nullptr;
 }
 
-constexpr const char *label_name(int label) {
-  if (label < 0 || label >= NAME_MAPPING_COUNT) {
-    return nullptr;
+constexpr bool no_level_above_max_table_value() {
+  for (const LevelName &entry : LEVEL_NAMES) {
+    if (entry.level > MAX_TABLE_VALUE) {
+      return false;
+    }
   }
-  return NAME_MAPPING[label];
+  return true;
 }
+
+// whole_decimal() gives up above MAX_TABLE_VALUE, so no table entry may sit above it.
+static_assert(NAME_MAPPING_COUNT - 1 <= MAX_TABLE_VALUE, "a NAME_MAPPING value is above MAX_TABLE_VALUE");
+static_assert(no_level_above_max_table_value(), "a LEVEL_NAMES level is above MAX_TABLE_VALUE");
 
 constexpr const char *summer_ventilation_name(std::string_view trimmed) {
   for (const RawValueName &entry : SUMMER_VENTILATION_NAMES) {
@@ -111,8 +125,7 @@ inline std::optional<KnownMeaning> known_property_meaning(int id, std::string_vi
   }
   const std::string_view trimmed = trim_ascii(raw);
   if (contains(FAN_LEVEL_IDS, id)) {
-    const int level = whole_decimal(trimmed);
-    return name_or_unexpected(level < 0 ? nullptr : level_name(level), trimmed);
+    return name_or_unexpected(level_name(whole_decimal(trimmed)), trimmed);
   }
   if (contains(FAN_LABEL_IDS, id)) {
     return name_or_unexpected(label_name(whole_decimal(trimmed)), trimmed);

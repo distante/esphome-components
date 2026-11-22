@@ -17,6 +17,7 @@ using esphome::sec_touch::FAN_LEVEL_IDS;
 using esphome::sec_touch::is_known_property;
 using esphome::sec_touch::known_property_meaning;
 using esphome::sec_touch::KnownMeaning;
+using esphome::sec_touch::label_name;
 using esphome::sec_touch::MAX_LEVEL;
 using esphome::sec_touch::MAX_NORMAL_LEVEL;
 using esphome::sec_touch::MeaningKind;
@@ -29,6 +30,7 @@ using esphome::sec_touch::OFF_LEVEL;
 using esphome::sec_touch::OFF_NAME;
 using esphome::sec_touch::SLEEP_LEVEL;
 using esphome::sec_touch::SLEEP_NAME;
+using esphome::sec_touch::SUMMER_VENTILATION_NAMES;
 using esphome::sec_touch::SUMMER_VENTILATION_OFF;
 using esphome::sec_touch::SUMMER_VENTILATION_ON;
 using esphome::sec_touch::SUMMER_VENTILATION_PROPERTY_ID;
@@ -66,12 +68,35 @@ const char *kind_name(MeaningKind kind) {
   return means(actual, MeaningKind::UNEXPECTED, trimmed);
 }
 
+/// The name SUMMER_VENTILATION_NAMES gives the entry whose raw value is `raw`, or nullptr when none has it.
+const char *summer_ventilation_table_name(const char *raw) {
+  for (const auto &entry : SUMMER_VENTILATION_NAMES) {
+    if (std::string_view(entry.raw) == raw) {
+      return entry.name;
+    }
+  }
+  return nullptr;
+}
+
 const int FAN_1_LEVEL_ID = FAN_LEVEL_IDS.front();
 const int FAN_6_LEVEL_ID = FAN_LEVEL_IDS.back();
 const int FAN_1_LABEL_ID = FAN_LABEL_IDS.front();
 const int FAN_6_LABEL_ID = FAN_LABEL_IDS.back();
 
 }  // namespace
+
+// ── label name ──
+
+TEST(LabelName, NamesEveryNameMappingValue) {
+  for (int value = 0; value < NAME_MAPPING_COUNT; value++) {
+    EXPECT_EQ(label_name(value), NAME_MAPPING[value]) << value;
+  }
+}
+
+TEST(LabelName, IsNullOutsideNameMapping) {
+  EXPECT_EQ(label_name(-1), nullptr);
+  EXPECT_EQ(label_name(NAME_MAPPING_COUNT), nullptr);
+}
 
 // ── known IDs ──
 
@@ -182,9 +207,13 @@ TEST(KnownPropertyMeaning, ALabelOutsideNameMappingOrNotADecimalIsUnexpected) {
 // ── summer ventilation ──
 
 TEST(KnownPropertyMeaning, SummerVentilationMatchesTheRawOnAndOffStrings) {
-  EXPECT_TRUE(means_name(known_property_meaning(SUMMER_VENTILATION_PROPERTY_ID, SUMMER_VENTILATION_ON), "on"));
-  EXPECT_TRUE(means_name(known_property_meaning(SUMMER_VENTILATION_PROPERTY_ID, SUMMER_VENTILATION_OFF), "off"));
-  EXPECT_TRUE(means_name(known_property_meaning(SUMMER_VENTILATION_PROPERTY_ID, " 0A00   "), "on"));
+  const char *on_name = summer_ventilation_table_name(SUMMER_VENTILATION_ON);
+  const char *off_name = summer_ventilation_table_name(SUMMER_VENTILATION_OFF);
+  ASSERT_NE(on_name, nullptr);
+  ASSERT_NE(off_name, nullptr);
+  EXPECT_TRUE(means_name(known_property_meaning(SUMMER_VENTILATION_PROPERTY_ID, SUMMER_VENTILATION_ON), on_name));
+  EXPECT_TRUE(means_name(known_property_meaning(SUMMER_VENTILATION_PROPERTY_ID, SUMMER_VENTILATION_OFF), off_name));
+  EXPECT_TRUE(means_name(known_property_meaning(SUMMER_VENTILATION_PROPERTY_ID, " 0A00   "), on_name));
 }
 
 // The hub's atoi parse turns "0A00" / "0800" into 0 / 800; those are not the raw values.

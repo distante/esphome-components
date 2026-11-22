@@ -380,7 +380,7 @@ For a known property, the Check tab shows what its value means. Known properties
 
 | Fan level (173) and label (78) | Summer ventilation (48), date (1) and clock (2) |
 |---|---|
-| <img src="images/sniffer-check-fan.png" alt="Check card Fan 1: level 173 = 10 meaning Automatic Time, label 78 = 35 meaning Kellerraum" width="300" /> | <img src="images/sniffer-check-global.png" alt="Check card Global: summer ventilation 48 = 0800 meaning off, date 1 and clock 2 as sent" width="300" /> |
+| <img src="images/sniffer-check-fan.png" alt="Check card Fan 1: level 173 = 10 meaning Automatic Time, label 78 = 35 meaning Kellerraum" width="240" /> | <img src="images/sniffer-check-global.png" alt="Check card Global: summer ventilation 48 = 0800 meaning off, date 1 and clock 2 as sent" width="240" /> |
 
 - **HTTP server:** the page needs `web_server_base:`, or `web_server:`, which loads it. Without either the config fails. The port is the server's; the sniffer has no port or auth options of its own.
 - **Sockets:** the page raises the HTTP server's client limit by 2, one for the page's polling and one spare for a reload.

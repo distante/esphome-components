@@ -43,6 +43,12 @@ class HistoryPool {
 
   bool is_allocated() const { return this->buf_ != nullptr; }
 
+  /// Forgets every previous value; the pool stays allocated.
+  void clear() {
+    this->used_ = 0;
+    std::memset(this->counts_, 0, sizeof(this->counts_));
+  }
+
   size_t free_bytes() const { return this->buf_ == nullptr ? 0 : HISTORY_POOL_BYTES - this->used_; }
 
   uint8_t count(uint8_t id) const { return this->counts_[id]; }

@@ -2,6 +2,7 @@
 
 // Plain C++, no ESPHome includes: built on the host by tests/cpp/test_property_store.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -116,6 +117,16 @@ class PropertyStore {
     f.query_status = outcome;
     f.query_status_at_s = now_s;
     f.seq = ++this->seq_;
+  }
+
+  /// Forgets every record, the history and the dropped count, as after a reboot; the blocks stay allocated. `seq` is
+  /// kept, so it never goes down for a page polling with an old `since`.
+  void clear() {
+    if (this->is_allocated()) {
+      std::fill_n(this->fields_.get(), PROPERTY_SLOTS, PropertyFields{});
+    }
+    this->history_.clear();
+    this->dropped_ = 0;
   }
 
   /// Only call with an ID 0..MAX_PROPERTY_ID on an allocated store.

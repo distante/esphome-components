@@ -191,6 +191,38 @@ TEST(PropertyStore, AValueLongerThanTheCapIsRejectedNotDropped) {
   EXPECT_EQ(store.dropped(), 0u);
 }
 
+TEST(PropertyStore, AClearForgetsEveryRecordItsHistoryAndTheDroppedCount) {
+  PropertyStore store = allocated_store();
+  record(store, PROPERTY_ID, "0000", 1);
+  record(store, PROPERTY_ID, "0100", 2);
+  store.record_query(MAX_PROPERTY_ID, ScanOutcome::SCAN_OUTCOME_NAK, 3);
+  record(store, MAX_PROPERTY_ID + 1, "1", 3);
+
+  store.clear();
+
+  EXPECT_FALSE(store.has_raw_value(PROPERTY_ID));
+  EXPECT_FALSE(store.is_queried(MAX_PROPERTY_ID));
+  EXPECT_EQ(store.fields(PROPERTY_ID).change_count, 0u);
+  EXPECT_EQ(store.fields(PROPERTY_ID).seq, 0u);
+  EXPECT_EQ(store.fields(MAX_PROPERTY_ID).seq, 0u);
+  EXPECT_TRUE(history_of(store, PROPERTY_ID).empty());
+  EXPECT_EQ(store.dropped(), 0u);
+}
+
+// A page polling with an old `since` must never see `seq` go down.
+TEST(PropertyStore, AfterAClearSeqKeepsGoingUpAndAMessageIsNewAgain) {
+  PropertyStore store = allocated_store();
+  record(store, PROPERTY_ID, "0100", 1);
+  const uint32_t seq_before = store.seq();
+
+  store.clear();
+
+  EXPECT_EQ(store.seq(), seq_before);
+  EXPECT_EQ(record(store, PROPERTY_ID, "0100", 9), RecordResult::RECORD_NEW);
+  EXPECT_EQ(store.fields(PROPERTY_ID).first_seen_s, 9u);
+  EXPECT_GT(store.seq(), seq_before);
+}
+
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

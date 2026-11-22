@@ -11,11 +11,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SEC-Touch sniffer</title>
 <style>
-  :root { --bg:#fafafa; --fg:#1d1d1f; --mute:#6e6e73; --line:#ddd; --acc:#0a66c2; --bad:#c0392b; --ok:#1e8449; }
+  :root { --bg:#fafafa; --fg:#1d1d1f; --mute:#6e6e73; --line:#ddd; --acc:#0a66c2; --bad:#c0392b; --ok:#1e8449;
+    --mark:#e67e22; }
   * { box-sizing:border-box; }
   /* Beats the display of .row, .cards and the rest, so `hidden` always hides. */
   [hidden] { display:none !important; }
-  body { margin:0; font:13px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--fg); padding:0 12px 24px; }
+  /* A column the height of the window: discover's map takes what the rows above it leave. */
+  body { margin:0; font:13px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--fg); padding:0 12px 12px;
+    height:100vh; display:flex; flex-direction:column; }
   h1 { font-size:15px; margin:10px 0; }
   button, input, select, textarea { font:inherit; }
   button { padding:3px 9px; cursor:pointer; }
@@ -27,13 +30,18 @@
   .offline { background:var(--bad); color:#fff; border-color:var(--bad); }
   .bar { height:8px; background:#e5e5e5; border-radius:4px; overflow:hidden; min-width:120px; }
   .bar > i { display:block; height:100%; background:var(--acc); }
-  #main { display:flex; gap:12px; align-items:flex-start; }
-  #grid { flex:1; display:grid; grid-template-columns:repeat(16, 1fr); gap:2px; max-width:900px; }
-  .cell { aspect-ratio:1; font-size:10px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  #discover-view { flex:1 1 0; min-height:0; display:flex; flex-direction:column; }
+  /* All 256 cells fit: the grid fills the width left of the side column and the height left in the window. */
+  #main { flex:1 1 0; min-height:380px; display:flex; gap:12px; }
+  #grid { flex:1; min-width:0; display:grid; gap:2px;
+    grid-template-columns:repeat(16, minmax(0, 1fr)); grid-template-rows:repeat(16, minmax(0, 1fr)); }
+  .cell { font-size:10px; display:flex; flex-direction:column; align-items:center; justify-content:center;
     overflow:hidden; cursor:pointer; background:#f7f7f7; border:1px solid #e2e2e2; }
   .cell code { font-size:10px; max-width:100%; overflow:hidden; white-space:nowrap; }
   .cell.unseen { background:#fff; border:1px dashed #bbb; }
-  .cell.reg { border:2px solid #333; }
+  /* A known property: discover leaves a gap, check shows it. */
+  .cell.gone { background:transparent; border:none; cursor:default; }
+  .cell.marked { box-shadow:inset 0 0 0 3px var(--mark); }
   .cell.stale { opacity:.45; font-style:italic; }
   .dim { background-image:repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,0,0,.3) 4px 6px); }
   .cell.dim { opacity:.5; }
@@ -41,14 +49,14 @@
   .cell.sel { outline:2px solid red; }
   .flash { animation:flash 2s; }
   @keyframes flash { from { box-shadow:inset 0 0 0 40px #ffe58a; } to { box-shadow:none; } }
-  #side { width:340px; }
-  #drawer { background:#fff; border:1px solid var(--line); padding:8px; margin-bottom:10px; }
+  #side { width:340px; flex:none; overflow:auto; }
+  .box { background:#fff; border:1px solid var(--line); padding:8px; margin-bottom:10px; }
   #drawer .value { font-size:20px; margin:6px 0; word-break:break-all; }
   #drawer textarea { width:100%; min-height:60px; }
   #drawer table td { padding:1px 6px 1px 0; vertical-align:top; }
   .unexpected { color:var(--bad); }
-  #feed { max-height:55vh; overflow:auto; }
-  #feed div { cursor:pointer; border-bottom:1px solid var(--line); padding:2px 0; }
+  .list { margin-bottom:10px; }
+  .list div { cursor:pointer; border-bottom:1px solid var(--line); padding:2px 0; }
   .s-ok { color:var(--ok); } .s-nak { color:var(--bad); } .s-timeout { color:#b9770e; } .s-unqueried { color:#999; }
   .bigtabs { display:flex; margin:8px 0; border-bottom:2px solid var(--line); }
   .bigtabs button { flex:1; border:none; background:none; padding:8px 16px; font-size:14px;
@@ -61,7 +69,13 @@
   .card h3 { margin:0 0 6px; font-size:14px; }
   .card .big { font-size:18px; }
   .card .gap { margin-top:6px; }
-  @media (max-width:900px) { #main { flex-direction:column; } #side { width:100%; } }
+  @media (max-width:900px) {
+    body, #discover-view { height:auto; display:block; }
+    #main { flex-direction:column; }
+    #grid { grid-template-rows:none; }
+    .cell { aspect-ratio:1; }
+    #side { width:100%; }
+  }
 </style>
 </head>
 <body>
@@ -88,31 +102,51 @@
 <div id="discover-view">
 <div class="row">
   <input id="f-query" placeholder="ID, value or note…" style="width:170px">
-  <label><input id="f-hide-reg" type="checkbox"> hide registered</label>
   <select id="f-changed"></select>
   colour by <select id="colour-by"><option>type</option><option>status</option></select>
-  <span class="badge" style="border:2px solid #333">registered</span>
   <span class="badge" style="border:1px dashed #bbb">never seen</span>
   <span class="badge dim">filtered out</span>
+  <span class="badge" style="box-shadow:inset 0 0 0 2px var(--mark)">changed since mark</span>
+  <span class="mute">blank: known, see Check</span>
 </div>
-<div id="f-types" class="row"></div>
-<div id="f-statuses" class="row"></div>
+<div class="row">
+  <span id="f-types" class="row" style="margin:0"></span>
+  <span class="mute">│</span>
+  <span id="f-statuses" class="row" style="margin:0"></span>
+</div>
 <div id="main">
   <div id="grid"></div>
   <div id="side">
-    <div id="drawer" hidden>
+    <div id="mark" class="box">
+      <b>Mark</b> <span class="mute">before and after a panel change</span>
+      <div class="row">
+        <button id="mark-set" title="Remember every value now; then change something on the panel">Set mark</button>
+        <span id="mark-on" class="row" style="margin:0" hidden>
+          <label><input id="f-since-mark" type="checkbox"> only changed since mark (<span id="mark-count"></span>)</label>
+          <span id="mark-at" class="mute"></span>
+          <button id="mark-move">Move mark to now</button>
+          <button id="mark-clear">Clear mark</button>
+        </span>
+      </div>
+    </div>
+    <div id="drawer" class="box" hidden>
       <div id="drawer-info"></div>
       <textarea id="note"></textarea>
     </div>
+    <div id="mark-changes-box" hidden>
+      <b>Changed since mark</b> <span class="mute">(mark value → now)</span>
+      <div id="mark-changes" class="list"></div>
+    </div>
     <b>Changes</b> <span class="mute">(newest first)</span>
-    <div id="feed"></div>
+    <div id="feed" class="list"></div>
   </div>
 </div>
 </div>
 <script type="module">
 import { applyResponse, changeFeed, emptyCopy, rowsOf, withScan } from "./records.mjs";
 import { createPoller, resyncReason, sinceFor } from "./poll.mjs";
-import { allPass, matchesFilter } from "./filters.mjs";
+import { allPass, visibleIds } from "./filters.mjs";
+import { changedSinceMark, markChanges, markNow } from "./mark.mjs";
 import { scanProgress } from "./scan_progress.mjs";
 import {
   acceptedRange,
@@ -126,7 +160,7 @@ import { checkCards } from "./check_cards.mjs";
 import { exportCsv, exportJson } from "./export.mjs";
 import { deviceKey, LAST_MAC_KEY, parseStored, storedText } from "./storage.mjs";
 import { STATUS_COLOURS, TYPE_COLOURS } from "./colours.mjs";
-import { isKnownId, knownMeaning } from "./known_meaning.mjs";
+import { isKnownId } from "./known_meaning.mjs";
 import { escapeControlBytes } from "./control_bytes.mjs";
 import { CATALOGUE } from "./catalogue.mjs";
 
@@ -150,7 +184,7 @@ const GOAL_TABS = [
   [GOALS.check, "Check", "confirm known properties"],
 ];
 const SWITCH_STOPS_SCAN = "Switching stops the running scan";
-/** The registered badge's tooltip, in discover's drawer and on check's fan cards. */
+/** The registered badge's tooltip, on check's fan cards. */
 const REGISTERED_TITLE = "registered: polled by the hub for this YAML";
 
 // Empty on the device; `?device=http://<ip>` while working on the page from a local server.
@@ -189,6 +223,8 @@ let goal = GOALS.discover;
 // The device's error text for the last refused discover start, null after an accepted one.
 let rangeErrorText = null;
 let selected = null;
+// The mark (mark.mjs), null while none is set. Page memory only: never stored.
+let mark = null;
 let online = null;
 let scanRequestFailed = false;
 const filter = allPass();
@@ -208,6 +244,8 @@ function load(newMac) {
     // Blocked storage: the device starts from an empty copy.
   }
   ({ copy, notes, mutes, range } = parseStored(text, CATALOGUE.discoverRange));
+  // Another device's values say nothing about this one.
+  clearMark();
   // A refused range of the previous device says nothing about this one.
   rangeErrorText = null;
   fillRange();
@@ -400,7 +438,10 @@ const cells = [];
 
 function buildStatic() {
   for (let id = 0; id < ID_COUNT; id++) {
-    const cell = el("div", { class: "cell", "data-id": id });
+    // Known properties are fixed by the catalogue: their gaps never change.
+    const cell = isKnownId(CATALOGUE, id)
+      ? el("div", { class: "cell gone", title: `${id}: known, see Check` })
+      : el("div", { class: "cell", "data-id": id });
     cells.push(cell);
     $("grid").append(cell);
   }
@@ -482,6 +523,9 @@ function cellColour(row) {
 function renderGrid(rowsById, visible) {
   const scan = currentScan();
   for (let id = 0; id < ID_COUNT; id++) {
+    if (isKnownId(CATALOGUE, id)) {
+      continue;
+    }
     const cell = cells[id];
     const row = rowsById.get(id);
     cell.replaceChildren(el("span", { class: "mute" }, String(id)));
@@ -495,9 +539,9 @@ function renderGrid(rowsById, visible) {
     if (row && notes[id]) {
       cell.append(el("span", {}, "✎"));
     }
-    cell.classList.toggle("reg", Boolean(row?.registered));
     cell.classList.toggle("stale", Boolean(row?.stale));
     cell.classList.toggle("dim", Boolean(row) && !visible.has(id));
+    cell.classList.toggle("marked", changedSinceMark(mark, id, row?.raw ?? null));
     cell.classList.toggle("cursor", Boolean(scan?.active) && scan.next === id);
     cell.classList.toggle("sel", selected === id);
     if (flashIds.has(id)) {
@@ -524,6 +568,36 @@ function addChips(parent, colours, chosen) {
     });
     parent.append(el("label", { class: "badge", style: `background:${colour}` }, box, key));
   }
+}
+
+function clearMark() {
+  mark = null;
+  filter.onlyChangedSinceMark = false;
+}
+
+/** The mark box, and the changes since the mark above the feed while a mark is set. */
+function renderMark() {
+  $("mark-set").hidden = mark !== null;
+  $("mark-on").hidden = mark === null;
+  $("mark-changes-box").hidden = mark === null;
+  $("f-since-mark").checked = filter.onlyChangedSinceMark;
+  if (mark === null) {
+    return;
+  }
+  const changes = markChanges(CATALOGUE, copy, mark);
+  $("mark-count").textContent = String(changes.length);
+  $("mark-at").textContent = `mark set ${new Date(mark.setAtMs).toLocaleTimeString()}`;
+  if (changes.length === 0) {
+    $("mark-changes").replaceChildren(
+      el("span", { class: "mute" }, "nothing yet: change a setting on the panel, then scan again"));
+    return;
+  }
+  $("mark-changes").replaceChildren(
+    ...changes.map((change) =>
+      el("div", { "data-id": change.id },
+        el("b", {}, String(change.id)), " ",
+        el("code", {}, shown(change.markRaw)), " → ", el("code", {}, shown(change.raw)))),
+  );
 }
 
 function renderFeed(visible) {
@@ -564,7 +638,6 @@ function renderDrawer(rowsById) {
   }
   head.append(
     row.type ? el("span", { class: "badge", style: `background:${TYPE_COLOURS[row.type]}` }, row.type) : null,
-    row.registered ? registeredBadge() : null,
     row.stale ? el("span", { class: "badge" }, "stale: browser copy only") : null,
     el("span", { class: "grow" }),
     el("button", { "data-action": "mute" }, mutes.has(selected) ? "Unmute in feed" : "Mute in feed"),
@@ -576,7 +649,6 @@ function renderDrawer(rowsById) {
   }
   const fact = (label, ...value) => el("tr", {}, el("td", { class: "mute" }, label), el("td", {}, ...value));
   const facts = el("table", {},
-    isKnownId(CATALOGUE, selected) ? fact("Meaning", meaningView(knownMeaning(CATALOGUE, selected, row.raw))) : null,
     fact("Query status",
       el("span", { class: `s-${row.status}` }, row.status), row.statusAtMs === null ? "" : ` · ${formatWall(row.statusAtMs)}`),
     fact("Changes", String(row.changeCount)),
@@ -605,8 +677,9 @@ function render() {
   }
   const rowsById = new Map(rows.map((row) => [row.id, row]));
   const now = Date.now();
-  const visible = new Set(rows.filter((row) => matchesFilter(row, filter, now)).map((row) => row.id));
+  const visible = visibleIds(CATALOGUE, rows, filter, now, mark);
   renderGrid(rowsById, visible);
+  renderMark();
   renderFeed(visible);
   renderDrawer(rowsById);
 }
@@ -636,18 +709,21 @@ function select(id) {
 }
 
 $("grid").addEventListener("click", (event) => {
-  const cell = event.target.closest(".cell");
+  const cell = event.target.closest(".cell[data-id]");
   if (cell) {
     select(Number(cell.dataset.id));
   }
 });
-$("feed").addEventListener("click", (event) => {
+/** A feed or mark-changes entry selects its ID. */
+function selectEntry(event) {
   const entry = event.target.closest("[data-id]");
   if (entry) {
     selected = Number(entry.dataset.id);
     render();
   }
-});
+}
+$("feed").addEventListener("click", selectEntry);
+$("mark-changes").addEventListener("click", selectEntry);
 $("drawer").addEventListener("click", (event) => {
   const action = event.target.dataset.action;
   if (action === "close") {
@@ -682,8 +758,21 @@ $("f-query").addEventListener("input", (event) => {
   filter.query = event.target.value;
   render();
 });
-$("f-hide-reg").addEventListener("change", (event) => {
-  filter.hideRegistered = event.target.checked;
+$("f-since-mark").addEventListener("change", (event) => {
+  filter.onlyChangedSinceMark = event.target.checked;
+  render();
+});
+$("mark-set").addEventListener("click", () => {
+  mark = markNow(copy, Date.now());
+  filter.onlyChangedSinceMark = true;
+  render();
+});
+$("mark-move").addEventListener("click", () => {
+  mark = markNow(copy, Date.now());
+  render();
+});
+$("mark-clear").addEventListener("click", () => {
+  clearMark();
   render();
 });
 $("f-changed").addEventListener("change", (event) => {
@@ -702,9 +791,9 @@ $("goal-tabs").addEventListener("click", (event) => {
   }
 });
 $("export-json").addEventListener("click", () =>
-  download("sec_touch_sniffer.json", exportJson(copy, notes, Date.now()), "application/json"));
+  download("sec_touch_sniffer.json", exportJson(CATALOGUE, copy, notes, mark, Date.now()), "application/json"));
 $("export-csv").addEventListener("click", () =>
-  download("sec_touch_sniffer.csv", exportCsv(copy, notes), "text/csv"));
+  download("sec_touch_sniffer.csv", exportCsv(CATALOGUE, copy, notes, mark), "text/csv"));
 
 buildStatic();
 renderTabs();

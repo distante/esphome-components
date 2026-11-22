@@ -1,6 +1,7 @@
 #include "sec_touch.h"
 #include "XModemCRC.h"
 #include "data_message.h"
+#include "get_retry.h"
 #include "esphome/core/log.h"
 #include "_definitions.h"
 

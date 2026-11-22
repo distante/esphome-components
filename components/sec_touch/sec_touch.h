@@ -8,7 +8,6 @@
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "_definitions.h"
 #include "data_message.h"
-#include "get_retry.h"
 #include "message_router.h"
 #include "scan_outcome.h"
 

@@ -215,6 +215,7 @@ Runs in the browser only; the device serves raw strings.
 
 Keyed by the ESP's MAC: a copy of the records, per-ID notes and mutes, and the last discover range. Notes and mutes never go to the device. The goal, the mark and "show known" are not stored.
 - **After a reboot** (`boot` changed): the device wins for every ID it has. IDs only in the browser copy stay, greyed out as stale, until the device sees them again.
+- **Clear data** (a header button, after a confirm): `POST /sniffer/clear` empties the device's records, then the page drops its browser copy and the mark. Notes, mutes and the discover range stay. If the device refuses or is offline, nothing is cleared. Other open pages see the new `boot` and take the empty store as a reboot, so their IDs turn stale.
 
 ### Export
 
@@ -242,6 +243,7 @@ Decided in [What is the contract between the device and the page?](https://githu
 | `GET /sniffer/data?since=S` | JSON, see below |
 | `POST /sniffer/scan/start?goal=G&from=F&to=T` | start a scan; empty body; 200 with the `scan` object |
 | `POST /sniffer/scan/stop` | stop the scan, either goal; empty body; 200 with the `scan` object |
+| `POST /sniffer/clear` | empty every record, the history pool and `dropped`, and draw a new `boot`; empty body; 200 with `{}`. `seq` keeps going up. A running scan goes on. |
 
 **Start parameters**, parsed in place like `since`:
 - `goal` is `discover` or `check`. Missing or unknown means discover.
@@ -297,7 +299,7 @@ Decided in [What is the contract between the device and the page?](https://githu
 
 **Raw value encoding:** byte-exact. Standard JSON escapes for `"` and `\`. Control bytes (< 0x20) and bytes ≥ 0x80 are sent as `\u00XX`, one code point per byte (Latin-1), so the page and the export recover the exact bytes. ASCII passes unchanged.
 
-**Device identity:** browser storage is keyed by the ESP's **MAC** (12 lowercase hex digits). `boot` is a random id generated at setup (8 hex digits), only for reboot detection. `name` is the ESPHome node name, for display. The panel's ID 3 is not used as a key.
+**Device identity:** browser storage is keyed by the ESP's **MAC** (12 lowercase hex digits). `boot` is a random id generated at setup (8 hex digits), only for reboot detection; a clear draws a new one, since it empties the store as a reboot does. `name` is the ESPHome node name, for display. The panel's ID 3 is not used as a key.
 
 ---
 

@@ -55,6 +55,9 @@ export function knownMeaning(catalogue, id, raw) {
     const names = catalogue.summerVentilationNames;
     return nameOrUnexpected(Object.hasOwn(names, trimmed) ? names[trimmed] : undefined, trimmed);
   }
-  // Date and clock: the value is its own meaning.
-  return { text: trimmed, unexpected: false };
+  if (id === catalogue.dateId || id === catalogue.clockId) {
+    return { text: trimmed, unexpected: false };
+  }
+  // Unreachable: isKnownId() lists exactly the IDs that have a branch above.
+  return null;
 }

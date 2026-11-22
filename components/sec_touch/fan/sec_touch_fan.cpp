@@ -1,7 +1,6 @@
 #include "sec_touch_fan.h"
 #include "../sec_touch.h"
 #include "../_definitions.h"
-#include "../known_property_meaning.h"
 
 namespace esphome {
 namespace sec_touch {

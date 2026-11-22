@@ -4,8 +4,10 @@
 // known properties, shared by _definitions.h, the host-built tests in tests/cpp and the sniffer page.
 // components/sec_touch_sniffer/page_bundle.py parses this file and fan_level.h at every build, so keep each
 // declaration it reads in its current form: `constexpr [const] int`, `constexpr const char *`, a `std::array` of ints
-// or of {value, name} pairs, and the NAME_MAPPING string table. Anything it cannot read fails the build. Keep char
-// literals ('x') out of both headers: the bundler's string and comment stripper does not know them.
+// or of {value, name} pairs, and the NAME_MAPPING string table. Anything it cannot read fails the build. Its limits:
+// - no comma inside the string of a {value, name} entry: the entry is split at commas;
+// - no constexpr locals in a function body of either header: the declaration regexes would read them as constants;
+// - no char literals ('x') or digit separators in either header: a ' outside strings and comments fails the build.
 
 #include <array>
 #include <cstddef>
@@ -149,6 +151,14 @@ constexpr const char *NAME_MAPPING[NAME_MAPPING_COUNT] = {
     "HWR",              // 67
     "leer"              // 68
 };
+
+/// The NAME_MAPPING name a fan's label property selects with `value`, or nullptr when `value` is outside NAME_MAPPING.
+constexpr const char *label_name(int value) {
+  if (value < 0 || value >= NAME_MAPPING_COUNT) {
+    return nullptr;
+  }
+  return NAME_MAPPING[value];
+}
 
 /// Whether `arr` holds `value`.
 template<typename T, std::size_t N> constexpr bool contains(const std::array<T, N> &arr, int value) {

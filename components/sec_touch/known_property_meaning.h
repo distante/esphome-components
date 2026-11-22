@@ -31,14 +31,6 @@ constexpr bool is_known_property(int id) {
   return contains(FAN_LEVEL_IDS, id) || contains(FAN_LABEL_IDS, id) || contains(GLOBAL_SETTING_IDS, id);
 }
 
-/// The NAME_MAPPING name a fan's label property selects with `value`, or nullptr when `value` is outside NAME_MAPPING.
-constexpr const char *label_name(int value) {
-  if (value < 0 || value >= NAME_MAPPING_COUNT) {
-    return nullptr;
-  }
-  return NAME_MAPPING[value];
-}
-
 namespace known_property_detail {
 
 constexpr bool is_ascii_space(char c) {
@@ -117,6 +109,10 @@ constexpr KnownMeaning name_or_unexpected(const char *name, std::string_view tri
 
 }  // namespace known_property_detail
 
+// known_property_meaning() names a branch for each global setting; a new one needs its meaning decided there.
+static_assert(GLOBAL_SETTING_IDS.size() == 3,
+              "a global setting ID was added: decide its meaning in known_property_meaning()");
+
 /// The meaning of a known property's raw value, or nullopt for an unknown property.
 inline std::optional<KnownMeaning> known_property_meaning(int id, std::string_view raw) {
   using namespace known_property_detail;
@@ -133,8 +129,11 @@ inline std::optional<KnownMeaning> known_property_meaning(int id, std::string_vi
   if (id == SUMMER_VENTILATION_PROPERTY_ID) {
     return name_or_unexpected(summer_ventilation_name(trimmed), trimmed);
   }
-  // Date and clock: the value is its own meaning.
-  return KnownMeaning{MeaningKind::AS_SENT, trimmed};
+  if (id == DATE_PROPERTY_ID || id == CLOCK_PROPERTY_ID) {
+    return KnownMeaning{MeaningKind::AS_SENT, trimmed};
+  }
+  // Unreachable while the static_assert above holds: every known property has a branch.
+  return std::nullopt;
 }
 
 }  // namespace sec_touch

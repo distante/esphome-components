@@ -93,6 +93,7 @@
   <span class="grow"></span>
   <button id="export-json">Export JSON</button>
   <button id="export-csv">Export CSV</button>
+  <button id="clear-data" title="Forget every captured value on the device and in this browser; notes and mutes stay">Clear data</button>
 </div>
 <div id="goal-tabs" class="bigtabs"></div>
 <div id="scan" class="row" hidden>
@@ -373,6 +374,30 @@ async function stopScan() {
   }
   renderLogged();
   return stopped;
+}
+
+/** Empties the device's records, then the browser copy; notes, mutes and the range stay. */
+async function clearData() {
+  if (!confirm("Clear every captured value on the device and in this browser? Notes and mutes stay.")) {
+    return;
+  }
+  const requestMac = mac;
+  try {
+    await fetchOk("/sniffer/clear", { method: "POST" });
+  } catch (error) {
+    console.error("clear request failed", error);
+    alert("The device did not clear its records; nothing was cleared.");
+    return;
+  }
+  // Another device answered while the request was out: its copy is not the one cleared.
+  if (mac === requestMac) {
+    copy = emptyCopy();
+    clearMark();
+    flashIds.clear();
+    save();
+  }
+  renderLogged();
+  poller.pollNow();
 }
 
 /** Starts the open tab's goal; discover sends the range as typed, and the device decides whether it is valid. */
@@ -825,6 +850,7 @@ $("goal-tabs").addEventListener("click", (event) => {
     setGoal(tab.dataset.goal);
   }
 });
+$("clear-data").addEventListener("click", clearData);
 $("export-json").addEventListener("click", () =>
   download("sec_touch_sniffer.json", exportJson(CATALOGUE, copy, notes, mark, Date.now()), "application/json"));
 $("export-csv").addEventListener("click", () =>

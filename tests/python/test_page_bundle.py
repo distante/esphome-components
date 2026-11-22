@@ -136,6 +136,22 @@ def test_fails_on_a_name_defined_twice_across_two_kinds(header_dir: Path) -> Non
         parse_catalogue(header_dir)
 
 
+def test_fails_on_a_char_literal_outside_strings_and_comments(header_dir: Path) -> None:
+    # The real header already has a ' in a comment ("a fan's label") and still parses; only code may not hold one.
+    edit(header_dir / PROTOCOL_IDS, "constexpr const int COMMANDID_SET",
+         "constexpr char SEPARATOR = ',';\nconstexpr const int COMMANDID_SET")
+
+    with pytest.raises(ValueError, match=re.escape("protocol_ids.h: char literals (') are not supported")):
+        parse_catalogue(header_dir)
+
+
+def test_a_missing_name_names_the_headers_it_was_looked_for_in(header_dir: Path) -> None:
+    edit(header_dir / PROTOCOL_IDS, "LEVEL_NAMES = {{", "LEVEL_NAMES_RENAMED = {{")
+
+    with pytest.raises(ValueError, match=re.escape("no LEVEL_NAMES in the parsed headers (fan_level.h, protocol_ids.h)")):
+        parse_catalogue(header_dir)
+
+
 def test_a_header_it_cannot_parse_fails_the_page_build(header_dir: Path) -> None:
     edit(header_dir / PROTOCOL_IDS, "{BURST_LEVEL, BURST_NAME}", "{BURST_LEVEL, BURSTY_NAME}")
 

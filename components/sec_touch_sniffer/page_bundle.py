@@ -84,6 +84,7 @@ class _Header:
     """The constants and tables of the catalogue headers, read with regexes. Anything it cannot read raises."""
 
     def __init__(self):
+        self.files: list[str] = []
         self.ints: dict[str, int] = {}
         self.strings: dict[str, str] = {}
         self.int_arrays: dict[str, list[int]] = {}
@@ -122,7 +123,12 @@ class _Header:
 
     def read(self, path: Path) -> None:
         where = path.name
-        source = _strip_comments(path.read_text(encoding="utf-8"))
+        self.files.append(where)
+        text = path.read_text(encoding="utf-8")
+        if "'" in _STRING_OR_COMMENT.sub("", text):
+            # The string and comment stripper does not know char literals: a '"' would derail it.
+            raise ValueError(f"{where}: char literals (') are not supported outside strings and comments")
+        source = _strip_comments(text)
         for name, value in _INT_CONSTANT.findall(source):
             self._define(self.ints, name, self._int(value.strip(), f"{where}: {name}"), where)
         for name, value in _STRING_CONSTANT.findall(source):
@@ -149,7 +155,8 @@ class _Header:
 
     def get(self, table: dict, name: str):
         if name not in table:
-            raise ValueError(f"{PROTOCOL_IDS_FILE}: no {name} the page catalogue can read")
+            files = ", ".join(self.files)
+            raise ValueError(f"no {name} in the parsed headers ({files}) that the page catalogue can read")
         return table[name]
 
 

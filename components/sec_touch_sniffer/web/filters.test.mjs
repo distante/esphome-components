@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 
 import { allPass, matchesFilter, visibleIds } from "./filters.mjs";
 import { markNow } from "./mark.mjs";
-import { emptyCopy } from "./records.mjs";
+import { applyResponse, emptyCopy } from "./records.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
+import { deviceRecord, deviceResponse } from "./fixture_records.mjs";
 
 const NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
 const MINUTE_MS = 60_000;
@@ -24,60 +25,57 @@ function row(overrides = {}) {
 }
 
 test("the default filter lets every row through", () => {
-  assert.equal(matchesFilter(row(), allPass(), NOW_MS), true);
-  assert.equal(matchesFilter(row({ raw: null, type: null, status: "nak" }), allPass(), NOW_MS), true);
+  assert.equal(matchesFilter(row(), allPass(), NOW_MS, null), true);
+  assert.equal(matchesFilter(row({ raw: null, type: null, status: "nak" }), allPass(), NOW_MS, null), true);
 });
 
 test("search matches the exact ID, part of the trimmed value, or part of the note, ignoring case", () => {
   const filter = (query) => ({ ...allPass(), query });
   const padded = row({ id: 85, raw: "00               ", note: "Summer Vent" });
 
-  assert.equal(matchesFilter(padded, filter("85"), NOW_MS), true);
-  assert.equal(matchesFilter(padded, filter("8"), NOW_MS), false);
-  assert.equal(matchesFilter(padded, filter("00"), NOW_MS), true);
-  assert.equal(matchesFilter(padded, filter("summer"), NOW_MS), true);
-  assert.equal(matchesFilter(padded, filter("winter"), NOW_MS), false);
+  assert.equal(matchesFilter(padded, filter("85"), NOW_MS, null), true);
+  assert.equal(matchesFilter(padded, filter("8"), NOW_MS, null), false);
+  assert.equal(matchesFilter(padded, filter("00"), NOW_MS, null), true);
+  assert.equal(matchesFilter(padded, filter("summer"), NOW_MS, null), true);
+  assert.equal(matchesFilter(padded, filter("winter"), NOW_MS, null), false);
 });
 
 test("the type filter keeps only the chosen types", () => {
   const filter = { ...allPass(), types: new Set(["date"]) };
 
-  assert.equal(matchesFilter(row({ type: "date" }), filter, NOW_MS), true);
-  assert.equal(matchesFilter(row({ type: "text" }), filter, NOW_MS), false);
+  assert.equal(matchesFilter(row({ type: "date" }), filter, NOW_MS, null), true);
+  assert.equal(matchesFilter(row({ type: "text" }), filter, NOW_MS, null), false);
 });
 
 test("the status filter keeps only the chosen query statuses", () => {
   const filter = { ...allPass(), statuses: new Set(["nak", "timeout"]) };
 
-  assert.equal(matchesFilter(row({ status: "timeout" }), filter, NOW_MS), true);
-  assert.equal(matchesFilter(row({ status: "nak" }), filter, NOW_MS), true);
-  assert.equal(matchesFilter(row({ status: "ok" }), filter, NOW_MS), false);
+  assert.equal(matchesFilter(row({ status: "timeout" }), filter, NOW_MS, null), true);
+  assert.equal(matchesFilter(row({ status: "nak" }), filter, NOW_MS, null), true);
+  assert.equal(matchesFilter(row({ status: "ok" }), filter, NOW_MS, null), false);
 });
 
 // Registered properties are known, and discover never shows known ones.
-test("there is no hide-registered filter", () => {
-  assert.deepEqual(Object.keys(allPass()).sort(), [
-    "changedWithinMs",
-    "onlyChangedSinceMark",
-    "query",
-    "statuses",
-    "types",
-  ]);
+test("no filter hides a registered row", () => {
+  const registered = row({ registered: true });
+
+  assert.equal(matchesFilter(registered, allPass(), NOW_MS, null), true);
+  assert.equal(matchesFilter(registered, { ...allPass(), hideRegistered: true }, NOW_MS, null), true);
 });
 
 test("changed recently keeps IDs whose value changed within the window", () => {
   const filter = { ...allPass(), changedWithinMs: 5 * MINUTE_MS };
 
-  assert.equal(matchesFilter(row({ changeCount: 2, changedAtMs: NOW_MS - 4 * MINUTE_MS }), filter, NOW_MS), true);
-  assert.equal(matchesFilter(row({ changeCount: 2, changedAtMs: NOW_MS - 6 * MINUTE_MS }), filter, NOW_MS), false);
+  assert.equal(matchesFilter(row({ changeCount: 2, changedAtMs: NOW_MS - 4 * MINUTE_MS }), filter, NOW_MS, null), true);
+  assert.equal(matchesFilter(row({ changeCount: 2, changedAtMs: NOW_MS - 6 * MINUTE_MS }), filter, NOW_MS, null), false);
   // First seen recently, never changed.
-  assert.equal(matchesFilter(row({ changeCount: 0, changedAtMs: NOW_MS - MINUTE_MS }), filter, NOW_MS), false);
+  assert.equal(matchesFilter(row({ changeCount: 0, changedAtMs: NOW_MS - MINUTE_MS }), filter, NOW_MS, null), false);
 });
 
-/** A copy with just the raw values the mark tests need: markNow() reads only `records[id].raw`. */
+/** A copy the device filled with these raw values, by ID; a null raw is a record that only ever failed. */
 function copyOf(raws) {
-  const records = Object.fromEntries(Object.entries(raws).map(([id, raw]) => [id, { id: Number(id), raw }]));
-  return { ...emptyCopy(), records };
+  const records = Object.entries(raws).map(([id, raw]) => deviceRecord(Number(id), raw));
+  return applyResponse(emptyCopy(), deviceResponse(records), NOW_MS).copy;
 }
 
 test("discover shows no known ID, whatever the filter", () => {
@@ -97,7 +95,7 @@ test("discover's visible IDs are the unknown rows that pass the filter", () => {
 });
 
 test("only changed since mark keeps the IDs whose raw value differs from the mark", () => {
-  const mark = markNow(copyOf({ 5: "0100", 6: "1", 7: null }), NOW_MS);
+  const mark = markNow(copyOf({ 5: "0100", 6: "1", 7: null }), NOW_MS, null);
   const filter = { ...allPass(), onlyChangedSinceMark: true };
 
   assert.equal(matchesFilter(row({ id: 5, raw: "0200" }), filter, NOW_MS, mark), true);
@@ -109,7 +107,7 @@ test("only changed since mark keeps the IDs whose raw value differs from the mar
 });
 
 test("only changed since mark adds to the other filters", () => {
-  const mark = markNow(copyOf({ 5: "0100", 6: "1" }), NOW_MS);
+  const mark = markNow(copyOf({ 5: "0100", 6: "1" }), NOW_MS, null);
   const filter = { ...allPass(), onlyChangedSinceMark: true, types: new Set(["int"]) };
 
   assert.equal(matchesFilter(row({ id: 5, raw: "0200", type: "padded int" }), filter, NOW_MS, mark), false);

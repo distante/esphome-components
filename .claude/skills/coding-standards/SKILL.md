@@ -90,6 +90,7 @@ Every change lands with tests in one of five layers:
 
 ### Tooling
 
-- **Worktrees.** Work in a git worktree (`EnterWorktree`, or `isolation: "worktree"` for subagents) unless the user says not to. Worktrees live in `.claude/worktrees/`.
+- **Worktrees.** Work in a git worktree (`EnterWorktree`, or `isolation: "worktree"` for subagents) unless the user says not to. Worktrees live in the main checkout's `.claude/worktrees/`.
+  - **Starting a task while already in a worktree** (a session reused with `/clear`, for example): when that worktree holds no earlier work on this task, which is the usual case, call `ExitWorktree` with `action: "keep"` first, then `EnterWorktree` with a new `name`. `EnterWorktree` refuses to create a worktree from inside another, and one made by hand from there nests inside it. Stay in the current worktree only when it already holds this task's own earlier work.
 - **Formatting and linting.** Before committing, run `pre-commit run --files <changed files>` and keep its fixes. Never format with a clang-format from outside the venv or pre-commit: other versions format differently.
 - **Git hooks.** Commit with the hooks running. Never bypass them: no `--no-verify`, no `PRE_COMMIT_ALLOW_NO_CONFIG`.

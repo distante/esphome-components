@@ -10,9 +10,9 @@ import {
   scanStartPath,
   switchStopsScan,
 } from "./scan_control.mjs";
+import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
 
-// The part of catalogue.mjs's shape this module reads.
-const CATALOGUE = { goals: { discover: "discover", check: "check" } };
+const CATALOGUE = FIXTURE_CATALOGUE;
 const { discover: DISCOVER, check: CHECK } = CATALOGUE.goals;
 
 const scan = (fields) => ({ active: false, goal: DISCOVER, from: 1, to: 255, next: null, done: false, ...fields });

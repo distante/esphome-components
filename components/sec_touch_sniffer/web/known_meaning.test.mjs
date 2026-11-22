@@ -1,19 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { isKnownId, knownIds, knownMeaning } from "./known_meaning.mjs";
+import { isKnownId, knownCellTitle, knownIds, knownMeaning, meaningText, NOT_SEEN } from "./known_meaning.mjs";
+import { escapeControlBytes } from "./control_bytes.mjs";
+import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
 
-// A small catalogue in the shape catalogue.mjs has, with made-up IDs so the tests don't lean on the real ones.
-const CATALOGUE = {
-  levelIds: [10, 11],
-  labelIds: [20, 21],
-  summerVentilationId: 30,
-  dateId: 31,
-  clockId: 32,
-  levelNames: { 0: "off", 3: "level 3", 7: "Burst", 255: "not connected" },
-  labelNames: ["-", "Bad", "Küche"],
-  summerVentilationNames: { "0A00": "on", "0800": "off" },
-};
+const CATALOGUE = FIXTURE_CATALOGUE;
 const [LEVEL, OTHER_LEVEL] = CATALOGUE.levelIds;
 const [LABEL] = CATALOGUE.labelIds;
 
@@ -94,4 +86,20 @@ test("date and clock mean their trimmed value as sent", () => {
 test("only ASCII whitespace is trimmed, as on the device", () => {
   assert.deepEqual(knownMeaning(CATALOGUE, LEVEL, " 7"), unexpected(" 7"));
   assert.deepEqual(knownMeaning(CATALOGUE, CATALOGUE.dateId, "\v16.11.26\f"), named("16.11.26"));
+});
+
+test("a known cell's tooltip is its ID, its shown value and its meaning", () => {
+  assert.equal(knownCellTitle(CATALOGUE, LEVEL, " 7  "), `${LEVEL} = 7 · Burst`);
+  assert.equal(knownCellTitle(CATALOGUE, LABEL, "9"), `${LABEL} = 9 · unexpected value 9`);
+  assert.equal(knownCellTitle(CATALOGUE, CATALOGUE.clockId, "13:47\x01"), `${CATALOGUE.clockId} = 13:47\\x01 · 13:47\\x01`);
+});
+
+test("a known cell with no value yet is not seen in its tooltip", () => {
+  assert.equal(knownCellTitle(CATALOGUE, LEVEL, null), `${LEVEL} = — · ${NOT_SEEN}`);
+});
+
+test("no meaning is shown as not seen, a meaning as its text with control bytes escaped", () => {
+  assert.equal(meaningText(null), NOT_SEEN);
+  assert.equal(meaningText(named("Burst")), "Burst");
+  assert.equal(meaningText(unexpected("9\x01")), escapeControlBytes("unexpected value 9\x01"));
 });

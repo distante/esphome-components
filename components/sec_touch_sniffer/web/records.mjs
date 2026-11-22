@@ -8,9 +8,11 @@
  * read its uptimes as wall time) and `stale` (only in the browser copy since the device rebooted).
  */
 
-import { STATUSES } from "./filters.mjs";
 import { guessIdType } from "./type_guess.mjs";
-import { wallTimeMs } from "./wall_time.mjs";
+import { uptimeAtMs, wallTimeMs } from "./wall_time.mjs";
+
+/** The query statuses, as the device names them. */
+export const STATUSES = ["unqueried", "ok", "nak", "timeout"];
 
 /** @returns {object} a copy that has seen no response yet */
 export function emptyCopy() {
@@ -71,6 +73,20 @@ export function wallOf(record, uptimeMs) {
     return null;
   }
   return wallTimeMs(record.anchor.browserNowMs, record.anchor.uptimeMs, uptimeMs);
+}
+
+/**
+ * Only extrapolated from a response of this page load: a stored anchor may predate a reboot.
+ *
+ * @param {object} copy the browser copy
+ * @param {number} browserMs a browser time (epoch ms)
+ * @returns {number | null} the device's uptime then (ms), or null when no device answered on this page load
+ */
+export function deviceUptimeMs(copy, browserMs) {
+  if (copy.device === null || copy.since === null) {
+    return null;
+  }
+  return uptimeAtMs(copy.device.anchor, browserMs);
 }
 
 /** @returns {object} what browser storage keeps of a copy */

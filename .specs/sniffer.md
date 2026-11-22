@@ -193,15 +193,15 @@ Decided in [What should the sniffer HTML page look like and do?](https://github.
 ### Discover
 
 Today's page minus known properties, plus the mark.
-- **ID map**: a 16×16 grid of IDs 0–255 with **known IDs as blank gaps**. Each cell shows its ID and the start of its trimmed raw value, coloured by guessed type or by scan status (user's choice). A cell flashes on change. The scan cursor is outlined while a scan runs. A never-seen ID has a white cell with a dashed border, so it does not look like an `unqueried` one. The grid fills the width left of the side column and sizes its rows to the window height, so all 256 cells fit without scrolling.
+- **ID map**: a 16×16 grid of IDs 0–255 with **known IDs as blank gaps**; a "show known" checkbox (off by default, page memory only) shows them greyed with their value, and their meaning in the tooltip, still outside the filters, feed and mark. Each cell shows its ID and the start of its trimmed raw value, coloured by guessed type or by scan status (user's choice). A cell flashes on change. The scan cursor is outlined while a scan runs. A never-seen ID has a white cell with a dashed border, so it does not look like an `unqueried` one. The grid fills the width left of the side column and sizes its rows to the window height, so all 256 cells fit without scrolling.
 - **Drawer** (click a cell): raw value (trimmed, with a marker when it was padded on the wire), type, query status, change count, last change, history (newest first) and a note field.
 - **Change feed**: recent changes across unknown IDs (`time ID old → new`), newest first. Clicking an entry selects its ID.
 - **Per-ID mute**: a drawer button removes the ID from the feed; its cell still updates.
-- **Filters**: search (ID, value, note), **type chips** and **status chips** on one line (type │ status), changed recently. They fade and stripe non-matching cells and apply to the feed. "Hide registered" is gone: registered properties are known, so discover never shows them.
+- **Filters**: search (ID, value, note), **type chips** and **status chips** on one line (type │ status), changed recently. They fade and stripe non-matching cells and apply to the feed; the chip group "colour by" is not using shows faded swatches but still filters. "Hide registered" is gone: registered properties are known, so discover never shows them.
 - **Mark** (browser only), in a box at the top of the side column, above the drawer and the list:
   - "Set mark" snapshots every raw value, with the wall time and device uptime.
   - An "only changed since mark (n)" filter dims every cell whose value equals the snapshot. Changed cells get an orange ring.
-  - While the mark is set, the side list swaps the change feed for "changed since mark: ID mark value → now".
+  - While the mark is set, the side column shows "changed since mark: ID mark value → now" above the change feed, which stays because the mark diff can't show a value toggled away and back.
   - "Move mark to now" and "Clear mark" sit with it.
   - The mark lives in page memory only; it is not stored in the browser and is lost on reload.
 
@@ -213,7 +213,7 @@ Runs in the browser only; the device serves raw strings.
 
 ### Browser storage
 
-Keyed by the ESP's MAC: a copy of the records, per-ID notes and mutes, and the last discover range. Notes and mutes never go to the device. The goal and the mark are not stored.
+Keyed by the ESP's MAC: a copy of the records, per-ID notes and mutes, and the last discover range. Notes and mutes never go to the device. The goal, the mark and "show known" are not stored.
 - **After a reboot** (`boot` changed): the device wins for every ID it has. IDs only in the browser copy stay, greyed out as stale, until the device sees them again.
 
 ### Export
@@ -387,7 +387,7 @@ Ships as **v1.5.0** (minor: the hub, fans and HA entities are untouched).
 7. An ID above 255 is dropped and counted. A bare `sec_touch_sniffer:` with `web_server_base:` is valid; without an HTTP server, on a non-ESP32 target, or as a second instance it is a config error. Any `text_sensor: - platform: sec_touch_sniffer` entry fails with the migration message.
 8. The catalogue header is the only definition of the known IDs, level names, label names and `0A00`/`0800`; the component builds against it and the page's catalogue module is generated from it at build time.
 9. Check shows one card per fan and a Global card with meaning and raw value; a non-matching value shows as `unexpected value x` in red; registered fans carry the badge.
-10. Discover shows no known ID in the map, feed or filters; setting the mark and changing values shows exactly the changed IDs under "only changed since mark".
+10. Discover shows no known ID in the map (unless "show known" is ticked, then greyed and outside the filters), feed or filters; setting the mark and changing values shows exactly the changed IDs under "only changed since mark".
 11. JSON and CSV exports carry `known`, `meaning` and `mark_raw` per record and are identical in both goals; the JSON carries `mark` and `scan.goal`.
 12. A value with control or non-ASCII bytes round-trips byte-exact through JSON `\u00XX` escaping into the export.
 13. **Heap check**, on the maintainer's controller in a single boot: record heap free, largest block and min free before and after a discover scan that finds new IDs and a check scan, with the page open plus a second web client, and through an OTA update. If min free drops under ~20 KB, shrink the history pool first.

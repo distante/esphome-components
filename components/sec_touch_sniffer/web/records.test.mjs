@@ -12,44 +12,12 @@ import {
   wholeDecimal,
   withScan,
 } from "./records.mjs";
+import { deviceRecord, deviceResponse } from "./fixture_records.mjs";
 
 const BROWSER_NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
 
-/** A record as /sniffer/data serves it (.specs/sniffer.md, "JSON shape"). */
-function deviceRecord(id, raw, overrides = {}) {
-  return {
-    id,
-    cmd: 32,
-    raw,
-    first: 1000,
-    last: 5000,
-    changed: 3000,
-    changes: 0,
-    status: "unqueried",
-    status_at: null,
-    reg: false,
-    hist: [[3000, raw]],
-    ...overrides,
-  };
-}
-
-function response(records, overrides = {}) {
-  return {
-    mac: "aabbccddeeff",
-    name: "ventilation",
-    boot: "9f2c41ab",
-    uptime: 10_000,
-    seq: 7,
-    full: true,
-    dropped: 0,
-    scan: null,
-    records,
-    ...overrides,
-  };
-}
-
 test("a full response fills an empty copy and remembers boot and seq", () => {
-  const { copy } = applyResponse(emptyCopy(), response([deviceRecord(5, "0100")]), BROWSER_NOW_MS);
+  const { copy } = applyResponse(emptyCopy(), deviceResponse([deviceRecord(5, "0100")]), BROWSER_NOW_MS);
 
   assert.equal(copy.boot, "9f2c41ab");
   assert.equal(copy.since, 7);
@@ -60,7 +28,7 @@ test("a full response fills an empty copy and remembers boot and seq", () => {
 test("a delta replaces only the records it carries, history included", () => {
   const first = applyResponse(
     emptyCopy(),
-    response([deviceRecord(5, "0100"), deviceRecord(6, "1")]),
+    deviceResponse([deviceRecord(5, "0100"), deviceRecord(6, "1")]),
     BROWSER_NOW_MS,
   ).copy;
   const changed = deviceRecord(5, "0080", {
@@ -71,7 +39,7 @@ test("a delta replaces only the records it carries, history included", () => {
     ],
   });
 
-  const { copy } = applyResponse(first, response([changed], { full: false, seq: 9 }), BROWSER_NOW_MS);
+  const { copy } = applyResponse(first, deviceResponse([changed], { full: false, seq: 9 }), BROWSER_NOW_MS);
 
   assert.equal(copy.since, 9);
   assert.deepEqual(copy.records[5].hist, [
@@ -84,13 +52,13 @@ test("a delta replaces only the records it carries, history included", () => {
 test("after a reboot the device wins for its IDs and browser-only IDs stay as stale", () => {
   const before = applyResponse(
     emptyCopy(),
-    response([deviceRecord(5, "0100"), deviceRecord(6, "1")]),
+    deviceResponse([deviceRecord(5, "0100"), deviceRecord(6, "1")]),
     BROWSER_NOW_MS,
   ).copy;
 
   const { copy } = applyResponse(
     before,
-    response([deviceRecord(5, "0200")], { boot: "00000001", seq: 2 }),
+    deviceResponse([deviceRecord(5, "0200")], { boot: "00000001", seq: 2 }),
     BROWSER_NOW_MS,
   );
 
@@ -103,12 +71,12 @@ test("after a reboot the device wins for its IDs and browser-only IDs stay as st
 
 test("a stale ID turns live again when the device sees it", () => {
   const stale = applyResponse(
-    applyResponse(emptyCopy(), response([deviceRecord(6, "1")]), BROWSER_NOW_MS).copy,
-    response([], { boot: "00000001", seq: 1 }),
+    applyResponse(emptyCopy(), deviceResponse([deviceRecord(6, "1")]), BROWSER_NOW_MS).copy,
+    deviceResponse([], { boot: "00000001", seq: 1 }),
     BROWSER_NOW_MS,
   ).copy;
 
-  const { copy } = applyResponse(stale, response([deviceRecord(6, "2")], { boot: "00000001", full: false, seq: 3 }), BROWSER_NOW_MS);
+  const { copy } = applyResponse(stale, deviceResponse([deviceRecord(6, "2")], { boot: "00000001", full: false, seq: 3 }), BROWSER_NOW_MS);
 
   assert.equal(copy.records[6].stale, false);
 });
@@ -116,13 +84,13 @@ test("a stale ID turns live again when the device sees it", () => {
 test("the IDs whose raw value changed are reported, so the page can flash them", () => {
   const first = applyResponse(
     emptyCopy(),
-    response([deviceRecord(5, "0100"), deviceRecord(6, "1")]),
+    deviceResponse([deviceRecord(5, "0100"), deviceRecord(6, "1")]),
     BROWSER_NOW_MS,
   ).copy;
 
   const { changedIds } = applyResponse(
     first,
-    response([deviceRecord(5, "0080"), deviceRecord(6, "1"), deviceRecord(7, "3")], { full: false, seq: 9 }),
+    deviceResponse([deviceRecord(5, "0080"), deviceRecord(6, "1"), deviceRecord(7, "3")], { full: false, seq: 9 }),
     BROWSER_NOW_MS,
   );
 
@@ -130,14 +98,14 @@ test("the IDs whose raw value changed are reported, so the page can flash them",
 });
 
 test("a record's times read as wall time anchored at the response that carried it", () => {
-  const { copy } = applyResponse(emptyCopy(), response([deviceRecord(5, "0100")], { uptime: 10_000 }), BROWSER_NOW_MS);
+  const { copy } = applyResponse(emptyCopy(), deviceResponse([deviceRecord(5, "0100")], { uptime: 10_000 }), BROWSER_NOW_MS);
 
   assert.equal(wallOf(copy.records[5], 3000), BROWSER_NOW_MS - 7000);
   assert.equal(wallOf(copy.records[5], null), null);
 });
 
 test("a stored copy reloads with its records and boot but polls from scratch", () => {
-  const { copy } = applyResponse(emptyCopy(), response([deviceRecord(5, "0100")]), BROWSER_NOW_MS);
+  const { copy } = applyResponse(emptyCopy(), deviceResponse([deviceRecord(5, "0100")]), BROWSER_NOW_MS);
 
   const reloaded = fromStored(JSON.parse(JSON.stringify(toStored(copy))));
 
@@ -154,7 +122,7 @@ test("unreadable storage gives an empty copy", () => {
 test("the change feed lists changes across IDs newest first, without muted IDs", () => {
   const { copy } = applyResponse(
     emptyCopy(),
-    response(
+    deviceResponse(
       [
         deviceRecord(2, "13:32:09", {
           hist: [
@@ -184,7 +152,7 @@ test("the change feed lists changes across IDs newest first, without muted IDs",
 });
 
 test("malformed stored records are dropped, the readable ones stay", () => {
-  const { copy } = applyResponse(emptyCopy(), response([deviceRecord(5, "0100")]), BROWSER_NOW_MS);
+  const { copy } = applyResponse(emptyCopy(), deviceResponse([deviceRecord(5, "0100")]), BROWSER_NOW_MS);
   const stored = JSON.parse(JSON.stringify(toStored(copy)));
   const good = stored.records[5];
   stored.records = {
@@ -225,7 +193,7 @@ test("malformed stored records are dropped, the readable ones stay", () => {
 });
 
 test("a stored device whose mac or name is not a string is dropped", () => {
-  const { copy } = applyResponse(emptyCopy(), response([]), BROWSER_NOW_MS);
+  const { copy } = applyResponse(emptyCopy(), deviceResponse([]), BROWSER_NOW_MS);
   const stored = JSON.parse(JSON.stringify(toStored(copy)));
 
   assert.equal(fromStored({ ...stored, device: { ...stored.device, mac: 1 } }).device, null);
@@ -235,7 +203,7 @@ test("a stored device whose mac or name is not a string is dropped", () => {
 
 test("a stored copy reloads without a scan state, so no stale scan shows as live", () => {
   const scan = { active: true, from: 1, to: 208, next: 40, done: false };
-  const { copy } = applyResponse(emptyCopy(), response([], { scan }), BROWSER_NOW_MS);
+  const { copy } = applyResponse(emptyCopy(), deviceResponse([], { scan }), BROWSER_NOW_MS);
 
   const reloaded = fromStored(JSON.parse(JSON.stringify(toStored(copy))));
 
@@ -250,7 +218,7 @@ test("a stored device without a readable anchor is dropped", () => {
 });
 
 test("the device and its records share the anchor of the response that carried them", () => {
-  const { copy } = applyResponse(emptyCopy(), response([deviceRecord(5, "0100")], { uptime: 10_000 }), BROWSER_NOW_MS);
+  const { copy } = applyResponse(emptyCopy(), deviceResponse([deviceRecord(5, "0100")], { uptime: 10_000 }), BROWSER_NOW_MS);
 
   assert.deepEqual(copy.device.anchor, { browserNowMs: BROWSER_NOW_MS, uptimeMs: 10_000 });
   assert.equal(copy.device.anchor, copy.records[5].anchor);
@@ -260,7 +228,7 @@ test("the device and its records share the anchor of the response that carried t
 test("a start or stop reply replaces the device's scan and nothing else", () => {
   const running = { active: true, goal: "discover", from: 1, to: 255, next: 40, done: false };
   const stopped = { ...running, active: false };
-  const { copy } = applyResponse(emptyCopy(), response([deviceRecord(5, "0100")], { scan: running }), BROWSER_NOW_MS);
+  const { copy } = applyResponse(emptyCopy(), deviceResponse([deviceRecord(5, "0100")], { scan: running }), BROWSER_NOW_MS);
 
   const updated = withScan(copy, stopped);
 

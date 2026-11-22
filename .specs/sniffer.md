@@ -197,7 +197,7 @@ Today's page minus known properties, plus the mark.
 - **Drawer** (click a cell): raw value (trimmed, with a marker when it was padded on the wire), type, query status, change count, last change, history (newest first) and a note field.
 - **Change feed**: recent changes across unknown IDs (`time ID old → new`), newest first. Clicking an entry selects its ID.
 - **Per-ID mute**: a drawer button removes the ID from the feed; its cell still updates.
-- **Filters**: search (ID, value, note), **type chips** and **status chips** on one line (type │ status), changed recently. They fade and stripe non-matching cells and apply to the feed. "Hide registered" is gone: registered properties are known, so discover never shows them.
+- **Filters**: search (ID, value, note), **type chips** and **status chips** on one line (type │ status), changed recently. They fade and stripe non-matching cells and apply to the feed; the chip group "colour by" is not using shows faded swatches but still filters. "Hide registered" is gone: registered properties are known, so discover never shows them.
 - **Mark** (browser only), in a box at the top of the side column, above the drawer and the list:
   - "Set mark" snapshots every raw value, with the wall time and device uptime.
   - An "only changed since mark (n)" filter dims every cell whose value equals the snapshot. Changed cells get an orange ring.

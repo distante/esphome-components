@@ -1,6 +1,7 @@
 # expect-error: sec_touch_sniffer is only available on ESP32
 
-# The sniffer is ESP32-only: its property records are sized against ESP32 heap.
+# The sniffer is ESP32-only: its property records are sized against ESP32 heap. The HTTP server is there, so the
+# target is the only error. The wifi credentials are placeholders.
 
 esphome:
   name: sec-touch-sniffer-esp8266
@@ -14,6 +15,12 @@ external_components:
       path: ../../../components
     components: [sec_touch, sec_touch_sniffer]
 
+wifi:
+  ssid: "fixture"
+  password: "fixture-password"
+
+web_server_base:
+
 uart:
   id: sec_touch_uart
   tx_pin: GPIO1
@@ -24,7 +31,4 @@ sec_touch:
   id: sec_touch_component
   uart_id: sec_touch_uart
 
-text_sensor:
-  - platform: sec_touch_sniffer
-    sec_touch_id: sec_touch_component
-    name: "Sniffer"
+sec_touch_sniffer:

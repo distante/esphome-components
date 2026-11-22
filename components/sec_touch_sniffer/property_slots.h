@@ -1,7 +1,6 @@
 #pragma once
 
-// Plain C++, no ESPHome includes: shared by the property store, the history pool and the text sensor builder.
-// text_sensor.py reads MAX_PROPERTY_ID from this file for the config's ID range.
+// Plain C++, no ESPHome includes: shared by the property store and the history pool.
 
 #include <cstddef>
 #include <cstdint>

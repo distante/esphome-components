@@ -1,4 +1,4 @@
-# expect-error: web_page: true needs an HTTP server
+# expect-error: add `web_server_base:` (or `web_server:`)
 
 # The sniffer page is served by web_server_base, which the sniffer does not auto-load.
 
@@ -24,8 +24,4 @@ sec_touch:
   id: sec_touch_component
   uart_id: sec_touch_uart
 
-text_sensor:
-  - platform: sec_touch_sniffer
-    sec_touch_id: sec_touch_component
-    name: "Sniffer"
-    web_page: true
+sec_touch_sniffer:

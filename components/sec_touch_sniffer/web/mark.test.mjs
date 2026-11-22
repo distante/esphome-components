@@ -4,29 +4,15 @@ import assert from "node:assert/strict";
 import { changedSinceMark, markChanges, markNow, markRaw } from "./mark.mjs";
 import { applyResponse, emptyCopy, fromStored, toStored } from "./records.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
-import { deviceRecord } from "./fixture_records.mjs";
+import { deviceRecord, deviceResponse } from "./fixture_records.mjs";
 
 const BROWSER_NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
 const [LEVEL] = FIXTURE_CATALOGUE.levelIds;
 
-function response(records, full) {
-  return {
-    mac: "aabbccddeeff",
-    name: "ventilation",
-    boot: "9f2c41ab",
-    uptime: 10_000,
-    seq: 7,
-    full,
-    dropped: 0,
-    scan: null,
-    records,
-  };
-}
-
 /** Unknown IDs 5 and 6 with a value, unknown 7 that only ever failed, and a known level. */
 function before() {
   const records = [deviceRecord(5, "0100"), deviceRecord(6, "1"), deviceRecord(7, null), deviceRecord(LEVEL, "3")];
-  return applyResponse(emptyCopy(), response(records, true), BROWSER_NOW_MS).copy;
+  return applyResponse(emptyCopy(), deviceResponse(records), BROWSER_NOW_MS).copy;
 }
 
 /** A delta: 5 changes, 6 is sent again unchanged, 7 gets its first value, the level changes, 40 is new. */
@@ -38,7 +24,7 @@ function after(copy) {
     deviceRecord(LEVEL, "7"),
     deviceRecord(40, "x"),
   ];
-  return applyResponse(copy, response(records, false), BROWSER_NOW_MS + 5000).copy;
+  return applyResponse(copy, deviceResponse(records, { full: false }), BROWSER_NOW_MS + 5000).copy;
 }
 
 test("a mark holds every raw value, the wall time it was set and the device uptime then", () => {
@@ -94,7 +80,7 @@ test("the changes since the mark are the unknown IDs whose value differs, in ID 
 test("a value changed and changed back is no change since the mark", () => {
   const copy = before();
   const mark = markNow(copy, BROWSER_NOW_MS);
-  const back = applyResponse(after(copy), response([deviceRecord(5, "0100")], false), BROWSER_NOW_MS + 9000).copy;
+  const back = applyResponse(after(copy), deviceResponse([deviceRecord(5, "0100")], { full: false }), BROWSER_NOW_MS + 9000).copy;
 
   assert.deepEqual(
     markChanges(FIXTURE_CATALOGUE, back, mark).map((change) => change.id),

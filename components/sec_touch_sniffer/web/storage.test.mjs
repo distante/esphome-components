@@ -2,36 +2,14 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { applyResponse, emptyCopy } from "./records.mjs";
+import { deviceRecord, deviceResponse } from "./fixture_records.mjs";
 import { deviceKey, LAST_MAC_KEY, parseStored, STORAGE_PREFIX, storedText } from "./storage.mjs";
 
 const BROWSER_NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
 
 function deviceCopy() {
-  const record = {
-    id: 5,
-    cmd: 32,
-    raw: "0100",
-    first: 1000,
-    last: 5000,
-    changed: 3000,
-    changes: 0,
-    status: "ok",
-    status_at: 1000,
-    reg: false,
-    hist: [[3000, "0100"]],
-  };
-  const response = {
-    mac: "aabbccddeeff",
-    name: "ventilation",
-    boot: "9f2c41ab",
-    uptime: 10_000,
-    seq: 7,
-    full: true,
-    dropped: 0,
-    scan: null,
-    records: [record],
-  };
-  return applyResponse(emptyCopy(), response, BROWSER_NOW_MS).copy;
+  const record = deviceRecord(5, "0100", { last: 5000, changed: 3000, hist: [[3000, "0100"]] });
+  return applyResponse(emptyCopy(), deviceResponse([record]), BROWSER_NOW_MS).copy;
 }
 
 // The catalogue's default discover range, made up so the tests don't lean on the real one.

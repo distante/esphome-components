@@ -27,3 +27,19 @@ export function deviceRecord(id, raw, { seenAt = SEEN_AT, ...fields } = {}) {
     ...fields,
   };
 }
+
+/** A full /sniffer/data response carrying `records`; `fields` replace any of its envelope fields. */
+export function deviceResponse(records, fields = {}) {
+  return {
+    mac: "aabbccddeeff",
+    name: "ventilation",
+    boot: "9f2c41ab",
+    uptime: 10_000,
+    seq: 7,
+    full: true,
+    dropped: 0,
+    scan: null,
+    records,
+    ...fields,
+  };
+}

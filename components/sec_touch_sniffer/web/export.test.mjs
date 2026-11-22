@@ -5,46 +5,35 @@ import { exportCsv, exportJson } from "./export.mjs";
 import { markNow } from "./mark.mjs";
 import { applyResponse, emptyCopy, fromStored, toStored } from "./records.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
-import { deviceRecord } from "./fixture_records.mjs";
+import { deviceRecord, deviceResponse } from "./fixture_records.mjs";
 
 const BROWSER_NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
 const SCAN = { active: false, goal: "discover", from: 1, to: 208, next: 1, done: true };
 const [LEVEL, OTHER_LEVEL] = FIXTURE_CATALOGUE.levelIds;
 const DATE = FIXTURE_CATALOGUE.dateId;
 
-/**
- * /sniffer/data as the device sends it: `\u00XX` per control or non-ASCII byte. 5 and 9 are unknown; of the known
- * ones, the level LEVEL (10) matches, OTHER_LEVEL (11) does not, and DATE (31) only ever failed.
- */
-const DEVICE_JSON = String.raw`{
-  "mac": "aabbccddeeff", "name": "ventilation", "boot": "9f2c41ab", "uptime": 10000,
-  "seq": 4, "full": true, "dropped": 0,
-  "scan": {"active": false, "goal": "discover", "from": 1, "to": 208, "next": 1, "done": true},
-  "records": [
-    {"id": 5, "cmd": 32, "raw": "0080", "first": 1000, "last": 9000, "changed": 7000,
-     "changes": 1, "status": "ok", "status_at": 1000, "reg": false,
-     "hist": [[7000, "0080"], [1000, "0100"]]},
-    {"id": 9, "cmd": 32, "raw": "\u0001Aé, \"x\"", "first": 2000, "last": 2000, "changed": 2000,
-     "changes": 0, "status": "unqueried", "status_at": null, "reg": false,
-     "hist": [[2000, "\u0001Aé, \"x\""]]},
-    {"id": 10, "cmd": 32, "raw": "7", "first": 2000, "last": 2000, "changed": 2000,
-     "changes": 0, "status": "ok", "status_at": 2000, "reg": true, "hist": [[2000, "7"]]},
-    {"id": 11, "cmd": 32, "raw": "99 ", "first": 2000, "last": 2000, "changed": 2000,
-     "changes": 0, "status": "ok", "status_at": 2000, "reg": false, "hist": [[2000, "99 "]]},
-    {"id": 31, "cmd": null, "raw": null, "first": null, "last": null, "changed": null,
-     "changes": 0, "status": "nak", "status_at": 3000, "reg": false, "hist": []}
-  ]
-}`;
+/** Unknown ID 9 as the device sends it in /sniffer/data: `\u00XX` per control or non-ASCII byte. */
+const ESCAPED_RECORD_JSON = String.raw`{"id": 9, "cmd": 32, "raw": "\u0001Aé, \"x\"", "first": 2000, "last": 2000,
+  "changed": 2000, "changes": 0, "status": "unqueried", "status_at": null, "reg": false,
+  "hist": [[2000, "\u0001Aé, \"x\""]]}`;
 
+/** 5 and 9 are unknown; of the known ones, the level LEVEL matches, OTHER_LEVEL does not, and DATE only ever failed. */
 function copyFromDevice() {
-  return applyResponse(emptyCopy(), JSON.parse(DEVICE_JSON), BROWSER_NOW_MS).copy;
+  const records = [
+    deviceRecord(5, "0080", { last: 9000, changed: 7000, changes: 1, hist: [[7000, "0080"], [1000, "0100"]] }),
+    JSON.parse(ESCAPED_RECORD_JSON),
+    deviceRecord(LEVEL, "7", { seenAt: 2000, reg: true }),
+    deviceRecord(OTHER_LEVEL, "99 ", { seenAt: 2000 }),
+    deviceRecord(DATE, null, { seenAt: 3000 }),
+  ];
+  return applyResponse(emptyCopy(), deviceResponse(records, { seq: 4, scan: SCAN }), BROWSER_NOW_MS).copy;
 }
 
 /** After the mark: 5 changes, the date gets its first value, 40 is new. */
 function changedAfterMark(copy) {
   const record = (id, raw) => deviceRecord(id, raw, { seenAt: 11_000, changes: 1 });
-  const delta = { ...JSON.parse(DEVICE_JSON), uptime: 12_000, seq: 9, full: false,
-    records: [record(5, "0090"), record(DATE, "21.11.26"), record(40, "1")] };
+  const records = [record(5, "0090"), record(DATE, "21.11.26"), record(40, "1")];
+  const delta = deviceResponse(records, { uptime: 12_000, seq: 9, full: false, scan: SCAN });
   return applyResponse(copy, delta, BROWSER_NOW_MS + 2000).copy;
 }
 
@@ -153,9 +142,9 @@ test("the CSV export has one row per ID in ID order, raw value, meaning and note
     "id,raw,guessed_type,registered,known,meaning,status,change_count,first_seen,last_changed,note,mark_raw",
     `5,"0080",padded int,false,false,"",ok,1,${iso(1000)},${iso(7000)},"",""`,
     `9,"\u0001Aé, ""x""",text,false,false,"",unqueried,0,${iso(2000)},${iso(2000)},"says ""hi""",""`,
-    `10,"7",int,true,true,"Burst",ok,0,${iso(2000)},${iso(2000)},"",""`,
-    `11,"99 ",int,false,true,"unexpected value 99",ok,0,${iso(2000)},${iso(2000)},"",""`,
-    `31,"",,false,true,"",nak,0,,,"",""`,
+    `${LEVEL},"7",int,true,true,"Burst",ok,0,${iso(2000)},${iso(2000)},"",""`,
+    `${OTHER_LEVEL},"99 ",int,false,true,"unexpected value 99",ok,0,${iso(2000)},${iso(2000)},"",""`,
+    `${DATE},"",,false,true,"",nak,0,,,"",""`,
   ]);
 });
 

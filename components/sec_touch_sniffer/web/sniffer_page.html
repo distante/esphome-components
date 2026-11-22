@@ -393,7 +393,7 @@ function renderDrawer(rowsById) {
     isKnownId(CATALOGUE, selected)
       ? fact("Meaning", meaning === null
         ? el("span", { class: "mute" }, "not seen")
-        : el("span", { class: meaning.unexpected ? "unexpected" : "" }, meaning.text))
+        : el("span", meaning.unexpected ? { class: "unexpected" } : {}, meaning.text))
       : null,
     fact("Query status",
       el("span", { class: `s-${row.status}` }, row.status), row.statusAtMs === null ? "" : ` · ${formatWall(row.statusAtMs)}`),

@@ -14,7 +14,8 @@ export function isKnownId(catalogue, id) {
     [catalogue.summerVentilationId, catalogue.dateId, catalogue.clockId].includes(id);
 }
 
-// ASCII whitespace only, as the device trims (String.prototype.trim also drops Unicode spaces).
+// ASCII whitespace only, matching the trim of known_property_meaning() in C++. The page's display trim
+// (String.prototype.trim) is wider: it also drops Unicode spaces.
 const ASCII_SPACE_AT_ENDS = /^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$/g;
 const WHOLE_DECIMAL = /^[0-9]+$/;
 

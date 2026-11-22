@@ -91,7 +91,8 @@ class _Header:
         self.string_tables: dict[str, list[str]] = {}
 
     def _define(self, table: dict, name: str, value, where: str) -> None:
-        if name in self.ints or name in self.strings or name in table:
+        kinds = (self.ints, self.strings, self.int_arrays, self.pair_tables, self.string_tables)
+        if any(name in kind for kind in kinds):
             raise ValueError(f"{where}: {name} is defined twice")
         table[name] = value
 

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { allPass, matchesFilter, visibleIds } from "./filters.mjs";
+import { allPass, feedIds, matchesFilter, visibleIds } from "./filters.mjs";
 import { markNow } from "./mark.mjs";
 import { applyResponse, emptyCopy } from "./records.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
@@ -120,4 +120,16 @@ test("only changed since mark lets every row through while no mark is set", () =
   const filter = { ...allPass(), onlyChangedSinceMark: true };
 
   assert.equal(matchesFilter(row(), filter, NOW_MS, null), true);
+});
+
+test("the feed keeps an ID changed and changed back since the mark, under every other filter", () => {
+  const mark = markNow(copyOf({ 5: "0100", 6: "1" }), NOW_MS);
+  // 5 was changed and reverted, so its value equals the mark again; 6 still differs.
+  const rows = [row({ id: 5, raw: "0100", status: "ok" }), row({ id: 6, raw: "2", status: "nak" })];
+  const sinceMark = { ...allPass(), onlyChangedSinceMark: true };
+
+  assert.deepEqual([...visibleIds(FIXTURE_CATALOGUE, rows, sinceMark, NOW_MS, mark)], [6]);
+  assert.deepEqual([...feedIds(FIXTURE_CATALOGUE, rows, sinceMark, NOW_MS, mark)], [5, 6]);
+  const sinceMarkNak = { ...sinceMark, statuses: new Set(["nak"]) };
+  assert.deepEqual([...feedIds(FIXTURE_CATALOGUE, rows, sinceMarkNak, NOW_MS, mark)], [6]);
 });

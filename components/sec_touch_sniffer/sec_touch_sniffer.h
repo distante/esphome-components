@@ -121,7 +121,7 @@ class SecTouchSniffer : public Component
 #ifdef USE_ESP32
   /// Hex MAC, which the page files its browser storage under.
   char mac_[MAC_ADDRESS_BUFFER_SIZE]{};
-  /// A random id per boot, so the page notices a reboot.
+  /// A random id per boot, so the page notices a reboot; a clear draws a new one, as a reboot would.
   char boot_[format_hex_size(sizeof(uint32_t))]{};
 
   // Serving scratch, static so a request grows no heap and keeps the httpd task's stack small. One request runs at
@@ -135,6 +135,9 @@ class SecTouchSniffer : public Component
   void serve_page_(AsyncWebServerRequest *request);
   void serve_data_(httpd_req_t *req);
   void serve_scan_(httpd_req_t *req, bool start);
+  /// Empties the record store and draws a new boot id, so every open page resyncs to the empty store.
+  void serve_clear_(httpd_req_t *req);
+  void new_boot_id_();
 #endif
 };
 

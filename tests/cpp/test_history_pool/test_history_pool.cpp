@@ -96,6 +96,22 @@ TEST(HistoryPool, AnUnallocatedPoolKeepsNothing) {
   EXPECT_TRUE(history_of(pool, QUIET_ID).empty());
 }
 
+TEST(HistoryPool, AClearEmptiesThePoolAndItKeepsValuesAgain) {
+  HistoryPool pool;
+  ASSERT_TRUE(pool.allocate());
+  push(pool, QUIET_ID, 10, "0000");
+  push(pool, BUSY_ID, 11, "11:00");
+
+  pool.clear();
+
+  EXPECT_TRUE(history_of(pool, QUIET_ID).empty());
+  EXPECT_TRUE(history_of(pool, BUSY_ID).empty());
+  EXPECT_EQ(pool.count(QUIET_ID), 0);
+  EXPECT_EQ(pool.free_bytes(), esphome::sec_touch::HISTORY_POOL_BYTES);
+  push(pool, QUIET_ID, 20, "0100");
+  EXPECT_EQ(history_of(pool, QUIET_ID), (std::vector<Entry>{{20, "0100"}}));
+}
+
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

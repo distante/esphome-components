@@ -46,8 +46,9 @@
   .cell.known { background:#e4e4e4; border-color:#d2d2d2; color:#777; cursor:default; }
   .marked { box-shadow:inset 0 0 0 3px var(--mark); }
   .cell.stale { opacity:.45; font-style:italic; }
-  .dim { background-image:repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,0,0,.3) 4px 6px); }
-  .cell.dim { opacity:.5; }
+  .dim { background-image:repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,0,0,.2) 4px 6px); }
+  .cell.dim { opacity:.35; }
+  .cell.dim:hover { opacity:1; }
   .cell.cursor { outline:3px solid var(--acc); }
   .cell.sel { outline:2px solid red; }
   .flash { animation:flash 2s; }
@@ -92,6 +93,7 @@
   <span class="grow"></span>
   <button id="export-json">Export JSON</button>
   <button id="export-csv">Export CSV</button>
+  <button id="clear-data" title="Forget every captured value on the device and in this browser; notes and mutes stay">Clear data</button>
 </div>
 <div id="goal-tabs" class="bigtabs"></div>
 <div id="scan" class="row" hidden>
@@ -152,7 +154,7 @@
 <script type="module">
 import { applyResponse, changeFeed, emptyCopy, rowsOf, withScan } from "./records.mjs";
 import { createPoller, resyncReason, sinceFor } from "./poll.mjs";
-import { allPass, visibleIds } from "./filters.mjs";
+import { allPass, feedIds, visibleIds } from "./filters.mjs";
 import { changedSinceMark, markChanges, markNow } from "./mark.mjs";
 import { scanProgress } from "./scan_progress.mjs";
 import {
@@ -239,6 +241,8 @@ let showKnown = false;
 const flashIds = new Set();
 // The ID whose note the drawer's note field holds.
 let drawerFor = null;
+// Counts the clears that emptied the copy, so a poll fetched before one is dropped.
+let clears = 0;
 
 function load(newMac) {
   mac = newMac;
@@ -306,6 +310,7 @@ async function fetchData(since) {
 const currentScan = () => copy.device?.scan ?? null;
 
 async function pollOnce() {
+  const clearsBefore = clears;
   let response = await fetchData(sinceFor(copy));
   if (response.mac !== mac) {
     load(response.mac);
@@ -315,6 +320,10 @@ async function pollOnce() {
   if (resyncReason(copy, response) !== null) {
     copy = { ...copy, since: null };
     response = await fetchData(0);
+  }
+  // A clear landed while this poll was out: its response holds the records just cleared. The next poll is a full one.
+  if (clears !== clearsBefore) {
+    return;
   }
   const result = applyResponse(copy, response, Date.now());
   copy = result.copy;
@@ -372,6 +381,35 @@ async function stopScan() {
   }
   renderLogged();
   return stopped;
+}
+
+/** Empties the device's records, then the browser copy; notes, mutes and the range stay. */
+async function clearData() {
+  // No device known yet: nothing to clear.
+  if (mac === null) {
+    return;
+  }
+  if (!confirm("Clear every captured value on the device and in this browser? Notes and mutes stay.")) {
+    return;
+  }
+  const requestMac = mac;
+  try {
+    await fetchOk("/sniffer/clear", { method: "POST" });
+  } catch (error) {
+    console.error("clear request failed", error);
+    alert("The device did not clear its records; nothing was cleared.");
+    return;
+  }
+  // Another device answered while the request was out: its copy is not the one cleared.
+  if (mac === requestMac) {
+    clears += 1;
+    copy = emptyCopy();
+    clearMark();
+    flashIds.clear();
+    save();
+  }
+  renderLogged();
+  poller.pollNow();
 }
 
 /** Starts the open tab's goal; discover sends the range as typed, and the device decides whether it is valid. */
@@ -623,8 +661,8 @@ function renderMark() {
   );
 }
 
-function renderFeed(visible) {
-  const entries = changeFeed(copy, mutes).filter((entry) => visible.has(entry.id)).slice(0, FEED_LENGTH);
+function renderFeed(listed) {
+  const entries = changeFeed(copy, mutes).filter((entry) => listed.has(entry.id)).slice(0, FEED_LENGTH);
   if (entries.length === 0) {
     $("feed").replaceChildren(el("span", { class: "mute" }, "none yet"));
     return;
@@ -710,7 +748,7 @@ function render() {
   $("f-statuses").classList.toggle("faded", colourBy !== "status");
   renderGrid(rowsById, visible);
   renderMark();
-  renderFeed(visible);
+  renderFeed(feedIds(CATALOGUE, rows, filter, now, mark));
   renderDrawer(rowsById);
 }
 
@@ -824,6 +862,7 @@ $("goal-tabs").addEventListener("click", (event) => {
     setGoal(tab.dataset.goal);
   }
 });
+$("clear-data").addEventListener("click", clearData);
 $("export-json").addEventListener("click", () =>
   download("sec_touch_sniffer.json", exportJson(CATALOGUE, copy, notes, mark, Date.now()), "application/json"));
 $("export-csv").addEventListener("click", () =>

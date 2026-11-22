@@ -197,7 +197,7 @@ Today's page minus known properties, plus the mark.
 - **Drawer** (click a cell): raw value (trimmed, with a marker when it was padded on the wire), type, query status, change count, last change, history (newest first) and a note field.
 - **Change feed**: recent changes across unknown IDs (`time ID old → new`), newest first. Clicking an entry selects its ID.
 - **Per-ID mute**: a drawer button removes the ID from the feed; its cell still updates.
-- **Filters**: search (ID, value, note), **type chips** and **status chips** on one line (type │ status), changed recently. They fade and stripe non-matching cells and apply to the feed; the chip group "colour by" is not using shows faded swatches but still filters. "Hide registered" is gone: registered properties are known, so discover never shows them.
+- **Filters**: search (ID, value, note), **type chips** and **status chips** on one line (type │ status), changed recently. They fade and stripe non-matching cells and apply to the feed except "only changed since mark"; the chip group "colour by" is not using shows faded swatches but still filters. "Hide registered" is gone: registered properties are known, so discover never shows them.
 - **Mark** (browser only), in a box at the top of the side column, above the drawer and the list:
   - "Set mark" snapshots every raw value, with the wall time and device uptime.
   - An "only changed since mark (n)" filter dims every cell whose value equals the snapshot. Changed cells get an orange ring.
@@ -215,6 +215,7 @@ Runs in the browser only; the device serves raw strings.
 
 Keyed by the ESP's MAC: a copy of the records, per-ID notes and mutes, and the last discover range. Notes and mutes never go to the device. The goal, the mark and "show known" are not stored.
 - **After a reboot** (`boot` changed): the device wins for every ID it has. IDs only in the browser copy stay, greyed out as stale, until the device sees them again.
+- **Clear data** (a header button, after a confirm): `POST /sniffer/clear` empties the device's records, then the page drops its browser copy and the mark. Notes, mutes and the discover range stay. If the device refuses or is offline, nothing is cleared. Other open pages see the new `boot` and take the empty store as a reboot, so their IDs turn stale.
 
 ### Export
 
@@ -242,6 +243,7 @@ Decided in [What is the contract between the device and the page?](https://githu
 | `GET /sniffer/data?since=S` | JSON, see below |
 | `POST /sniffer/scan/start?goal=G&from=F&to=T` | start a scan; empty body; 200 with the `scan` object |
 | `POST /sniffer/scan/stop` | stop the scan, either goal; empty body; 200 with the `scan` object |
+| `POST /sniffer/clear` | empty every record, the history pool and `dropped`, and draw a new `boot`; empty body; 200 with `{}`. `seq` keeps going up. A running scan goes on. |
 
 **Start parameters**, parsed in place like `since`:
 - `goal` is `discover` or `check`. Missing or unknown means discover.
@@ -257,7 +259,7 @@ Decided in [What is the contract between the device and the page?](https://githu
 - The page resyncs with `since=0` on first load, when `boot` differs from the stored value (then runs the reboot merge), and when the server `seq` is lower than the page's `since`.
 
 **Concurrency and RAM.** Handlers run on the httpd task while the main loop writes records.
-- A mutex (ESPHome's `Mutex`, a FreeRTOS mutex on ESP32) guards the record store. Only the store's writes take it on the main loop; the main loop reads without it, being the only writer. The scan fields the handler reads (scanning flag, goal, range and position) are separate atomics, so a poll that races a scan step can show them out of step; the next poll corrects it.
+- A mutex (ESPHome's `Mutex`, a FreeRTOS mutex on ESP32) guards the record store. The main loop and the httpd task's clear both write the records, so every read or write of them takes it, the main loop's reads included. The scan fields the handler reads (scanning flag, goal, range and position) are separate atomics, so a poll that races a scan step can show them out of step; the next poll corrects it.
 - Per record, the handler copies the record **in binary** (fields, raw value and its history entries, ≤ ~540 B) into static scratch under the lock, releases the lock, then formats JSON into a ~256 B chunk buffer and sends it with `httpd_resp_send_chunk` on the raw request. It sets status, content type and `Access-Control-Allow-Origin` itself and ends with the empty chunk.
 - Peak RAM ~800 B, no heap growth per request, independent of escaping. The query string is parsed in place, not through the server's heap-allocated parameters.
 - A response is not an atomic snapshot. A record changed mid-response is caught by the next poll through `seq`.
@@ -297,7 +299,7 @@ Decided in [What is the contract between the device and the page?](https://githu
 
 **Raw value encoding:** byte-exact. Standard JSON escapes for `"` and `\`. Control bytes (< 0x20) and bytes ≥ 0x80 are sent as `\u00XX`, one code point per byte (Latin-1), so the page and the export recover the exact bytes. ASCII passes unchanged.
 
-**Device identity:** browser storage is keyed by the ESP's **MAC** (12 lowercase hex digits). `boot` is a random id generated at setup (8 hex digits), only for reboot detection. `name` is the ESPHome node name, for display. The panel's ID 3 is not used as a key.
+**Device identity:** browser storage is keyed by the ESP's **MAC** (12 lowercase hex digits). `boot` is a random id generated at setup (8 hex digits), only for reboot detection; a clear draws a new one, since it empties the store as a reboot does. `name` is the ESPHome node name, for display. The panel's ID 3 is not used as a key.
 
 ---
 

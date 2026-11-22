@@ -1,5 +1,6 @@
 /**
- * Discover's filters (see .specs/sniffer.md, "Discover"). They dim non-matching cells and apply to the change feed.
+ * Discover's filters (see .specs/sniffer.md, "Discover"). They dim non-matching cells and apply to the change feed,
+ * all but "only changed since mark" (see `feedIds`).
  * Known properties are never visible in discover, whatever the filter.
  */
 
@@ -70,4 +71,19 @@ function matchesQuery(row, query) {
 export function visibleIds(catalogue, rows, filter, nowMs, mark) {
   const visible = rows.filter((row) => !isKnownId(catalogue, row.id) && matchesFilter(row, filter, nowMs, mark));
   return new Set(visible.map((row) => row.id));
+}
+
+/**
+ * The change feed leaves out "only changed since mark": the mark diff can't show a value toggled away and back,
+ * so the feed must still list those changes (.specs/sniffer.md, "Discover").
+ *
+ * @param {object} catalogue the CATALOGUE of catalogue.mjs
+ * @param {object[]} rows the page rows (see records.mjs, `rowsOf`)
+ * @param {object} filter the filter, as for `matchesFilter`
+ * @param {number} nowMs browser time (epoch ms)
+ * @param {object | null} mark the mark (see mark.mjs), null when none is set
+ * @returns {Set<number>} the IDs whose changes the feed lists
+ */
+export function feedIds(catalogue, rows, filter, nowMs, mark) {
+  return visibleIds(catalogue, rows, { ...filter, onlyChangedSinceMark: false }, nowMs, mark);
 }

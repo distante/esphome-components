@@ -42,6 +42,8 @@
   .cell.unseen { background:#fff; border:1px dashed #bbb; }
   /* A known property: discover leaves a gap, check shows it. */
   .cell.gone { background:transparent; border:none; cursor:default; }
+  /* A known property under "show known": grey, with no type or status colour, and not clickable. */
+  .cell.known { background:#e4e4e4; border-color:#d2d2d2; color:#777; cursor:default; }
   .marked { box-shadow:inset 0 0 0 3px var(--mark); }
   .cell.stale { opacity:.45; font-style:italic; }
   .dim { background-image:repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,0,0,.3) 4px 6px); }
@@ -106,6 +108,7 @@
   <input id="f-query" placeholder="ID, value or note…" style="width:170px">
   <select id="f-changed"></select>
   colour by <select id="colour-by"><option>type</option><option>status</option></select>
+  <label><input id="show-known" type="checkbox"> show known</label>
   <span class="badge" style="border:1px dashed #bbb">never seen</span>
   <span class="badge dim">filtered out</span>
   <span class="badge marked">changed since mark</span>
@@ -162,14 +165,14 @@ import { checkCards } from "./check_cards.mjs";
 import { exportCsv, exportJson } from "./export.mjs";
 import { deviceKey, LAST_MAC_KEY, parseStored, storedText } from "./storage.mjs";
 import { STATUS_COLOURS, TYPE_COLOURS } from "./colours.mjs";
-import { knownIds } from "./known_meaning.mjs";
-import { escapeControlBytes } from "./control_bytes.mjs";
+import { knownCellTitle, knownIds, NOT_SEEN } from "./known_meaning.mjs";
+import { escapeControlBytes, shown } from "./control_bytes.mjs";
 import { CATALOGUE } from "./catalogue.mjs";
 
 const ID_COUNT = 256;
 /** Known properties are fixed by the catalogue: discover's map leaves a gap for each, once, at page start. */
 const KNOWN_ID_SET = new Set(knownIds(CATALOGUE));
-/** What a known ID's gap in discover's map means: the gap's tooltip and the legend. */
+/** What a known ID's gap or grey cell in discover's map means: the gap's tooltip and the legend. */
 const KNOWN_GAP_TEXT = "known, see Check";
 const FEED_LENGTH = 60;
 /** A grid cell previews this many characters of its value; the full value is in its tooltip. */
@@ -207,13 +210,6 @@ function el(tag, attrs = {}, ...children) {
   return node;
 }
 
-/** A raw value for display: trimmed, with control bytes as \xNN. */
-function shown(raw) {
-  if (raw === null) {
-    return "—";
-  }
-  return escapeControlBytes(raw.trim());
-}
 const isPadded = (raw) => raw !== null && raw !== raw.trim();
 const formatWall = (wallMs) => (wallMs === null ? "—" : new Date(wallMs).toLocaleString());
 
@@ -235,6 +231,8 @@ let online = null;
 let scanRequestFailed = false;
 const filter = allPass();
 let colourBy = "type";
+// Whether discover's map shows known IDs greyed instead of as gaps. Page memory only: never stored.
+let showKnown = false;
 const flashIds = new Set();
 // The ID whose note the drawer's note field holds.
 let drawerFor = null;
@@ -444,14 +442,11 @@ const cells = [];
 
 function buildStatic() {
   for (let id = 0; id < ID_COUNT; id++) {
-    // Their gaps never change.
-    const cell = KNOWN_ID_SET.has(id)
-      ? el("div", { class: "cell gone", title: `${id}: ${KNOWN_GAP_TEXT}` })
-      : el("div", { class: "cell", "data-id": id });
+    // No data-id on a known ID: it is never selected.
+    const cell = KNOWN_ID_SET.has(id) ? el("div", { class: "cell" }) : el("div", { class: "cell", "data-id": id });
     cells.push(cell);
     $("grid").append(cell);
   }
-  $("known-gap-legend").textContent = `blank: ${KNOWN_GAP_TEXT}`;
   addChips($("f-types"), TYPE_COLOURS, filter.types);
   addChips($("f-statuses"), STATUS_COLOURS, filter.statuses);
   $("f-changed").append(...CHANGED_WITHIN_PRESETS.map(([ms, label]) => el("option", { value: ms }, label)));
@@ -496,7 +491,7 @@ function renderTabs() {
 /** A known property's meaning: red when unexpected, "not seen" while it has no value. */
 function meaningView(meaning, size = "") {
   if (meaning === null) {
-    return el("span", { class: `mute ${size}`.trim() }, "not seen");
+    return el("span", { class: `mute ${size}`.trim() }, NOT_SEEN);
   }
   const classes = `${meaning.unexpected ? "unexpected" : ""} ${size}`.trim();
   return el("span", classes ? { class: classes } : {}, escapeControlBytes(meaning.text));
@@ -530,11 +525,12 @@ function cellColour(row) {
 function renderGrid(rowsById, visible) {
   const scan = currentScan();
   for (let id = 0; id < ID_COUNT; id++) {
-    if (KNOWN_ID_SET.has(id)) {
-      continue;
-    }
     const cell = cells[id];
     const row = rowsById.get(id);
+    if (KNOWN_ID_SET.has(id)) {
+      renderKnownCell(cell, id, row?.raw ?? null);
+      continue;
+    }
     cell.replaceChildren(el("span", { class: "mute" }, String(id)));
     // backgroundColor, not background, so the filtered-out stripes of .dim stay.
     cell.style.backgroundColor = row ? cellColour(row) : "";
@@ -558,6 +554,22 @@ function renderGrid(rowsById, visible) {
     }
   }
   flashIds.clear();
+}
+
+/** A known ID's cell: a gap, or under "show known" grey with its value. Never dimmed, ringed or flashed. */
+function renderKnownCell(cell, id, raw) {
+  cell.classList.toggle("gone", !showKnown);
+  cell.classList.toggle("known", showKnown);
+  if (!showKnown) {
+    cell.replaceChildren();
+    cell.title = `${id}: ${KNOWN_GAP_TEXT}`;
+    return;
+  }
+  cell.replaceChildren(el("span", {}, String(id)));
+  if (raw !== null) {
+    cell.append(el("code", {}, shown(raw).slice(0, CELL_CHARS)));
+  }
+  cell.title = knownCellTitle(CATALOGUE, id, raw);
 }
 
 /** A filter chip per key of `colours`, in its colour, toggling the key in `chosen`: filter and legend in one. */
@@ -685,6 +697,7 @@ function render() {
   const rowsById = new Map(rows.map((row) => [row.id, row]));
   const now = Date.now();
   const visible = visibleIds(CATALOGUE, rows, filter, now, mark);
+  $("known-gap-legend").textContent = `${showKnown ? "grey" : "blank"}: ${KNOWN_GAP_TEXT}`;
   renderGrid(rowsById, visible);
   renderMark();
   renderFeed(visible);
@@ -788,6 +801,10 @@ $("f-changed").addEventListener("change", (event) => {
 });
 $("colour-by").addEventListener("change", (event) => {
   colourBy = event.target.value;
+  render();
+});
+$("show-known").addEventListener("change", (event) => {
+  showKnown = event.target.checked;
   render();
 });
 $("scan-toggle").addEventListener("click", toggleScan);

@@ -6,6 +6,7 @@
  */
 
 import { wholeDecimal } from "./records.mjs";
+import { escapeControlBytes, shown } from "./control_bytes.mjs";
 
 /**
  * @param {object} catalogue the CATALOGUE of catalogue.mjs
@@ -72,4 +73,18 @@ export function knownMeaning(catalogue, id, raw) {
   }
   // Unreachable: isKnownId() lists exactly the IDs that have a branch above.
   return null;
+}
+
+/** What a known property shows while it has no value. */
+export const NOT_SEEN = "not seen";
+
+/**
+ * @param {object} catalogue the CATALOGUE of catalogue.mjs
+ * @param {number} id a known property ID
+ * @param {string | null} raw the raw value as received, null when never seen
+ * @returns {string} the tooltip of the ID's cell in discover's map under "show known": `ID = value · meaning`
+ */
+export function knownCellTitle(catalogue, id, raw) {
+  const meaning = knownMeaning(catalogue, id, raw);
+  return `${id} = ${shown(raw)} · ${meaning === null ? NOT_SEEN : escapeControlBytes(meaning.text)}`;
 }

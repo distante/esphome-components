@@ -398,6 +398,16 @@ text_sensor:
 
 `web_page: true` serves, at `http://<device>/sniffer`, a page for working out what the IDs mean: a map of IDs 0–255 coloured by guessed type or by scan status, a drawer per ID with its raw value and up to 7 previous values, a feed of recent changes, filters, per-ID notes, scan start and stop, and a JSON and CSV export. Notes and a copy of the records are kept in the browser, keyed by the ESP's MAC, and never sent to the device. Without `scan_end` the page shows passive captures only, without scan controls.
 
+<p align="center">
+  <img src="images/sniffer-overview.png" alt="Sniffer page: ID map, drawer and change feed" width="900" />
+</p>
+
+For a known property, the drawer also shows what its value means. Known properties are the fan levels (173–178), fan labels (78–83), summer ventilation (48), date (1) and clock (2). Levels and labels show their name ("level 3", "Burst", "Bad"), summer ventilation shows `0A00` as "on" and `0800` as "off", and date and clock show the value as sent. A value that matches none of these shows as `unexpected value x` in red. The names come from [`protocol_ids.h`](protocol_ids.h), the same table the component uses.
+
+| Fan level (173) | Fan label (78) | Summer ventilation (48) | Date (1) |
+|---|---|---|---|
+| <img src="images/sniffer-drawer-level.png" alt="ID 173: raw 10, meaning Automatic Time" width="220" /> | <img src="images/sniffer-drawer-label.png" alt="ID 78: raw 35, meaning Kellerraum" width="220" /> | <img src="images/sniffer-drawer-summer.png" alt="ID 48: raw 0800, meaning off" width="220" /> | <img src="images/sniffer-drawer-date.png" alt="ID 1: the date as sent" width="220" /> |
+
 - **HTTP server:** the page needs `web_server_base:`, or `web_server:`, which loads it. Without either the config fails. The port is the server's; the sniffer has no port or auth options of its own.
 - **Sockets:** the page raises the HTTP server's client limit by 2, one for the page's polling and one spare for a reload.
 - **Open on the LAN without auth:** without `web_server: auth:`, anyone on your network can open the page and start or stop a scan, which pauses normal polling. When set, `web_server: auth:` and `allowed_origins` also apply to `/sniffer`, `/sniffer/data` and `/sniffer/scan/*`.

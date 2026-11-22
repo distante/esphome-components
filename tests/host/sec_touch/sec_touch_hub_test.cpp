@@ -62,6 +62,63 @@ class SECTouchHubTest : public ::testing::Test {
   std::vector<std::string> seen_;
 };
 
+/// `[STX][ACK][ETX]`: the panel's ACK of a request, and the hub's ACK of a data frame.
+std::vector<uint8_t> ack_frame() { return frame(std::string(1, static_cast<char>(ACK))); }
+
+/// A data frame for `property_id` whose CRC field has one bit flipped.
+std::vector<uint8_t> data_frame_with_bad_crc(int property_id, const std::string &value) {
+  std::string covered = std::string(1, static_cast<char>(STX)) + data_head(property_id, value);
+  unsigned short crc = GetXModemCRC(covered.data(), covered.size()) ^ 0x01;
+  return frame(data_head(property_id, value) + std::to_string(crc));
+}
+
+std::vector<uint8_t> concat(const std::vector<uint8_t> &a, const std::vector<uint8_t> &b) {
+  std::vector<uint8_t> out = a;
+  out.insert(out.end(), b.begin(), b.end());
+  return out;
+}
+
+constexpr int LABEL_1_ID = FAN_LABEL_IDS[0];
+constexpr int LABEL_2_ID = FAN_LABEL_IDS[1];
+constexpr int LABEL_3_ID = FAN_LABEL_IDS[2];
+
+/// A GET whose reply is dropped as malformed is sent once more (issue #52).
+class SECTouchGetRetryTest : public SECTouchHubTest {
+ protected:
+  void SetUp() override {
+    SECTouchHubTest::SetUp();
+    this->hub_.set_inter_task_delay(0);
+  }
+
+  /// Queues a label GET for each of `ids`. Each label's listener records "<property_id>=<value>" in labels_.
+  void queue_label_reads(const std::vector<int> &ids) {
+    for (int id : ids) {
+      this->hub_.register_manual_update_listener(id, [this](int property_id, int value) {
+        this->labels_.push_back(std::to_string(property_id) + "=" + std::to_string(value));
+      });
+    }
+    this->hub_.add_manual_tasks_to_queue();
+  }
+
+  /// Sends the first queued task. Afterwards tx holds only that request.
+  void send_next_task() {
+    this->uart_.tx.clear();
+    this->hub_.loop();
+  }
+
+  /// The panel answers the GET in flight with its ACK, then `data`. Returns what the hub sent meanwhile: its ACK of
+  /// `data`, then the next task it dispatched.
+  std::vector<uint8_t> panel_answers(const std::vector<uint8_t> &data) {
+    this->uart_.tx.clear();
+    this->uart_.push_rx(ack_frame());
+    this->uart_.push_rx(data);
+    this->loop_times(3);
+    return this->uart_.tx;
+  }
+
+  std::vector<std::string> labels_;
+};
+
 }  // namespace
 
 TEST_F(SECTouchHubTest, DataFrameReachesTapByteExactAndIsAcked) {
@@ -210,6 +267,66 @@ TEST_F(SECTouchHubTest, CorruptedAckEndsSetAsMalformed) {
   EXPECT_EQ(this->hub_.current_running_task_type, TaskType::NONE);
   EXPECT_EQ(this->hub_.get_last_scan_outcome(), ScanOutcome::SCAN_OUTCOME_TIMEOUT);
   EXPECT_TRUE(this->uart_.tx.empty());
+}
+
+// A label is read only at boot and on the update button, so a dropped reply would leave it empty until then.
+TEST_F(SECTouchGetRetryTest, MalformedLabelReplyIsAckedThenTheSameGetIsSentAgain) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+  ASSERT_EQ(this->uart_.tx, get_frame(LABEL_1_ID));
+
+  EXPECT_EQ(this->panel_answers(data_frame_with_bad_crc(LABEL_1_ID, "3")), concat(ack_frame(), get_frame(LABEL_1_ID)));
+
+  this->panel_answers(data_frame(LABEL_1_ID, "3"));
+  EXPECT_EQ(this->labels_, std::vector<std::string>{std::to_string(LABEL_1_ID) + "=3"});
+}
+
+// One retry per task, so a noisy line can't loop: the second bad reply ends the task and the next one goes out.
+TEST_F(SECTouchGetRetryTest, SecondMalformedReplyEndsTheTaskWithoutAThirdSend) {
+  this->queue_label_reads({LABEL_1_ID, LABEL_2_ID});
+  this->send_next_task();
+  this->panel_answers(data_frame_with_bad_crc(LABEL_1_ID, "3"));
+
+  EXPECT_EQ(this->panel_answers(data_frame_with_bad_crc(LABEL_1_ID, "3")), concat(ack_frame(), get_frame(LABEL_2_ID)));
+  EXPECT_TRUE(this->labels_.empty());
+}
+
+// No reply at all may mean a busy panel, where a retry only adds TASK_TIMEOUT_MS of waiting.
+TEST_F(SECTouchGetRetryTest, WatchdogTimeoutIsNotRetried) {
+  this->queue_label_reads({LABEL_1_ID, LABEL_2_ID});
+  this->send_next_task();
+
+  this->uart_.tx.clear();
+  this->age_task_past_watchdog();
+  this->hub_.loop();
+
+  EXPECT_EQ(this->uart_.tx, get_frame(LABEL_2_ID));
+}
+
+// The sniffer retries a scan query itself, after the TIMEOUT outcome a malformed reply records.
+TEST_F(SECTouchGetRetryTest, MalformedReplyDuringScanIsNotRetried) {
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
+  this->hub_.add_discovery_get_task(UNANSWERED_PROPERTY_ID);
+  this->send_next_task();
+
+  EXPECT_EQ(this->panel_answers(data_frame_with_bad_crc(FAN_1_LEVEL_ID, "10")),
+            concat(ack_frame(), get_frame(UNANSWERED_PROPERTY_ID)));
+  EXPECT_EQ(this->hub_.get_last_scan_outcome(), ScanOutcome::SCAN_OUTCOME_TIMEOUT);
+}
+
+TEST_F(SECTouchGetRetryTest, QueuedTasksKeepTheirOrderBehindTheRetry) {
+  this->queue_label_reads({LABEL_1_ID, LABEL_2_ID, LABEL_3_ID});
+  this->send_next_task();
+
+  EXPECT_EQ(this->panel_answers(data_frame_with_bad_crc(LABEL_1_ID, "1")), concat(ack_frame(), get_frame(LABEL_1_ID)));
+  EXPECT_EQ(this->panel_answers(data_frame(LABEL_1_ID, "1")), concat(ack_frame(), get_frame(LABEL_2_ID)));
+  EXPECT_EQ(this->panel_answers(data_frame(LABEL_2_ID, "2")), concat(ack_frame(), get_frame(LABEL_3_ID)));
+  this->panel_answers(data_frame(LABEL_3_ID, "3"));
+
+  EXPECT_EQ(this->labels_,
+            (std::vector<std::string>{std::to_string(LABEL_1_ID) + "=1", std::to_string(LABEL_2_ID) + "=2",
+                                      std::to_string(LABEL_3_ID) + "=3"}));
 }
 
 }  // namespace esphome::sec_touch::testing

@@ -33,6 +33,14 @@ inline std::vector<uint8_t> data_frame(int property_id, const std::string &value
   return frame(data_head(property_id, value) + std::to_string(crc));
 }
 
+/// `[STX]32800[TAB]<id>[TAB]<crc>[ETX]`, the GET the hub sends.
+inline std::vector<uint8_t> get_frame(int property_id) {
+  std::string head = std::to_string(COMMANDID_GET) + tab + std::to_string(property_id) + tab;
+  std::string covered = std::string(1, static_cast<char>(STX)) + head;
+  unsigned short crc = GetXModemCRC(covered.data(), covered.size());
+  return frame(head + std::to_string(crc));
+}
+
 /// `[STX]32[TAB]<id>[TAB]<value>[TAB]<crc>[ETX]`, the SET the hub sends.
 /// Same layout as a data frame: COMMANDID_SET is 32.
 inline std::vector<uint8_t> set_frame(int property_id, const std::string &value) {

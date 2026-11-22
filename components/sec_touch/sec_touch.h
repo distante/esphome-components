@@ -8,6 +8,7 @@
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "_definitions.h"
 #include "data_message.h"
+#include "get_retry.h"
 #include "message_router.h"
 #include "scan_outcome.h"
 
@@ -87,6 +88,8 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
  protected:
   IncomingMessage incoming_message;
   std::deque<std::unique_ptr<BaseTask>> data_task_queue;
+  /// The task sent last, kept until it ends so a dropped GET can go back to the queue.
+  std::unique_ptr<BaseTask> in_flight_task_;
 
   std::map<int, UpdateCallbackListener> recursive_update_listeners;
   std::vector<int> fan_level_property_ids_;
@@ -121,7 +124,7 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   int store_data_to_incoming_message(uint8_t data);
   void cleanup_after_task_complete(TaskEnd end);
   void send_ack_message();
-  void drop_data_message();
+  void drop_data_message(DataMessageCheck check);
 
   unsigned long task_start_time_ = 0;
   unsigned long task_ready_at_ms_ = 0;

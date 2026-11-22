@@ -230,6 +230,7 @@ void SECTouchComponent::process_task_queue() {
       ESP_LOGW(TAG, "Unknown task type in unified queue");
       break;
   }
+  this->in_flight_task_ = std::move(task_ptr);
   data_task_queue.pop_front();
 }
 
@@ -328,6 +329,7 @@ void SECTouchComponent::enter_scan_mode() {
     ESP_LOGW(TAG, "Entering scan mode — discarding %zu pending task(s)", this->data_task_queue.size());
   }
   this->data_task_queue.clear();
+  this->in_flight_task_.reset();
   this->incoming_message.reset();
   this->current_running_task_type = TaskType::NONE;
   this->task_start_time_ = 0;
@@ -517,14 +519,14 @@ where:
     char context[384];
     this->describe_dropped_message(buf, len, details, context, sizeof(context));
     ESP_LOGE(TAG_UART, "  [process_data] %s (%s). Task Failed", data_message_check_reason(check), context);
-    this->drop_data_message();
+    this->drop_data_message(check);
     return;
   }
   if (check == DataMessageCheck::DATA_CRC_MISMATCH || check == DataMessageCheck::DATA_CRC_NOT_A_NUMBER) {
     char context[384];
     this->describe_dropped_message(buf, len, "", context, sizeof(context));
     ESP_LOGW(TAG_UART, "  [process_data] %s (%s). Task Failed", data_message_check_reason(check), context);
-    this->drop_data_message();
+    this->drop_data_message(check);
     return;
   }
   if (check == DataMessageCheck::DATA_ROUTE_UNCHECKED) {
@@ -550,14 +552,25 @@ where:
 
 // A dropped data frame is still ACKed. Without the ACK the panel ignores the next request until the
 // watchdog fires, and it never resends a frame, so the ACK gives nothing up.
-void SECTouchComponent::drop_data_message() {
+// A GET whose reply this drops goes back to the front of the queue once, to be sent again after the ACK (issue #52).
+void SECTouchComponent::drop_data_message(DataMessageCheck check) {
+  std::unique_ptr<BaseTask> task = std::move(this->in_flight_task_);
   this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
   this->send_ack_message();
+
+  if (task == nullptr ||
+      !should_retry_get(task->get_task_type() == TaskType::GET_DATA, check, task->retried, this->scan_mode_active_)) {
+    return;
+  }
+  ESP_LOGI(TAG, "Sending the GET for property_id %d once more after dropping its reply", task->property_id);
+  task->retried = true;
+  this->data_task_queue.push_front(std::move(task));
 }
 
 void SECTouchComponent::cleanup_after_task_complete(TaskEnd end) {
   ESP_LOGD(TAG, "cleanup_after_task_complete called, end: %s", task_end_name(end));
   this->incoming_message.reset();
+  this->in_flight_task_.reset();
   this->current_running_task_type = TaskType::NONE;
   this->task_start_time_ = 0;
   this->scan_outcome_.record(end, this->scan_mode_active_);

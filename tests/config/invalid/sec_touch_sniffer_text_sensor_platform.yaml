@@ -1,21 +1,24 @@
-# The sniffer text sensor with an active scan range and its scan switch, as in
-# the full example in components/sec_touch/readme.md.
+# expect-error: sec_touch_sniffer moved out of text_sensor in v1.5.0.
+
+# The v1.4.0 text sensor platform is gone: any entry fails with the migration message.
 
 esphome:
-  name: sec-touch-sniffer-scan-switch
+  name: sec-touch-sniffer-text-sensor
 
 esp32:
   board: esp32dev
-
-logger:
-  # Compiles every ESP_LOG* call, so the compile test sees -Wformat warnings.
-  level: VERY_VERBOSE
 
 external_components:
   - source:
       type: local
       path: ../../../components
     components: [sec_touch, sec_touch_sniffer]
+
+wifi:
+  ssid: "fixture"
+  password: "fixture-password"
+
+web_server_base:
 
 uart:
   id: sec_touch_uart
@@ -31,7 +34,3 @@ text_sensor:
   - platform: sec_touch_sniffer
     sec_touch_id: sec_touch_component
     name: "Sniffer"
-    scan_start: 1
-    scan_end: 250
-    scan_switch:
-      name: "Sniffer Scan Active"

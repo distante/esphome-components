@@ -2,9 +2,8 @@
 #include "esphome/core/log.h"
 #include "esphome/core/hal.h"
 #include "json_chunk_writer.h"
-#include "sniffer_state.h"
 
-#ifdef USE_SEC_TOUCH_SNIFFER_WEB_PAGE
+#ifdef USE_ESP32
 #include "esphome/core/application.h"
 #endif
 
@@ -20,12 +19,11 @@ static uint32_t uptime_s() { return static_cast<uint32_t>(millis_64() / MS_PER_S
 SecTouchSniffer::SecTouchSniffer(SECTouchComponent *parent) : parent_(parent) {}
 
 void SecTouchSniffer::setup() {
-  if (!this->store_.allocate(this->web_page_)) {
+  if (!this->store_.allocate(/*with_history=*/true)) {
     ESP_LOGE(TAG, "Not enough heap for the property records");
     this->mark_failed();
     return;
   }
-  this->state_.reserve(MAX_STATE_LEN);
 
   this->parent_->register_message_tap([this](int command_id, int property_id, const std::string &raw_value) {
     this->on_message_(command_id, property_id, raw_value);
@@ -33,10 +31,9 @@ void SecTouchSniffer::setup() {
 
   this->parent_->register_queue_empty_listener([this]() { this->on_queue_empty_(); });
 
-  this->update_scan_switch_();
   this->disable_loop();
 
-#ifdef USE_SEC_TOUCH_SNIFFER_WEB_PAGE
+#ifdef USE_ESP32
   get_mac_address_into_buffer(this->mac_);
   format_hex_to(this->boot_, random_uint32());
   web_server_base::global_web_server_base->init();
@@ -46,7 +43,6 @@ void SecTouchSniffer::setup() {
 
 void SecTouchSniffer::dump_config() {
   ESP_LOGCONFIG(TAG, "SEC-Touch-Sniffer:");
-  ESP_LOGCONFIG(TAG, "  Web page: %s", YESNO(this->web_page_));
   ESP_LOGCONFIG(TAG, "  History: %s", this->store_.history().is_allocated() ? "on" : "off");
 }
 
@@ -69,17 +65,6 @@ void SecTouchSniffer::loop() {
   }
 }
 
-void SecTouchSniffer::update_scan_switch_() {
-  if (this->scan_switch_ != nullptr) {
-    this->scan_switch_->publish_state(this->is_scanning_);
-  }
-}
-
-void SecTouchSniffer::publish_records_() {
-  build_sniffer_state(this->store_, this->is_registered_(), this->state_);
-  this->publish_state(this->state_);
-}
-
 void SecTouchSniffer::start_scan(const ScanRun &run) {
   if (this->is_scanning_) {
     return;
@@ -99,7 +84,6 @@ void SecTouchSniffer::start_scan(const ScanRun &run) {
   this->scan_retry_pending_ = false;
   this->pending_query_id_ = NO_PENDING_QUERY;
   this->is_scanning_ = true;
-  this->update_scan_switch_();
   this->parent_->enter_scan_mode();
   // First task is submitted by on_queue_empty_() which fires immediately because
   // enter_scan_mode() cleared the queue and reset the running task state
@@ -120,8 +104,6 @@ void SecTouchSniffer::end_scan_(bool completed) {
   this->pending_query_id_ = NO_PENDING_QUERY;
   this->scan_completed_ = completed;
   this->is_scanning_ = false;
-  this->update_scan_switch_();
-  this->publish_records_();
   this->parent_->exit_scan_mode();
 }
 
@@ -209,18 +191,13 @@ void SecTouchSniffer::on_message_(int command_id, int property_id, const std::st
   if (result == RecordResult::RECORD_NEW) {
     ESP_LOGI(TAG, "NEW property_id %d (cmd=%d raw='%s' at=%" PRIu32 "s)", property_id, command_id, raw_value.c_str(),
              now_s);
-  } else {
-    ESP_LOGI(TAG, "property_id %d changed (cmd=%d raw='%s' at=%" PRIu32 "s, change %" PRIu32 ")", property_id,
-             command_id, raw_value.c_str(), now_s, this->store_.fields(property_id).change_count);
-  }
-
-  if (this->is_scanning_ || !is_listed_in_state(this->store_, property_id, this->is_registered_())) {
     return;
   }
-  this->publish_records_();
+  ESP_LOGI(TAG, "property_id %d changed (cmd=%d raw='%s' at=%" PRIu32 "s, change %" PRIu32 ")", property_id, command_id,
+           raw_value.c_str(), now_s, this->store_.fields(property_id).change_count);
 }
 
-#ifdef USE_SEC_TOUCH_SNIFFER_WEB_PAGE
+#ifdef USE_ESP32
 
 static SnifferRoute route_of(AsyncWebServerRequest *request) {
   SnifferMethod method = SnifferMethod::METHOD_OTHER;
@@ -333,7 +310,7 @@ void SecTouchSniffer::serve_scan_(httpd_req_t *req, bool start) {
   this->end_json_response_(req);
 }
 
-#endif  // USE_SEC_TOUCH_SNIFFER_WEB_PAGE
+#endif  // USE_ESP32
 
 }  // namespace sec_touch
 }  // namespace esphome

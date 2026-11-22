@@ -57,8 +57,8 @@ class PropertyStore {
   ///
   /// Heap, despite "avoid dynamic memory allocation": the sniffer is a development tool, flashed to discover
   /// properties rather than kept on every device. Each block is allocated once at setup and never freed, so the heap
-  /// does not fragment at runtime; separate blocks stay under 16 KB each, the pool exists only with the page, and a
-  /// failed allocation marks the component failed instead of crashing.
+  /// does not fragment at runtime; separate blocks stay under 16 KB each, and a failed allocation marks the component
+  /// failed instead of crashing.
   bool allocate(bool with_history) {
     if (this->fields_ == nullptr) {
       this->fields_.reset(new (std::nothrow) PropertyFields[PROPERTY_SLOTS]());

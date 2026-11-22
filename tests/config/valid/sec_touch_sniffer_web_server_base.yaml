@@ -1,8 +1,8 @@
-# The sniffer with web_page: true on web_server_base alone, without web_server: the history pool and the
-# /sniffer handler. The wifi credentials are placeholders: the build never connects.
+# A bare sec_touch_sniffer: block on web_server_base alone, without web_server: the /sniffer handler and the
+# history pool. The wifi credentials are placeholders: the build never connects.
 
 esphome:
-  name: sec-touch-sniffer-web-page
+  name: sec-touch-sniffer-server-base
 
 esp32:
   board: esp32dev
@@ -33,10 +33,4 @@ sec_touch:
   id: sec_touch_component
   uart_id: sec_touch_uart
 
-text_sensor:
-  - platform: sec_touch_sniffer
-    sec_touch_id: sec_touch_component
-    name: "Sniffer"
-    scan_start: 1
-    scan_end: 208
-    web_page: true
+sec_touch_sniffer:

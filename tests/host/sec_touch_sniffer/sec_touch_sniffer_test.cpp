@@ -3,13 +3,12 @@
 #include <algorithm>
 #include <cstdlib>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "../sec_touch/common.h"
 #include "esphome/components/sec_touch_sniffer/sec_touch_sniffer.h"
 #include "esphome/components/sec_touch_sniffer/scan_goal.h"
-#include "esphome/components/sec_touch_sniffer/sec_touch_sniffer_scan_switch.h"
-#include "esphome/components/sec_touch_sniffer/sniffer_state.h"
 #include "esphome/core/application.h"
 #include "esphome/core/hal.h"
 
@@ -21,9 +20,6 @@ namespace {
 constexpr int UNREGISTERED_ID = 133;
 /// An ID an entity registers: fan pair 1's level.
 constexpr int REGISTERED_ID = FAN_LEVEL_IDS[0];
-
-/// The text sensor state listing UNREGISTERED_ID with value "10".
-const std::string UNREGISTERED_STATE = std::to_string(UNREGISTERED_ID) + "=10";
 
 /// Another ID no entity registers, scanned right after UNREGISTERED_ID.
 constexpr int NEXT_UNREGISTERED_ID = UNREGISTERED_ID + 1;
@@ -41,29 +37,32 @@ std::vector<int> known_ids_ascending() {
   return ids;
 }
 
-/// The sniffer, with the scan object its page handler serves.
+/// The sniffer, with the records and the scan object its page handler serves.
 class TestableSniffer : public SecTouchSniffer {
  public:
   using SecTouchSniffer::SecTouchSniffer;
+  const PropertyStore &store() const { return this->store_; }
+  /// The previous raw values of `id`, newest first, as the page gets them.
+  std::vector<std::string> previous_values(int id) const {
+    std::vector<std::string> values;
+    this->store_.history().for_each_newest_first(
+        static_cast<uint8_t>(id), [&values](uint32_t, std::string_view raw) { values.emplace_back(raw); });
+    return values;
+  }
   /// The scan object the page would get now.
   ScanState scan() const { return scan_state(this->scan_fields_()); }
   /// The scan object a stop request would get now, as the page handler builds it.
   ScanState stop_reply() const { return scan_reply(this->scan_fields_(), /*start=*/false, DEFAULT_DISCOVER_RUN); }
 };
 
-/// A hub and a set-up sniffer on a fake UART, with every state the sniffer publishes.
+/// A hub and a set-up sniffer on a fake UART.
 struct SnifferRig {
   FakeUART uart;
   TestableSECTouch hub;
   TestableSniffer sniffer{&hub};
-  SecTouchSnifferScanSwitch scan_switch;
-  std::vector<std::string> published;
 
   SnifferRig() {
     this->hub.set_uart_parent(&this->uart);
-    this->scan_switch.set_parent(&this->sniffer);
-    this->sniffer.set_scan_switch(&this->scan_switch);
-    this->sniffer.add_on_state_callback([this](const std::string &state) { this->published.push_back(state); });
     this->sniffer.setup();
   }
 
@@ -152,35 +151,35 @@ struct SnifferRig {
 
 }  // namespace
 
-TEST(SecTouchSnifferTest, PublishesAPropertyTheHubHasNotRegistered) {
+TEST(SecTouchSnifferTest, RecordsAPropertyTheHubSends) {
   SnifferRig rig;
 
   rig.receive(UNREGISTERED_ID, "10");
 
-  EXPECT_EQ(rig.sniffer.get_state(), UNREGISTERED_STATE);
+  EXPECT_EQ(rig.sniffer.store().raw_value(UNREGISTERED_ID), "10");
 }
 
-TEST(SecTouchSnifferTest, ARepeatedIdenticalMessageIsNotPublishedAgain) {
-  SnifferRig rig;
-  rig.receive(UNREGISTERED_ID, "10");
-
-  rig.receive(UNREGISTERED_ID, "10");
-
-  EXPECT_EQ(rig.published, (std::vector<std::string>{UNREGISTERED_STATE}));
-}
-
-TEST(SecTouchSnifferTest, ARegisteredIdIsRecordedButNotListed) {
+TEST(SecTouchSnifferTest, RecordsARegisteredPropertyTheHubSends) {
   SnifferRig rig;
   rig.hub.register_manual_update_listener(REGISTERED_ID, [](int, int) {});
+  ASSERT_TRUE(rig.hub.is_property_registered(REGISTERED_ID));
 
-  rig.receive(REGISTERED_ID, "2");
-  rig.receive(UNREGISTERED_ID, "10");
+  rig.receive(REGISTERED_ID, "3");
 
-  EXPECT_EQ(rig.published, (std::vector<std::string>{UNREGISTERED_STATE}));
+  EXPECT_EQ(rig.sniffer.store().raw_value(REGISTERED_ID), "3");
 }
 
-// The state is published once, at the end, with everything the scan found; nothing is published while it runs.
-TEST(SecTouchSnifferTest, ACompletedScanPublishesOnceWithEverythingItFound) {
+// Always on: the page is always compiled in, and its records list each property's previous values.
+TEST(SecTouchSnifferTest, KeepsAHistoryOfPreviousRawValues) {
+  SnifferRig rig;
+  rig.receive(UNREGISTERED_ID, "10");
+
+  rig.receive(UNREGISTERED_ID, "11");
+
+  EXPECT_EQ(rig.sniffer.previous_values(UNREGISTERED_ID), std::vector<std::string>{"10"});
+}
+
+TEST(SecTouchSnifferTest, ACompletedScanRecordsEverythingItFound) {
   SnifferRig rig;
   rig.start_scan(discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID));
 
@@ -189,11 +188,11 @@ TEST(SecTouchSnifferTest, ACompletedScanPublishesOnceWithEverythingItFound) {
 
   EXPECT_FALSE(rig.sniffer.is_scanning());
   EXPECT_TRUE(rig.sniffer.scan().done);
-  EXPECT_EQ(rig.published, (std::vector<std::string>{UNREGISTERED_STATE + STATE_SEPARATOR +
-                                                     std::to_string(NEXT_UNREGISTERED_ID) + "=11"}));
+  EXPECT_EQ(rig.sniffer.store().raw_value(UNREGISTERED_ID), "10");
+  EXPECT_EQ(rig.sniffer.store().raw_value(NEXT_UNREGISTERED_ID), "11");
 }
 
-TEST(SecTouchSnifferTest, StoppingAScanPublishesOnceWithWhatItFoundSoFar) {
+TEST(SecTouchSnifferTest, StoppingAScanEndsItNotDone) {
   SnifferRig rig;
   rig.start_scan(discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID));
   rig.answer_scan_query(UNREGISTERED_ID, "10");
@@ -202,7 +201,6 @@ TEST(SecTouchSnifferTest, StoppingAScanPublishesOnceWithWhatItFoundSoFar) {
 
   EXPECT_FALSE(rig.sniffer.is_scanning());
   EXPECT_FALSE(rig.sniffer.scan().done);
-  EXPECT_EQ(rig.published, (std::vector<std::string>{UNREGISTERED_STATE}));
 }
 
 // Waits out SCAN_RETRY_DELAY_MS on the real clock.
@@ -218,8 +216,7 @@ TEST(SecTouchSnifferTest, ATimedOutScanQueryIsRetriedOnceThenSkipped) {
 
   EXPECT_EQ(rig.gets_sent_for(UNREGISTERED_ID), 2);
   EXPECT_FALSE(rig.sniffer.is_scanning());
-  // A record that only ever failed is not listed, so the end-of-scan state is empty.
-  EXPECT_EQ(rig.published, (std::vector<std::string>{""}));
+  EXPECT_EQ(rig.sniffer.store().fields(UNREGISTERED_ID).query_status, ScanOutcome::SCAN_OUTCOME_TIMEOUT);
 }
 
 // --- Scan goals ---
@@ -329,7 +326,6 @@ TEST(SecTouchSnifferTest, ARequestedStartWaitsForTheLoop) {
 
   rig.loop_sniffer();
   EXPECT_TRUE(rig.sniffer.is_scanning());
-  EXPECT_TRUE(rig.scan_switch.state);
 }
 
 TEST(SecTouchSnifferTest, ARequestedStartScansTheRequestedRun) {
@@ -343,16 +339,15 @@ TEST(SecTouchSnifferTest, ARequestedStartScansTheRequestedRun) {
   EXPECT_EQ(rig.gets_sent(), std::vector<int>{NEXT_UNREGISTERED_ID});
 }
 
-TEST(SecTouchSnifferTest, ARequestedStopEndsTheScanAndMovesTheSwitch) {
+TEST(SecTouchSnifferTest, ARequestedStopEndsTheScan) {
   SnifferRig rig;
   rig.start_scan(discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID));
-  ASSERT_TRUE(rig.scan_switch.state);
+  ASSERT_TRUE(rig.sniffer.is_scanning());
 
   rig.sniffer.request_scan(false);
   rig.loop_sniffer();
 
   EXPECT_FALSE(rig.sniffer.is_scanning());
-  EXPECT_FALSE(rig.scan_switch.state);
 }
 
 TEST(SecTouchSnifferTest, AStartDuringAScanChangesNothing) {
@@ -372,13 +367,16 @@ TEST(SecTouchSnifferTest, AStartDuringAScanChangesNothing) {
 
 TEST(SecTouchSnifferTest, AStopWhileIdleChangesNothing) {
   SnifferRig rig;
+  rig.start_scan(discover(UNREGISTERED_ID, UNREGISTERED_ID));
+  rig.answer_scan_query(UNREGISTERED_ID, "10");
+  ASSERT_TRUE(rig.sniffer.scan().done);
 
   rig.sniffer.request_scan(false);
   rig.loop_sniffer();
 
   EXPECT_FALSE(rig.sniffer.is_scanning());
-  // Stopping an idle scan would publish the records; an ignored stop publishes nothing.
-  EXPECT_TRUE(rig.published.empty());
+  // Ending an idle scan again would mark the completed run stopped.
+  EXPECT_TRUE(rig.sniffer.scan().done);
 }
 
 TEST(SecTouchSnifferTest, ARequestIsAppliedOnce) {
@@ -389,25 +387,6 @@ TEST(SecTouchSnifferTest, ARequestIsAppliedOnce) {
 
   rig.loop_sniffer();
 
-  EXPECT_FALSE(rig.sniffer.is_scanning());
-}
-
-// No YAML range: the switch starts a discover of the default range through the same request path.
-TEST(SecTouchSnifferTest, TheSwitchStartsADiscoverOfTheDefaultRange) {
-  SnifferRig rig;
-
-  rig.scan_switch.turn_on();
-  EXPECT_FALSE(rig.sniffer.is_scanning());
-  rig.loop_sniffer();
-  rig.loop_hub();
-  rig.send_scan_query(SecTouchSniffer::SCAN_NEXT_DELAY_MS);
-
-  EXPECT_TRUE(rig.sniffer.is_scanning());
-  EXPECT_TRUE(rig.scan_switch.state);
-  EXPECT_EQ(rig.gets_sent(), std::vector<int>{first_scan_id(DEFAULT_DISCOVER_RUN)});
-
-  rig.scan_switch.turn_off();
-  rig.loop_sniffer();
   EXPECT_FALSE(rig.sniffer.is_scanning());
 }
 

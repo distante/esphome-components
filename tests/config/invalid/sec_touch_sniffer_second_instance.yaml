@@ -1,0 +1,36 @@
+# expect-error: expected a dictionary.
+
+# The sniffer is single-instance (no MULTI_CONF): its page has one /sniffer URL, so a second block, written as a
+# list, fails. The wifi credentials are placeholders.
+
+esphome:
+  name: sec-touch-sniffer-second
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch, sec_touch_sniffer]
+
+wifi:
+  ssid: "fixture"
+  password: "fixture-password"
+
+web_server_base:
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  id: sec_touch_component
+  uart_id: sec_touch_uart
+
+sec_touch_sniffer:
+  - id: sniffer
+  - id: second_sniffer

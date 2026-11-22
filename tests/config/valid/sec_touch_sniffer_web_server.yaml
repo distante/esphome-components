@@ -1,5 +1,6 @@
-# The sniffer page next to web_server with auth: web_server loads web_server_base, and the /sniffer handler,
-# added with add_handler(), inherits its auth. The wifi credentials are placeholders: the build never connects.
+# The sniffer next to web_server with auth: web_server loads web_server_base, and the /sniffer handler,
+# added with add_handler(), inherits its auth. Both IDs are given here; a bare block picks them itself.
+# The wifi credentials are placeholders: the build never connects.
 
 esphome:
   name: sec-touch-sniffer-web-server
@@ -36,12 +37,6 @@ sec_touch:
   id: sec_touch_component
   uart_id: sec_touch_uart
 
-text_sensor:
-  - platform: sec_touch_sniffer
-    sec_touch_id: sec_touch_component
-    name: "Sniffer"
-    scan_start: 1
-    scan_end: 208
-    scan_switch:
-      name: "Sniffer Scan"
-    web_page: true
+sec_touch_sniffer:
+  id: sniffer
+  sec_touch_id: sec_touch_component

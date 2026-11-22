@@ -152,7 +152,7 @@
 <script type="module">
 import { applyResponse, changeFeed, emptyCopy, rowsOf, withScan } from "./records.mjs";
 import { createPoller, resyncReason, sinceFor } from "./poll.mjs";
-import { allPass, visibleIds } from "./filters.mjs";
+import { allPass, feedIds, visibleIds } from "./filters.mjs";
 import { changedSinceMark, markChanges, markNow } from "./mark.mjs";
 import { scanProgress } from "./scan_progress.mjs";
 import {
@@ -623,8 +623,8 @@ function renderMark() {
   );
 }
 
-function renderFeed(visible) {
-  const entries = changeFeed(copy, mutes).filter((entry) => visible.has(entry.id)).slice(0, FEED_LENGTH);
+function renderFeed(listed) {
+  const entries = changeFeed(copy, mutes).filter((entry) => listed.has(entry.id)).slice(0, FEED_LENGTH);
   if (entries.length === 0) {
     $("feed").replaceChildren(el("span", { class: "mute" }, "none yet"));
     return;
@@ -710,7 +710,7 @@ function render() {
   $("f-statuses").classList.toggle("faded", colourBy !== "status");
   renderGrid(rowsById, visible);
   renderMark();
-  renderFeed(visible);
+  renderFeed(feedIds(CATALOGUE, rows, filter, now, mark));
   renderDrawer(rowsById);
 }
 

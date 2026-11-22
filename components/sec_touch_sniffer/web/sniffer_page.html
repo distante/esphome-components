@@ -2,8 +2,7 @@
 <!--
   The sniffer page (.specs/sniffer.md, "Page"). The build (page_bundle.py) inlines the ./*.mjs modules it imports
   and gzips it into flash; the device serves it at GET /sniffer. catalogue.mjs is no file: page_bundle.py generates
-  it from sec_touch's protocol_ids.h and fan_level.h and this component's property_slots.h and scan_goal.h, so the
-  page only runs bundled. To work on it without flashing,
+  it from C++ headers (its docstring), so the page only runs bundled. To work on it without flashing,
   bundle it and open it with ?device=http://<device-ip> (readme.md, "Tests"): the data endpoints allow any origin.
 -->
 <html lang="en">

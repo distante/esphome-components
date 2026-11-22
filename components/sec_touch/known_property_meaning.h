@@ -32,6 +32,21 @@ constexpr bool is_known_property(int id) {
   return contains(FAN_LEVEL_IDS, id) || contains(FAN_LABEL_IDS, id) || contains(GLOBAL_SETTING_IDS, id);
 }
 
+/// The highest known property ID: the largest ID of the arrays is_known_property() reads.
+constexpr int max_known_property_id() {
+  int max = 0;
+  for (int id : FAN_LEVEL_IDS) {
+    max = id > max ? id : max;
+  }
+  for (int id : FAN_LABEL_IDS) {
+    max = id > max ? id : max;
+  }
+  for (int id : GLOBAL_SETTING_IDS) {
+    max = id > max ? id : max;
+  }
+  return max;
+}
+
 namespace known_property_detail {
 
 constexpr bool is_ascii_space(char c) {

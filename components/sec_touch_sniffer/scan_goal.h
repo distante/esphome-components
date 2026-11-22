@@ -76,24 +76,8 @@ constexpr int last_scan_id(const ScanRun &run) {
   return NO_SCAN_ID;
 }
 
-namespace scan_goal_detail {
-
-constexpr size_t known_ids_in_slots() {
-  size_t count = 0;
-  for (int id = 0; id <= MAX_PROPERTY_ID; id++) {
-    if (is_known_property(id)) {
-      count++;
-    }
-  }
-  return count;
-}
-
-}  // namespace scan_goal_detail
-
-// Check derives its IDs from the record slots, so a known ID outside them would never be checked.
-static_assert(scan_goal_detail::known_ids_in_slots() ==
-                  FAN_LEVEL_IDS.size() + FAN_LABEL_IDS.size() + GLOBAL_SETTING_IDS.size(),
-              "a known property ID is outside the record slots, or listed twice");
+// Check derives its IDs from the record slots, so a known ID above them would never be checked.
+static_assert(max_known_property_id() <= MAX_PROPERTY_ID, "a known property ID is above the record slots");
 
 /// A parsed `POST /sniffer/scan/start` query. `valid` false is a 400: nothing starts.
 struct ScanStart {

@@ -94,7 +94,6 @@ void SecTouchSniffer::start_scan(const ScanRun &run) {
   this->scan_from_ = run.from;
   this->scan_to_ = run.to;
   this->current_scan_id_ = first_scan_id(run);
-  this->scan_completed_ = false;
   this->scan_ran_ = true;
   this->scan_retry_pending_ = false;
   this->pending_query_id_ = NO_PENDING_QUERY;
@@ -318,7 +317,9 @@ void SecTouchSniffer::serve_scan_(httpd_req_t *req, bool start) {
     if (!parsed.valid) {
       // Nothing starts.
       this->begin_json_response_(req, HTTPD_400);
-      this->json_.raw(R"({"error":"from and to must both be given, 0-255, with from <= to"})");
+      this->json_.raw(R"({"error":"from and to must both be given, 0-)");
+      this->json_.number(MAX_PROPERTY_ID);
+      this->json_.raw(R"(, with from <= to"})");
       this->end_json_response_(req);
       return;
     }

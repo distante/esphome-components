@@ -48,7 +48,8 @@
   .cell.cursor { outline:3px solid var(--acc); }
   .cell.sel { outline:2px solid red; }
   .flash { animation:flash 2s; }
-  @keyframes flash { from { box-shadow:inset 0 0 0 40px #ffe58a; } to { box-shadow:none; } }
+  /* No `to`: the flash fades into the cell's own box-shadow, the mark's ring on a marked cell. */
+  @keyframes flash { from { box-shadow:inset 0 0 0 40px #ffe58a; } }
   #side { width:340px; flex:none; overflow:auto; }
   .box { background:#fff; border:1px solid var(--line); padding:8px; margin-bottom:10px; }
   #drawer .value { font-size:20px; margin:6px 0; word-break:break-all; }

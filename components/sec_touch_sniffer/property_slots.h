@@ -1,6 +1,8 @@
 #pragma once
 
 // Plain C++, no ESPHome includes: shared by the property store and the history pool.
+// page_bundle.py reads the default discover range from this header: keep its declarations in the forms the comment at
+// the top of ../sec_touch/protocol_ids.h lists.
 
 #include <cstddef>
 #include <cstdint>

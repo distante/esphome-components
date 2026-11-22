@@ -170,6 +170,18 @@ def test_the_catalogue_module_exports_the_parsed_catalogue_as_one_const() -> Non
     assert json.loads(module.removeprefix(prefix).rstrip().removesuffix(";")) == parse_catalogue()
 
 
+def test_a_name_holding_html_cannot_close_the_module_script(tmp_path: Path, header_dir: Path) -> None:
+    web_dir = tmp_path / "web"
+    write_page(web_dir, f'import {{ CATALOGUE }} from "./{CATALOGUE_MODULE}";\nconsole.log(CATALOGUE);\n')
+    edit(header_dir / PROTOCOL_IDS, '"Wohnzimmer"', '"</script><!--"')
+
+    page = bundle_page(web_dir, header_dir)
+
+    assert page.count("</script") == 1
+    assert "<!--" not in page
+    assert parse_catalogue(header_dir)["labelNames"][7] == "</script><!--"
+
+
 def test_the_bundled_page_inlines_the_catalogue() -> None:
     page = bundle_page()
 

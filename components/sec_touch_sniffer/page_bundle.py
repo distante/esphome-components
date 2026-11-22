@@ -111,9 +111,10 @@ class _Header:
             return text
         if token in self.strings:
             return self.strings[token]
-        if re.fullmatch(r"\d+", token) or token in self.ints:
+        try:
             return self._int(token, where)
-        raise ValueError(f"{where}: cannot read {token!r} as a literal or a known constant")
+        except ValueError:
+            raise ValueError(f"{where}: cannot read {token!r} as a literal or a known constant") from None
 
     def _sized(self, size: str, items: list, name: str, where: str) -> list:
         declared = self._int(size, f"{where}: {name}")
@@ -192,8 +193,13 @@ def parse_catalogue(header_dir: Path = HEADER_DIR) -> dict:
 
 
 def catalogue_module(header_dir: Path = HEADER_DIR) -> str:
-    """The source of the virtual catalogue.mjs: one `CATALOGUE` const, built from the headers at every call."""
-    return f"export const CATALOGUE = {json.dumps(parse_catalogue(header_dir), ensure_ascii=False)};\n"
+    """The source of the virtual catalogue.mjs: one `CATALOGUE` const, built from the headers at every call.
+
+    `<` is written as \\u003c (the same string to JSON and JS) so no name can close the page's inline script with
+    `</script` or open an HTML comment with `<!--`.
+    """
+    catalogue = json.dumps(parse_catalogue(header_dir), ensure_ascii=False).replace("<", "\\u003c")
+    return f"export const CATALOGUE = {catalogue};\n"
 
 
 def bundle_page(web_dir: Path = WEB_DIR, header_dir: Path = HEADER_DIR) -> str:

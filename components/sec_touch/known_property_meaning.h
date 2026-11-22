@@ -115,19 +115,20 @@ static_assert(GLOBAL_SETTING_IDS.size() == 3,
 
 /// The meaning of a known property's raw value, or nullopt for an unknown property.
 inline std::optional<KnownMeaning> known_property_meaning(int id, std::string_view raw) {
-  using namespace known_property_detail;
   if (!is_known_property(id)) {
     return std::nullopt;
   }
-  const std::string_view trimmed = trim_ascii(raw);
+  const std::string_view trimmed = known_property_detail::trim_ascii(raw);
   if (contains(FAN_LEVEL_IDS, id)) {
-    return name_or_unexpected(level_name(whole_decimal(trimmed)), trimmed);
+    return known_property_detail::name_or_unexpected(
+        known_property_detail::level_name(known_property_detail::whole_decimal(trimmed)), trimmed);
   }
   if (contains(FAN_LABEL_IDS, id)) {
-    return name_or_unexpected(label_name(whole_decimal(trimmed)), trimmed);
+    return known_property_detail::name_or_unexpected(label_name(known_property_detail::whole_decimal(trimmed)),
+                                                     trimmed);
   }
   if (id == SUMMER_VENTILATION_PROPERTY_ID) {
-    return name_or_unexpected(summer_ventilation_name(trimmed), trimmed);
+    return known_property_detail::name_or_unexpected(known_property_detail::summer_ventilation_name(trimmed), trimmed);
   }
   if (id == DATE_PROPERTY_ID || id == CLOCK_PROPERTY_ID) {
     return KnownMeaning{MeaningKind::AS_SENT, trimmed};

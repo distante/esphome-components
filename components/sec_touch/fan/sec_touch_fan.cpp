@@ -63,13 +63,12 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
       return;
     }
 
-    if (new_value < 0 || new_value >= NAME_MAPPING_COUNT) {
+    const char *new_label = label_name(new_value);
+    if (new_label == nullptr) {
       ESP_LOGW(TAG, "Value %d is not yet handled for fan label_id %d (level_id %d)", new_value, this->label_id,
                this->level_id);
       return;
     }
-
-    auto new_label = NAME_MAPPING[new_value];
 
     const std::string &current_label = label_text_sensor->get_state();  // Get the current state of the text sensor
     if (current_label == new_label) {

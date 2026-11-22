@@ -21,7 +21,7 @@ Every tool is pinned. `.pre-commit-config.yaml` pins each hook, and pre-commit i
 
 # Tests
 
-All five layers run in CI ([.github/workflows/tests.yml](.github/workflows/tests.yml)) on every PR and push to `main`.
+Every row of the table below runs in CI ([.github/workflows/tests.yml](.github/workflows/tests.yml)) on every PR and push to `main`.
 
 One-time setup, from the repo root:
 
@@ -38,6 +38,7 @@ pip install -r requirements_test.txt
 | Config validation (`esphome config` + pytest) | `pytest tests/config` | `tests/config/{valid,invalid}/*.yaml` |
 | Config compile (`esphome compile` + pytest, opt-in) | `pytest tests/config --compile -m compile` | `tests/config/valid/*.yaml` |
 | Page JS (`node --test`, Node 22, no dependencies) | `npm test` | `components/<component>/web/*.test.mjs` |
+| Build scripts (pytest; the sniffer page bundle and its catalogue) | `pytest tests/python` | `tests/python/test_*.py` |
 
 Which layer a change needs, and the TDD With teeth steps: [.claude/skills/coding-standards/SKILL.md](.claude/skills/coding-standards/SKILL.md#tests).
 

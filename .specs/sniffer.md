@@ -87,7 +87,7 @@ One **property record** per property ID:
 
 Decided in [Where does the known-property catalogue live, and how does the page decode known values?](https://github.com/distante/esphome-components/issues/68).
 
-**One source.** A pure C++ header in `components/sec_touch/` (no ESPHome includes) holds the known property IDs and their meaning tables. `protocol_ids.h`, already pure and holding `FAN_LEVEL_IDS` and `FAN_LABEL_IDS`, grows into it, or a new pure header sits beside it. The component, the sniffer and the page all read it; nothing is copied by hand.
+**One source.** Two pure C++ headers in `components/sec_touch/` (no ESPHome includes) hold the known property IDs and their meaning tables: `protocol_ids.h`, already pure and holding `FAN_LEVEL_IDS` and `FAN_LABEL_IDS`, grows into the catalogue, and the level and preset names sit in `fan_level.h`, beside the level constants they are keyed by. Each value is still defined once. The component, the sniffer and the page all read them; nothing is copied by hand.
 
 | Known property | IDs | Expected meaning |
 |---|---|---|
@@ -97,12 +97,12 @@ Decided in [Where does the known-property catalogue live, and how does the page 
 | Date | 1 | the value as sent |
 | Clock | 2 | the value as sent |
 
-- **Moves into the header:** `GLOBAL_SETTING_IDS`, the 48/1/2 ID constants and `NAME_MAPPING` out of `_definitions.h`, and the six preset names of `FanModeList` (`fan/_fan_mode.cpp`, behind an ESPHome include), keyed by the `fan/fan_level.h` constants. The header also names levels 1–6 and 0 (off) and 255 (not connected), which have no names today. The component keeps using them from there.
+- **Moves into the headers:** `GLOBAL_SETTING_IDS`, the 48/1/2 ID constants and `NAME_MAPPING` out of `_definitions.h` into `protocol_ids.h`, and the six preset names of `FanModeList` (`fan/_fan_mode.cpp`, behind an ESPHome include) into `components/sec_touch/fan_level.h` (moved out of `fan/`, which ESPHome copies only into builds that load the fan platform), beside the level constants they are keyed by. `fan_level.h` also names levels 1–6 and 0 (off) and 255 (not connected), which have no names today. The component keeps using them from there.
 - **Left as is:** the Python copy of the fan IDs in `sec_touch/__init__.py`.
 - **Matching.** Levels and labels match the trimmed raw value read as a whole decimal integer. Property 48 matches the raw string `0A00`/`0800`, not the `0`/`800` the component's `atoi` parse yields. Date and clock always match and show the trimmed value.
 - **Unexpected value.** A known property whose value matches no entry shows as `unexpected value x` (`x` the trimmed raw value). That also covers corrupted values. There are no further decode rules.
 - **Device:** the sniffer uses the known-ID list to pick what a scan queries.
-- **Page:** `page_bundle.py` parses the header at every build and generates a **virtual** module, `catalogue.mjs`, with the IDs and meanings. The resolver serves that name from memory instead of `web/`; no file is written. Only `sniffer_page.html` imports it. Tested modules (export, check cards, discover filtering) take the catalogue as an argument, so their `node --test` suites pass a fixture. A Python test covers the header parse.
+- **Page:** `page_bundle.py` parses both headers at every build and generates a **virtual** module, `catalogue.mjs`, with the IDs and meanings. The resolver serves that name from memory instead of `web/`; no file is written. Only `sniffer_page.html` imports it. Tested modules (export, check cards, discover filtering) take the catalogue as an argument, so their `node --test` suites pass a fixture. A Python test covers the header parse.
 
 ---
 

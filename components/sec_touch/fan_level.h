@@ -1,0 +1,71 @@
+#pragma once
+
+// Plain C++, no ESPHome includes: the values of a fan's level property and their names, shared by the fan component,
+// FanModeEnum, protocol_ids.h and tests/cpp. It sits in the component root, not in fan/, because ESPHome copies fan/
+// only into builds that load the fan platform.
+// components/sec_touch_sniffer/page_bundle.py parses this file with protocol_ids.h at every build, so the declaration
+// forms and limits listed at the top of protocol_ids.h bind this file too.
+
+#include <array>
+
+namespace esphome {
+namespace sec_touch {
+
+// Values of a fan's level property. The SEC-Touch protocol fixes them.
+
+/// Turns the fan off. The Normal preset's range starts here too.
+constexpr int OFF_LEVEL = 0;
+/// Level a Normal preset carries: the start of its range, OFF_LEVEL..MAX_NORMAL_LEVEL.
+constexpr int NORMAL_PRESET_LEVEL = OFF_LEVEL;
+/// Continuous ventilation runs at MIN_NORMAL_LEVEL..MAX_NORMAL_LEVEL; split mode's slider covers the same range.
+constexpr int MIN_NORMAL_LEVEL = 1;
+constexpr int MAX_NORMAL_LEVEL = 6;
+/// Special modes, each one a single level.
+constexpr int BURST_LEVEL = 7;
+constexpr int AUTOMATIC_HUMIDITY_LEVEL = 8;
+constexpr int AUTOMATIC_CO2_LEVEL = 9;
+constexpr int AUTOMATIC_TIME_LEVEL = 10;
+constexpr int SLEEP_LEVEL = 11;
+/// Highest level the panel reports for a running fan.
+constexpr int MAX_LEVEL = SLEEP_LEVEL;
+/// Level the panel reports when no fan is connected to the slot.
+constexpr int NOT_CONNECTED_LEVEL = 255;
+
+inline bool is_normal_level(int level) { return level >= MIN_NORMAL_LEVEL && level <= MAX_NORMAL_LEVEL; }
+
+// Names of the fan presets (FanModeEnum) and of the level each one carries, keyed by the levels above.
+constexpr const char *NORMAL_PRESET_NAME = "Normal";
+constexpr const char *BURST_NAME = "Burst";
+constexpr const char *AUTOMATIC_HUMIDITY_NAME = "Automatic Humidity";
+constexpr const char *AUTOMATIC_CO2_NAME = "Automatic CO2";
+constexpr const char *AUTOMATIC_TIME_NAME = "Automatic Time";
+constexpr const char *SLEEP_NAME = "Sleep";
+constexpr const char *OFF_NAME = "off";
+constexpr const char *NOT_CONNECTED_NAME = "not connected";
+
+/// A fan level value and its name.
+struct LevelName {
+  int level;
+  const char *name;
+};
+
+// Every level a fan's level property can report. Levels 2 to 5 have no constant above: they sit inside
+// MIN_NORMAL_LEVEL..MAX_NORMAL_LEVEL, so their entries spell the level out.
+constexpr std::array<LevelName, 13> LEVEL_NAMES = {{
+    {OFF_LEVEL, OFF_NAME},
+    {MIN_NORMAL_LEVEL, "level 1"},
+    {2, "level 2"},
+    {3, "level 3"},
+    {4, "level 4"},
+    {5, "level 5"},
+    {MAX_NORMAL_LEVEL, "level 6"},
+    {BURST_LEVEL, BURST_NAME},
+    {AUTOMATIC_HUMIDITY_LEVEL, AUTOMATIC_HUMIDITY_NAME},
+    {AUTOMATIC_CO2_LEVEL, AUTOMATIC_CO2_NAME},
+    {AUTOMATIC_TIME_LEVEL, AUTOMATIC_TIME_NAME},
+    {SLEEP_LEVEL, SLEEP_NAME},
+    {NOT_CONNECTED_LEVEL, NOT_CONNECTED_NAME},
+}};
+
+}  // namespace sec_touch
+}  // namespace esphome

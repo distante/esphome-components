@@ -1,19 +1,19 @@
 
 #include "_fan_mode.h"
 #include "vector"
-#include "fan_level.h"
+#include "../fan_level.h"
 
 namespace level = esphome::sec_touch;
 
 // Define the global static FanModeList that preserves the intended order
 static const std::vector<std::pair<FanModeEnum::FanMode, FanModeEnum::FanModeData>> FanModeList = {
-    {FanModeEnum::FanMode::NORMAL, {"Normal", level::NORMAL_PRESET_LEVEL, level::MAX_NORMAL_LEVEL}},
-    {FanModeEnum::FanMode::BURST, {"Burst", level::BURST_LEVEL, esphome::nullopt}},
+    {FanModeEnum::FanMode::NORMAL, {level::NORMAL_PRESET_NAME, level::NORMAL_PRESET_LEVEL, level::MAX_NORMAL_LEVEL}},
+    {FanModeEnum::FanMode::BURST, {level::BURST_NAME, level::BURST_LEVEL, esphome::nullopt}},
     {FanModeEnum::FanMode::AUTOMATIC_HUMIDITY,
-     {"Automatic Humidity", level::AUTOMATIC_HUMIDITY_LEVEL, esphome::nullopt}},
-    {FanModeEnum::FanMode::AUTOMATIC_CO2, {"Automatic CO2", level::AUTOMATIC_CO2_LEVEL, esphome::nullopt}},
-    {FanModeEnum::FanMode::AUTOMATIC_TIME, {"Automatic Time", level::AUTOMATIC_TIME_LEVEL, esphome::nullopt}},
-    {FanModeEnum::FanMode::SLEEP, {"Sleep", level::SLEEP_LEVEL, esphome::nullopt}},
+     {level::AUTOMATIC_HUMIDITY_NAME, level::AUTOMATIC_HUMIDITY_LEVEL, esphome::nullopt}},
+    {FanModeEnum::FanMode::AUTOMATIC_CO2, {level::AUTOMATIC_CO2_NAME, level::AUTOMATIC_CO2_LEVEL, esphome::nullopt}},
+    {FanModeEnum::FanMode::AUTOMATIC_TIME, {level::AUTOMATIC_TIME_NAME, level::AUTOMATIC_TIME_LEVEL, esphome::nullopt}},
+    {FanModeEnum::FanMode::SLEEP, {level::SLEEP_NAME, level::SLEEP_LEVEL, esphome::nullopt}},
 };
 
 // Static function to get a reference to the FanModeList

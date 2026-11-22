@@ -47,6 +47,8 @@ class TestableSniffer : public SecTouchSniffer {
   using SecTouchSniffer::SecTouchSniffer;
   /// The scan object the page would get now.
   ScanState scan() const { return scan_state(this->scan_fields_()); }
+  /// The scan object a stop request would get now, as the page handler builds it.
+  ScanState stop_reply() const { return scan_reply(this->scan_fields_(), /*start=*/false, DEFAULT_DISCOVER_RUN); }
 };
 
 /// A hub and a set-up sniffer on a fake UART, with every state the sniffer publishes.
@@ -281,6 +283,19 @@ TEST(SecTouchSnifferTest, AStartAfterACompletedRunIsNotDone) {
   rig.start_scan(run);
 
   EXPECT_FALSE(rig.sniffer.scan().done);
+}
+
+TEST(SecTouchSnifferTest, AStopReplyMidRunAfterACompletedRunIsNotDone) {
+  SnifferRig rig;
+  rig.start_scan(discover(UNREGISTERED_ID, UNREGISTERED_ID));
+  rig.answer_scan_query(UNREGISTERED_ID, "10");
+  ASSERT_TRUE(rig.sniffer.scan().done);
+
+  rig.start_scan(discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID));
+  const ScanState reply = rig.sniffer.stop_reply();
+
+  EXPECT_FALSE(reply.done);
+  EXPECT_EQ(reply.next, UNREGISTERED_ID);
 }
 
 TEST(SecTouchSnifferTest, DuringTheGapBeforeAQueryNextNamesThatId) {

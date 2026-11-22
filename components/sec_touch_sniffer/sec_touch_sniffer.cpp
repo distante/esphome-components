@@ -94,6 +94,7 @@ void SecTouchSniffer::start_scan(const ScanRun &run) {
   this->scan_from_ = run.from;
   this->scan_to_ = run.to;
   this->current_scan_id_ = first_scan_id(run);
+  this->scan_completed_ = false;
   this->scan_ran_ = true;
   this->scan_retry_pending_ = false;
   this->pending_query_id_ = NO_PENDING_QUERY;

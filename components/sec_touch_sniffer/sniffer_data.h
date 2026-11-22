@@ -150,7 +150,8 @@ struct ScanFields {
   /// A scan was started since boot.
   bool ran;
   bool active;
-  /// The last ended run covered all of its IDs. Each run's end sets it.
+  /// The last ended run covered all of its IDs. Each run's end sets it; a start clears it, so a stop reply mid-run
+  /// is not done.
   bool completed;
   /// The running or last run.
   ScanRun run;

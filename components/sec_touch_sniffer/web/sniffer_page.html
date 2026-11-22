@@ -2,7 +2,7 @@
 <!--
   The sniffer page (.specs/sniffer.md, "Page"). The build (page_bundle.py) inlines the ./*.mjs modules it imports
   and gzips it into flash; the device serves it at GET /sniffer. catalogue.mjs is no file: page_bundle.py generates
-  it from sec_touch's protocol_ids.h and fan_level.h, so the page only runs bundled. To work on it without flashing,
+  it from C++ headers (its docstring), so the page only runs bundled. To work on it without flashing,
   bundle it and open it with ?device=http://<device-ip> (readme.md, "Tests"): the data endpoints allow any origin.
 -->
 <html lang="en">
@@ -13,6 +13,8 @@
 <style>
   :root { --bg:#fafafa; --fg:#1d1d1f; --mute:#6e6e73; --line:#ddd; --acc:#0a66c2; --bad:#c0392b; --ok:#1e8449; }
   * { box-sizing:border-box; }
+  /* Beats the display of .row, .cards and the rest, so `hidden` always hides. */
+  [hidden] { display:none !important; }
   body { margin:0; font:13px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--fg); padding:0 12px 24px; }
   h1 { font-size:15px; margin:10px 0; }
   button, input, select, textarea { font:inherit; }
@@ -48,6 +50,17 @@
   #feed { max-height:55vh; overflow:auto; }
   #feed div { cursor:pointer; border-bottom:1px solid var(--line); padding:2px 0; }
   .s-ok { color:var(--ok); } .s-nak { color:var(--bad); } .s-timeout { color:#b9770e; } .s-unqueried { color:#999; }
+  .bigtabs { display:flex; margin:8px 0; border-bottom:2px solid var(--line); }
+  .bigtabs button { flex:1; border:none; background:none; padding:8px 16px; font-size:14px;
+    border-bottom:3px solid transparent; margin-bottom:-2px; text-align:left; }
+  .bigtabs button.on { border-bottom-color:var(--acc); font-weight:600; }
+  .bigtabs small { font-weight:400; color:var(--mute); font-size:12px; }
+  #range input { width:4em; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:10px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:6px; padding:10px; }
+  .card h3 { margin:0 0 6px; font-size:14px; }
+  .card .big { font-size:18px; }
+  .card .gap { margin-top:6px; }
   @media (max-width:900px) { #main { flex-direction:column; } #side { width:100%; } }
 </style>
 </head>
@@ -60,11 +73,19 @@
   <button id="export-json">Export JSON</button>
   <button id="export-csv">Export CSV</button>
 </div>
+<div id="goal-tabs" class="bigtabs"></div>
 <div id="scan" class="row" hidden>
   <button id="scan-toggle"></button>
+  <span id="range">
+    IDs <input id="range-from" inputmode="numeric" aria-label="from ID">
+    – <input id="range-to" inputmode="numeric" aria-label="to ID">
+    <span id="range-error" class="unexpected"></span>
+  </span>
   <div class="bar grow"><i id="scan-bar"></i></div>
   <span id="scan-label" class="mute"></span>
 </div>
+<div id="check-view" class="cards" hidden></div>
+<div id="discover-view">
 <div class="row">
   <input id="f-query" placeholder="ID, value or note…" style="width:170px">
   <label><input id="f-hide-reg" type="checkbox"> hide registered</label>
@@ -87,11 +108,21 @@
     <div id="feed"></div>
   </div>
 </div>
+</div>
 <script type="module">
-import { applyResponse, changeFeed, emptyCopy, rowsOf } from "./records.mjs";
+import { applyResponse, changeFeed, emptyCopy, rowsOf, withScan } from "./records.mjs";
 import { createPoller, resyncReason, sinceFor } from "./poll.mjs";
 import { allPass, matchesFilter } from "./filters.mjs";
 import { scanProgress } from "./scan_progress.mjs";
+import {
+  acceptedRange,
+  rangeError,
+  scanButtonLabel,
+  scanReply,
+  scanStartPath,
+  switchStopsScan,
+} from "./scan_control.mjs";
+import { checkCards } from "./check_cards.mjs";
 import { exportCsv, exportJson } from "./export.mjs";
 import { deviceKey, LAST_MAC_KEY, parseStored, storedText } from "./storage.mjs";
 import { STATUS_COLOURS, TYPE_COLOURS } from "./colours.mjs";
@@ -111,6 +142,16 @@ const CHANGED_WITHIN_PRESETS = [
   [5 * MINUTE_MS, "changed < 5 min"],
   [HOUR_MS, "changed < 1 h"],
 ];
+/** The goals as the device names them. */
+const GOALS = CATALOGUE.goals;
+/** The page tabs, as [goal, title, what the goal does]. */
+const GOAL_TABS = [
+  [GOALS.discover, "Discover", "find unknown properties"],
+  [GOALS.check, "Check", "confirm known properties"],
+];
+const SWITCH_STOPS_SCAN = "Switching stops the running scan";
+/** The registered badge's tooltip, in discover's drawer and on check's fan cards. */
+const REGISTERED_TITLE = "registered: polled by the hub for this YAML";
 
 // Empty on the device; `?device=http://<ip>` while working on the page from a local server.
 const DEVICE_URL = new URLSearchParams(location.search).get("device") ?? "";
@@ -141,6 +182,12 @@ let mac = null;
 let copy = emptyCopy();
 let notes = {};
 let mutes = new Set();
+// The last discover range the device accepted, filled into the range inputs when a device loads.
+let range = CATALOGUE.discoverRange;
+// The open tab's goal. Not stored: the page always opens in discover.
+let goal = GOALS.discover;
+// The device's error text for the last refused discover start, null after an accepted one.
+let rangeErrorText = null;
 let selected = null;
 let online = null;
 let scanRequestFailed = false;
@@ -160,7 +207,15 @@ function load(newMac) {
   } catch {
     // Blocked storage: the device starts from an empty copy.
   }
-  ({ copy, notes, mutes } = parseStored(text));
+  ({ copy, notes, mutes, range } = parseStored(text, CATALOGUE.discoverRange));
+  // A refused range of the previous device says nothing about this one.
+  rangeErrorText = null;
+  fillRange();
+}
+
+function fillRange() {
+  $("range-from").value = String(range.from);
+  $("range-to").value = String(range.to);
 }
 
 /** The MAC of the last device that answered, so its copy shows at page open even while it is offline. */
@@ -182,7 +237,7 @@ function rememberMac() {
 
 function save() {
   try {
-    localStorage.setItem(deviceKey(mac), storedText(copy, notes, mutes));
+    localStorage.setItem(deviceKey(mac), storedText(copy, notes, mutes, range));
   } catch {
     // Full or blocked storage: the page still works, the copy just does not survive a reload.
   }
@@ -237,18 +292,107 @@ const poller = createPoller({
   },
 });
 
-async function toggleScan() {
-  const action = currentScan()?.active ? "stop" : "start";
+/** A reply's body; a body that breaks off reads as empty, which scanReply() takes as no scan object. */
+const replyText = (response) => response.text().catch(() => "");
+
+/**
+ * Puts the scan of a start or stop reply into the copy at once, so the scan control decides on it rather than on the
+ * last poll's. Dropped when another device answered while the request was out.
+ *
+ * @returns {object | null} the reply's scan, null when it was dropped or the body held none
+ */
+function takeScanReply(requestMac, bodyText) {
+  const scan = scanReply(bodyText);
+  if (scan === null || mac !== requestMac) {
+    return null;
+  }
+  copy = withScan(copy, scan);
+  return scan;
+}
+
+/** @returns {Promise<boolean>} whether the device accepted the stop */
+async function stopScan() {
+  const requestMac = mac;
+  let stopped = false;
   try {
-    await fetchOk(`/sniffer/scan/${action}`, { method: "POST" });
+    const response = await fetchOk("/sniffer/scan/stop", { method: "POST" });
     scanRequestFailed = false;
+    stopped = true;
+    takeScanReply(requestMac, await replyText(response));
     poller.pollNow();
   } catch (error) {
     // No poll at once: it would clear the failure before it shows. The next scheduled poll clears it.
-    console.error(`scan ${action} request failed`, error);
+    console.error("scan stop request failed", error);
     scanRequestFailed = true;
   }
-  renderHeader();
+  renderLogged();
+  return stopped;
+}
+
+/** Starts the open tab's goal; discover sends the range as typed, and the device decides whether it is valid. */
+async function startScan() {
+  const startGoal = goal;
+  const requestMac = mac;
+  const fromText = $("range-from").value;
+  const toText = $("range-to").value;
+  try {
+    const response = await fetch(`${DEVICE_URL}${scanStartPath(CATALOGUE, startGoal, fromText, toText)}`, {
+      method: "POST",
+    });
+    if (response.status === 400) {
+      scanRequestFailed = false;
+      if (mac === requestMac) {
+        rangeErrorText = rangeError(await replyText(response));
+      }
+      renderLogged();
+      return;
+    }
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    scanRequestFailed = false;
+    rangeErrorText = null;
+    // The device accepted the start: a body the page cannot read is no failure, the poll brings the scan.
+    const scan = takeScanReply(requestMac, await replyText(response));
+    // A start while a scan runs replies with the running scan: only a range that was sent and runs is remembered.
+    const accepted = startGoal === GOALS.discover ? acceptedRange(CATALOGUE, scan, fromText, toText) : null;
+    if (accepted !== null) {
+      range = accepted;
+      save();
+    }
+    poller.pollNow();
+  } catch (error) {
+    // No poll at once: it would clear the failure before it shows. The next scheduled poll clears it.
+    console.error("scan start request failed", error);
+    scanRequestFailed = true;
+  }
+  renderLogged();
+}
+
+function toggleScan() {
+  return currentScan()?.active ? stopScan() : startScan();
+}
+
+/**
+ * Opens a goal's tab. Leaving a running scan's goal stops that scan, after asking; the page never starts one. The
+ * confirm promised a stop, so a stop that fails keeps the tab, and the header shows the failure.
+ */
+async function setGoal(target) {
+  if (target === goal) {
+    return;
+  }
+  if (switchStopsScan(currentScan(), target)) {
+    if (!confirm(SWITCH_STOPS_SCAN)) {
+      return;
+    }
+    if (!(await stopScan())) {
+      return;
+    }
+  }
+  goal = target;
+  // The range error belongs to discover's last start, not to the tab opened now.
+  rangeErrorText = null;
+  renderLogged();
 }
 
 // ───── rendering ─────
@@ -263,6 +407,9 @@ function buildStatic() {
   addChips($("f-types"), TYPE_COLOURS, filter.types);
   addChips($("f-statuses"), STATUS_COLOURS, filter.statuses);
   $("f-changed").append(...CHANGED_WITHIN_PRESETS.map(([ms, label]) => el("option", { value: ms }, label)));
+  $("goal-tabs").append(...GOAL_TABS.map(([tabGoal, title, does]) =>
+    el("button", { "data-goal": tabGoal }, title, " ", el("small", {}, `— ${does}`))));
+  fillRange();
 }
 
 function renderHeader() {
@@ -282,10 +429,49 @@ function renderScan() {
   if (scan === null) {
     return;
   }
-  const progress = scanProgress(scan);
-  $("scan-toggle").textContent = scan.active ? "■ Stop scan" : "▶ Start scan";
+  const progress = scanProgress(scan, CATALOGUE, goal);
+  $("scan-toggle").textContent = scanButtonLabel(scan, goal);
   $("scan-bar").style.width = `${progress.percent}%`;
   $("scan-label").textContent = progress.label;
+  $("range").hidden = goal !== GOALS.discover;
+  $("range-error").textContent = rangeErrorText ?? "";
+}
+
+function renderTabs() {
+  for (const tab of $("goal-tabs").children) {
+    tab.classList.toggle("on", tab.dataset.goal === goal);
+  }
+  $("discover-view").hidden = goal !== GOALS.discover;
+  $("check-view").hidden = goal !== GOALS.check;
+}
+
+/** A known property's meaning: red when unexpected, "not seen" while it has no value. */
+function meaningView(meaning, size = "") {
+  if (meaning === null) {
+    return el("span", { class: `mute ${size}`.trim() }, "not seen");
+  }
+  const classes = `${meaning.unexpected ? "unexpected" : ""} ${size}`.trim();
+  return el("span", classes ? { class: classes } : {}, escapeControlBytes(meaning.text));
+}
+
+const registeredBadge = () => el("span", { class: "badge", title: REGISTERED_TITLE }, "registered");
+
+const rawView = (property) => el("span", { class: "mute" }, `${property.id} = `, el("code", {}, shown(property.raw)));
+
+function renderCheck(rows) {
+  const { fans, global } = checkCards(CATALOGUE, rows);
+  const fanCards = fans.map((card) =>
+    el("div", { class: "card" },
+      el("h3", {}, `Fan ${card.fan} `,
+        card.registered ? registeredBadge() : null),
+      el("div", {}, meaningView(card.level.meaning, "big")),
+      el("div", {}, rawView(card.level)),
+      el("div", { class: "gap" }, "label: ", meaningView(card.label.meaning)),
+      el("div", {}, rawView(card.label))));
+  const globalCard = el("div", { class: "card" }, el("h3", {}, "Global"),
+    ...global.map((property) =>
+      el("div", {}, `${property.name}: `, meaningView(property.meaning), " (", rawView(property), ")")));
+  $("check-view").replaceChildren(...fanCards, globalCard);
 }
 
 function cellColour(row) {
@@ -378,7 +564,7 @@ function renderDrawer(rowsById) {
   }
   head.append(
     row.type ? el("span", { class: "badge", style: `background:${TYPE_COLOURS[row.type]}` }, row.type) : null,
-    row.registered ? el("span", { class: "badge", title: "registered: polled by the hub" }, "registered") : null,
+    row.registered ? registeredBadge() : null,
     row.stale ? el("span", { class: "badge" }, "stale: browser copy only") : null,
     el("span", { class: "grow" }),
     el("button", { "data-action": "mute" }, mutes.has(selected) ? "Unmute in feed" : "Mute in feed"),
@@ -389,13 +575,8 @@ function renderDrawer(rowsById) {
     value.append(el("span", { class: "mute", title: `padded on the wire: "${row.raw}"` }, " ␣ padded"));
   }
   const fact = (label, ...value) => el("tr", {}, el("td", { class: "mute" }, label), el("td", {}, ...value));
-  const meaning = knownMeaning(CATALOGUE, selected, row.raw);
   const facts = el("table", {},
-    isKnownId(CATALOGUE, selected)
-      ? fact("Meaning", meaning === null
-        ? el("span", { class: "mute" }, "not seen")
-        : el("span", meaning.unexpected ? { class: "unexpected" } : {}, escapeControlBytes(meaning.text)))
-      : null,
+    isKnownId(CATALOGUE, selected) ? fact("Meaning", meaningView(knownMeaning(CATALOGUE, selected, row.raw))) : null,
     fact("Query status",
       el("span", { class: `s-${row.status}` }, row.status), row.statusAtMs === null ? "" : ` · ${formatWall(row.statusAtMs)}`),
     fact("Changes", String(row.changeCount)),
@@ -413,11 +594,18 @@ function renderDrawer(rowsById) {
 
 function render() {
   const rows = rowsOf(copy, notes);
+  renderHeader();
+  renderTabs();
+  renderScan();
+  if (goal === GOALS.check) {
+    // Check has no map: changes seen meanwhile do not flash when discover opens again.
+    flashIds.clear();
+    renderCheck(rows);
+    return;
+  }
   const rowsById = new Map(rows.map((row) => [row.id, row]));
   const now = Date.now();
   const visible = new Set(rows.filter((row) => matchesFilter(row, filter, now)).map((row) => row.id));
-  renderHeader();
-  renderScan();
   renderGrid(rowsById, visible);
   renderFeed(visible);
   renderDrawer(rowsById);
@@ -507,12 +695,19 @@ $("colour-by").addEventListener("change", (event) => {
   render();
 });
 $("scan-toggle").addEventListener("click", toggleScan);
+$("goal-tabs").addEventListener("click", (event) => {
+  const tab = event.target.closest("[data-goal]");
+  if (tab) {
+    setGoal(tab.dataset.goal);
+  }
+});
 $("export-json").addEventListener("click", () =>
   download("sec_touch_sniffer.json", exportJson(copy, notes, Date.now()), "application/json"));
 $("export-csv").addEventListener("click", () =>
   download("sec_touch_sniffer.csv", exportCsv(copy, notes), "text/csv"));
 
 buildStatic();
+renderTabs();
 const storedMac = lastMac();
 if (storedMac !== null) {
   // Shows (and exports) the stored copy even when the device is offline at page open.

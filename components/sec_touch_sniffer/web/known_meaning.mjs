@@ -1,9 +1,21 @@
 /**
  * Known properties and the expected meaning of their raw values (.specs/sniffer.md, "Known-property catalogue").
- * The page passes the generated CATALOGUE (catalogue.mjs, built by page_bundle.py from sec_touch's protocol_ids.h
- * and fan_level.h);
+ * The page passes the generated CATALOGUE (catalogue.mjs, built by page_bundle.py; its known properties come from
+ * sec_touch's protocol_ids.h and fan_level.h);
  * the rules match known_property_meaning() in components/sec_touch/known_property_meaning.h.
  */
+
+import { wholeDecimal } from "./records.mjs";
+
+/**
+ * @param {object} catalogue the CATALOGUE of catalogue.mjs
+ * @returns {number[]} every known property ID, ascending: the IDs a check scan queries, in its order
+ */
+export function knownIds(catalogue) {
+  const ids = [...catalogue.levelIds, ...catalogue.labelIds, catalogue.summerVentilationId, catalogue.dateId,
+    catalogue.clockId];
+  return [...new Set(ids)].sort((a, b) => a - b);
+}
 
 /**
  * @param {object} catalogue the CATALOGUE of catalogue.mjs
@@ -11,21 +23,20 @@
  * @returns {boolean} whether the ID is a known property
  */
 export function isKnownId(catalogue, id) {
-  return catalogue.levelIds.includes(id) || catalogue.labelIds.includes(id) ||
-    [catalogue.summerVentilationId, catalogue.dateId, catalogue.clockId].includes(id);
+  return knownIds(catalogue).includes(id);
 }
 
 // ASCII whitespace only, matching the trim of known_property_meaning() in C++. The page's display trim
 // (String.prototype.trim) is wider: it also drops Unicode spaces.
 const ASCII_SPACE_AT_ENDS = /^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$/g;
-const WHOLE_DECIMAL = /^[0-9]+$/;
 
 /** @returns {string | undefined} the name the trimmed raw, read as a whole decimal, has in `names` */
 function nameAtWholeDecimal(names, trimmed) {
-  if (!WHOLE_DECIMAL.test(trimmed)) {
+  const value = wholeDecimal(trimmed);
+  if (value === null) {
     return undefined;
   }
-  const key = String(Number(trimmed));
+  const key = String(value);
   return Object.hasOwn(names, key) ? names[key] : undefined;
 }
 

@@ -23,6 +23,8 @@ using esphome::sec_touch::MAX_PROPERTY_ID;
 using esphome::sec_touch::next_scan_id;
 using esphome::sec_touch::NO_SCAN_ID;
 using esphome::sec_touch::query_value;
+using esphome::sec_touch::SCAN_GOAL_CHECK_NAME;
+using esphome::sec_touch::SCAN_GOAL_DISCOVER_NAME;
 using esphome::sec_touch::scan_goal_name;
 using esphome::sec_touch::scan_start_from_uri;
 using esphome::sec_touch::ScanGoal;
@@ -122,8 +124,8 @@ TEST(ScanGoal, PastTheLastIdNoneIsLeft) {
 }
 
 TEST(ScanGoal, GoalsAreNamedAsThePageNamesThem) {
-  EXPECT_STREQ(scan_goal_name(ScanGoal::SCAN_GOAL_DISCOVER), "discover");
-  EXPECT_STREQ(scan_goal_name(ScanGoal::SCAN_GOAL_CHECK), "check");
+  EXPECT_STREQ(scan_goal_name(ScanGoal::SCAN_GOAL_DISCOVER), SCAN_GOAL_DISCOVER_NAME);
+  EXPECT_STREQ(scan_goal_name(ScanGoal::SCAN_GOAL_CHECK), SCAN_GOAL_CHECK_NAME);
 }
 
 // --- The start request ---

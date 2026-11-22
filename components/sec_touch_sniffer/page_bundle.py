@@ -8,9 +8,24 @@ anything else fails the build rather than shipping a page that breaks in the bro
 - `import { a, b } from "./name.mjs";` (may span lines; no `as` renames)
 - `export function`, `export async function`, `export const`, `export let`, `export class`
 
-`catalogue.mjs` is virtual: no file in web/. The resolver serves it from memory, built at every bundle from sec_touch's
-protocol_ids.h and fan_level.h (the known-property catalogue, .specs/sniffer.md). Only the page may import it; the
-tested modules take the catalogue as an argument. A header it cannot read fails the build.
+`catalogue.mjs` is virtual: no file in web/. The resolver serves it from memory, built at every bundle from four C++
+headers: the known-property catalogue (.specs/sniffer.md) from sec_touch's protocol_ids.h and fan_level.h, and the
+default discover range and the goal names from this component's property_slots.h and scan_goal.h. Only the page may
+import it; the tested modules take the catalogue as an argument.
+
+Each declaration the build reads from those headers must keep one of these forms:
+
+- `constexpr [const] int` or `constexpr [const] uint8_t` set to a (possibly negative) int literal or an earlier such
+  constant
+- `constexpr const char *` set to a string literal
+- a `std::array` of ints or of {value, name} pairs
+- the NAME_MAPPING string table
+
+Anything it cannot read fails the build. Its limits, in all four headers:
+
+- no comma inside the string of a {value, name} entry: the entry is split at commas;
+- no constexpr locals of those forms in a function body: the declaration regexes would read them as constants;
+- no char literals ('x') or digit separators: a ' outside strings and comments fails the build.
 """
 
 import gzip
@@ -21,6 +36,7 @@ import re
 WEB_DIR = Path(__file__).parent / "web"
 PAGE_FILE = "sniffer_page.html"
 HEADER_DIR = Path(__file__).parent.parent / "sec_touch"
+SNIFFER_HEADER_DIR = Path(__file__).parent
 CATALOGUE_MODULE = "catalogue.mjs"
 
 _SCRIPT = re.compile(r'(<script type="module">)(.*?)(</script>)', re.S)
@@ -29,12 +45,14 @@ _EXPORT = re.compile(r"^export (?=(?:async )?function |const |let |class )", re.
 _LEFTOVER = re.compile(r"^[ \t]*(?:import|export)\b", re.M)
 _TOP_LEVEL_NAME = re.compile(r"^(?:async )?(?:function\*?|const|let|class) (\w+)", re.M)
 
-# The catalogue headers. Each regex reads one declaration form; see the comment at the top of protocol_ids.h.
+# The four parsed headers. Each regex below reads one declaration form of the module docstring.
 PROTOCOL_IDS_FILE = "protocol_ids.h"
 FAN_LEVEL_FILE = "fan_level.h"
+PROPERTY_SLOTS_FILE = "property_slots.h"
+SCAN_GOAL_FILE = "scan_goal.h"
 _STRING_OR_COMMENT = re.compile(r'"(?:[^"\\\n]|\\.)*"|//[^\n]*|/\*.*?\*/', re.S)
 _STRING = re.compile(r'"(?:[^"\\\n]|\\.)*"')
-_INT_CONSTANT = re.compile(r"\bconstexpr\s+(?:const\s+)?int\s+(\w+)\s*=\s*([^;]*);")
+_INT_CONSTANT = re.compile(r"\bconstexpr\s+(?:const\s+)?(?:int|uint8_t)\s+(\w+)\s*=\s*([^;]*);")
 _STRING_CONSTANT = re.compile(r"\bconstexpr\s+const\s+char\s*\*\s*(\w+)\s*=\s*([^;]*);")
 _INT_ARRAY = re.compile(r"\bconstexpr\s+(?:const\s+)?std::array<int,\s*(\w+)>\s+(\w+)\s*=\s*\{([^{}]*)\};")
 _PAIR_TABLE = re.compile(r"\bconstexpr\s+(?:const\s+)?std::array<\w+,\s*(\w+)>\s+(\w+)\s*=\s*\{\{(.*?)\}\};", re.S)
@@ -100,7 +118,7 @@ class _Header:
         self.defined_in[name] = where
 
     def _int(self, token: str, where: str) -> int:
-        if re.fullmatch(r"\d+", token):
+        if re.fullmatch(r"-?\d+", token):
             return int(token)
         if token in self.ints:
             return self.ints[token]
@@ -177,11 +195,13 @@ def _names_by(header: _Header, name: str, key_type: type) -> dict:
     return names
 
 
-def parse_catalogue(header_dir: Path = HEADER_DIR) -> dict:
-    """The known-property catalogue (.specs/sniffer.md), read from sec_touch's protocol_ids.h and fan_level.h."""
+def parse_catalogue(header_dir: Path = HEADER_DIR, sniffer_header_dir: Path = SNIFFER_HEADER_DIR) -> dict:
+    """The contents of catalogue.mjs, read from the four headers the module docstring names."""
     header = _Header()
     header.read(header_dir / FAN_LEVEL_FILE)
     header.read(header_dir / PROTOCOL_IDS_FILE)
+    header.read(sniffer_header_dir / PROPERTY_SLOTS_FILE)
+    header.read(sniffer_header_dir / SCAN_GOAL_FILE)
     return {
         "levelIds": header.get(header.int_arrays, "FAN_LEVEL_IDS"),
         "labelIds": header.get(header.int_arrays, "FAN_LABEL_IDS"),
@@ -191,6 +211,14 @@ def parse_catalogue(header_dir: Path = HEADER_DIR) -> dict:
         "levelNames": _names_by(header, "LEVEL_NAMES", int),
         "labelNames": header.get(header.string_tables, "NAME_MAPPING"),
         "summerVentilationNames": _names_by(header, "SUMMER_VENTILATION_NAMES", str),
+        "discoverRange": {
+            "from": header.get(header.ints, "DEFAULT_DISCOVER_FROM"),
+            "to": header.get(header.ints, "DEFAULT_DISCOVER_TO"),
+        },
+        "goals": {
+            "discover": header.get(header.strings, "SCAN_GOAL_DISCOVER_NAME"),
+            "check": header.get(header.strings, "SCAN_GOAL_CHECK_NAME"),
+        },
     }
 
 

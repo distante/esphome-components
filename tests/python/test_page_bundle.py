@@ -16,6 +16,7 @@ from page_bundle import (  # noqa: E402
     CATALOGUE_MODULE,
     HEADER_DIR,
     PAGE_FILE,
+    SNIFFER_HEADER_DIR,
     WEB_DIR,
     bundle_page,
     catalogue_module,
@@ -25,6 +26,8 @@ from page_bundle import (  # noqa: E402
 
 PROTOCOL_IDS = "protocol_ids.h"
 FAN_LEVEL = "fan_level.h"
+PROPERTY_SLOTS = "property_slots.h"
+SCAN_GOAL = "scan_goal.h"
 
 
 @pytest.fixture
@@ -34,6 +37,16 @@ def header_dir(tmp_path: Path) -> Path:
     copy.mkdir(parents=True)
     shutil.copy(HEADER_DIR / PROTOCOL_IDS, copy / PROTOCOL_IDS)
     shutil.copy(HEADER_DIR / FAN_LEVEL, copy / FAN_LEVEL)
+    return copy
+
+
+@pytest.fixture
+def sniffer_header_dir(tmp_path: Path) -> Path:
+    """A copy of the real sniffer headers the discover range is parsed from, for a test to break."""
+    copy = tmp_path / "sec_touch_sniffer"
+    copy.mkdir(parents=True)
+    shutil.copy(SNIFFER_HEADER_DIR / PROPERTY_SLOTS, copy / PROPERTY_SLOTS)
+    shutil.copy(SNIFFER_HEADER_DIR / SCAN_GOAL, copy / SCAN_GOAL)
     return copy
 
 
@@ -88,6 +101,53 @@ def test_parses_all_69_label_names_in_order() -> None:
 
 def test_parses_the_summer_ventilation_values() -> None:
     assert parse_catalogue()["summerVentilationNames"] == {"0A00": "on", "0800": "off"}
+
+
+def test_parses_the_default_discover_range_through_max_property_id() -> None:
+    assert parse_catalogue()["discoverRange"] == {"from": 1, "to": 255}
+
+
+def test_reads_the_discover_range_from_the_given_sniffer_directory(sniffer_header_dir: Path) -> None:
+    edit(sniffer_header_dir / PROPERTY_SLOTS, "MAX_PROPERTY_ID = 255;", "MAX_PROPERTY_ID = 200;")
+    edit(sniffer_header_dir / SCAN_GOAL, "DEFAULT_DISCOVER_FROM = 1;", "DEFAULT_DISCOVER_FROM = 3;")
+
+    assert parse_catalogue(sniffer_header_dir=sniffer_header_dir)["discoverRange"] == {"from": 3, "to": 200}
+
+
+def test_parses_the_goal_names_the_device_uses() -> None:
+    assert parse_catalogue()["goals"] == {"discover": "discover", "check": "check"}
+
+
+def test_reads_the_goal_names_from_the_given_sniffer_directory(sniffer_header_dir: Path) -> None:
+    edit(sniffer_header_dir / SCAN_GOAL, 'SCAN_GOAL_CHECK_NAME = "check";', 'SCAN_GOAL_CHECK_NAME = "confirm";')
+
+    goals = parse_catalogue(sniffer_header_dir=sniffer_header_dir)["goals"]
+
+    assert goals == {"discover": "discover", "check": "confirm"}
+
+
+@pytest.mark.parametrize(
+    ("file", "old", "new", "error"),
+    [
+        pytest.param(SCAN_GOAL, "DEFAULT_DISCOVER_TO = MAX_PROPERTY_ID;", "DEFAULT_DISCOVER_TO = MAX_PROPERTY_ID - 1;",
+                     "DEFAULT_DISCOVER_TO", id="expression bound"),
+        pytest.param(SCAN_GOAL, "constexpr uint8_t DEFAULT_DISCOVER_FROM = 1;", "", "DEFAULT_DISCOVER_FROM",
+                     id="missing bound"),
+        pytest.param(PROPERTY_SLOTS, "constexpr int MAX_PROPERTY_ID = 255;", "", "MAX_PROPERTY_ID",
+                     id="missing max property id"),
+        pytest.param(SCAN_GOAL, 'constexpr const char *SCAN_GOAL_DISCOVER_NAME = "discover";', "",
+                     "SCAN_GOAL_DISCOVER_NAME", id="missing goal name"),
+        pytest.param(SCAN_GOAL, 'SCAN_GOAL_CHECK_NAME = "check";', "SCAN_GOAL_CHECK_NAME = SCAN_GOAL_DISCOVER_NAME;",
+                     "SCAN_GOAL_CHECK_NAME", id="goal name not a literal"),
+    ],
+)
+def test_fails_loudly_on_a_sniffer_header_it_cannot_parse(
+    sniffer_header_dir: Path, file: str, old: str, new: str, error: str
+) -> None:
+    edit(sniffer_header_dir / file, old, new)
+
+    with pytest.raises(ValueError, match=re.escape(error)):
+        parse_catalogue(sniffer_header_dir=sniffer_header_dir)
 
 
 def test_reads_the_headers_from_the_given_directory(header_dir: Path) -> None:
@@ -173,7 +233,12 @@ def test_a_repeated_key_names_the_header_that_declares_the_table(
 def test_a_missing_name_names_the_headers_it_was_looked_for_in(header_dir: Path) -> None:
     edit(header_dir / FAN_LEVEL, "LEVEL_NAMES = {{", "LEVEL_NAMES_RENAMED = {{")
 
-    with pytest.raises(ValueError, match=re.escape("no LEVEL_NAMES in the parsed headers (fan_level.h, protocol_ids.h)")):
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "no LEVEL_NAMES in the parsed headers (fan_level.h, protocol_ids.h, property_slots.h, scan_goal.h)"
+        ),
+    ):
         parse_catalogue(header_dir)
 
 

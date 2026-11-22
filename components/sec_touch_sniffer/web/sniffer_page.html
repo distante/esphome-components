@@ -1,9 +1,9 @@
 <!doctype html>
 <!--
   The sniffer page (.specs/sniffer.md, "Page"). The build (page_bundle.py) inlines the ./*.mjs modules it imports
-  and gzips it into flash; the device serves it at GET /sniffer.
-  To work on it without flashing, serve this folder (`python -m http.server -d components/sec_touch_sniffer/web`)
-  and open sniffer_page.html?device=http://<device-ip>: the data endpoints allow any origin.
+  and gzips it into flash; the device serves it at GET /sniffer. catalogue.mjs is no file: page_bundle.py generates
+  it from sec_touch's protocol_ids.h, so the page only runs bundled. To work on it without flashing, bundle it and
+  open it with ?device=http://<device-ip> (readme.md, "Tests"): the data endpoints allow any origin.
 -->
 <html lang="en">
 <head>
@@ -44,6 +44,7 @@
   #drawer .value { font-size:20px; margin:6px 0; word-break:break-all; }
   #drawer textarea { width:100%; min-height:60px; }
   #drawer table td { padding:1px 6px 1px 0; vertical-align:top; }
+  .unexpected { color:var(--bad); }
   #feed { max-height:55vh; overflow:auto; }
   #feed div { cursor:pointer; border-bottom:1px solid var(--line); padding:2px 0; }
   .s-ok { color:var(--ok); } .s-nak { color:var(--bad); } .s-timeout { color:#b9770e; } .s-unqueried { color:#999; }
@@ -94,6 +95,8 @@ import { scanProgress } from "./scan_progress.mjs";
 import { exportCsv, exportJson } from "./export.mjs";
 import { deviceKey, LAST_MAC_KEY, parseStored, storedText } from "./storage.mjs";
 import { STATUS_COLOURS, TYPE_COLOURS } from "./colours.mjs";
+import { isKnownId, knownMeaning } from "./known_meaning.mjs";
+import { CATALOGUE } from "./catalogue.mjs";
 
 const ID_COUNT = 256;
 const FEED_LENGTH = 60;
@@ -385,7 +388,13 @@ function renderDrawer(rowsById) {
     value.append(el("span", { class: "mute", title: `padded on the wire: "${row.raw}"` }, " ␣ padded"));
   }
   const fact = (label, ...value) => el("tr", {}, el("td", { class: "mute" }, label), el("td", {}, ...value));
+  const meaning = knownMeaning(CATALOGUE, selected, row.raw);
   const facts = el("table", {},
+    isKnownId(CATALOGUE, selected)
+      ? fact("Meaning", meaning === null
+        ? el("span", { class: "mute" }, "not seen")
+        : el("span", { class: meaning.unexpected ? "unexpected" : "" }, meaning.text))
+      : null,
     fact("Query status",
       el("span", { class: `s-${row.status}` }, row.status), row.statusAtMs === null ? "" : ` · ${formatWall(row.statusAtMs)}`),
     fact("Changes", String(row.changeCount)),

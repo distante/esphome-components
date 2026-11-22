@@ -10,9 +10,9 @@ test("a running scan names the ID it queries next and the range", () => {
   });
 });
 
-test("a stopped scan names the ID it resumes at", () => {
+test("a stopped scan names the ID it stopped at", () => {
   assert.deepEqual(scanProgress({ active: false, from: 1, to: 100, next: 51, done: false }), {
-    label: "Stopped at ID 51, resumes there",
+    label: "Stopped at ID 51",
     percent: 50,
   });
 });
@@ -22,6 +22,13 @@ test("a completed scan is complete and full", () => {
     label: "Scan of 1–100 complete",
     percent: 100,
   });
+});
+
+test("before any run the scan is not scanned yet and empty", () => {
+  assert.deepEqual(
+    scanProgress({ active: false, goal: "discover", from: null, to: null, next: null, done: false }),
+    { label: "Not scanned yet", percent: 0 },
+  );
 });
 
 test("a scan querying its last ID is not yet full", () => {

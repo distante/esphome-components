@@ -105,7 +105,7 @@ which never answered. ID 193, which timed out in the upstream scan, answered thi
 
 The sniffer keeps every value byte-exact as the panel sent it, and its page exports them.
 
-1. Enable the sniffer with a scan range and the page (see [Sniffer page](readme.md#sniffer-page)):
+1. Enable the sniffer with the page (see [Sniffer page](readme.md#sniffer-page)):
 
    ```yaml
    web_server_base:   # or web_server:
@@ -114,8 +114,6 @@ The sniffer keeps every value byte-exact as the panel sent it, and its page expo
      - platform: sec_touch_sniffer
        sec_touch_id: sec_touch_component
        name: "Sniffer"
-       scan_start: 1
-       scan_end: 255
        web_page: true
    ```
 
@@ -123,8 +121,8 @@ The sniffer keeps every value byte-exact as the panel sent it, and its page expo
    scan runs; the label reads "Scanning ID n of 1–255" and then "Scan of 1–255 complete". The records live
    on the device, so the tab can be closed and reopened during the scan.
 3. Click an ID to see its raw value, guessed type, query status (`ok`, `nak`, `timeout`, or
-   `unqueried` for IDs the scan has not asked, registered IDs included, since the scan skips
-   them) and previous values. Notes typed in the drawer stay in the browser and go into the
+   `unqueried` for IDs the scan has not asked, known IDs included, since a discover scan
+   skips them; a check scan queries them) and previous values. Notes typed in the drawer stay in the browser and go into the
    export.
 4. Press **Export JSON** (`sec_touch_sniffer.json`: the full record per ID with history, wall
    times and notes, plus device uptime and scan state) or **Export CSV**

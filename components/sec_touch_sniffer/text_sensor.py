@@ -125,10 +125,6 @@ async def to_code(config):
         cg.extern_progmem_array(PAGE_ARRAY, cg.uint8, list(page))
         cg.add_global(cg.RawExpression(f"constexpr size_t {PAGE_ARRAY}_SIZE = {len(page)}"))
 
-    scan_end = config[CONF_SCAN_END]
-    if scan_end > 0:
-        cg.add(var.set_scan_range(config[CONF_SCAN_START], scan_end))
-
     if CONF_SCAN_SWITCH in config:
         sw = await switch.new_switch(config[CONF_SCAN_SWITCH])
         await cg.register_parented(sw, var)

@@ -10,20 +10,29 @@
 #include "sec_touch_sniffer/property_store.h"
 #include "sec_touch_sniffer/sniffer_data.h"
 
+using esphome::sec_touch::CHECK_RUN;
 using esphome::sec_touch::COMMANDID_SET;
+using esphome::sec_touch::DATE_PROPERTY_ID;
+using esphome::sec_touch::DEFAULT_DISCOVER_RUN;
 using esphome::sec_touch::DELTA_END;
 using esphome::sec_touch::DeviceInfo;
+using esphome::sec_touch::FAN_LABEL_IDS;
+using esphome::sec_touch::FAN_LEVEL_IDS;
+using esphome::sec_touch::first_scan_id;
 using esphome::sec_touch::HistoryPool;
 using esphome::sec_touch::JSON_CHUNK_BYTES;
 using esphome::sec_touch::JsonChunkWriter;
 using esphome::sec_touch::MAX_PROPERTY_ID;
 using esphome::sec_touch::next_record_in_delta;
+using esphome::sec_touch::NO_SCAN_ID;
 using esphome::sec_touch::PropertyStore;
 using esphome::sec_touch::RecordSnapshot;
 using esphome::sec_touch::scan_reply;
-using esphome::sec_touch::scan_resume_id;
 using esphome::sec_touch::scan_state;
+using esphome::sec_touch::ScanFields;
+using esphome::sec_touch::ScanGoal;
 using esphome::sec_touch::ScanOutcome;
+using esphome::sec_touch::ScanRun;
 using esphome::sec_touch::ScanState;
 using esphome::sec_touch::since_from_uri;
 using esphome::sec_touch::sniffer_route;
@@ -90,7 +99,8 @@ std::vector<int> delta_ids(const PropertyStore &store, uint32_t since) {
 }
 
 const DeviceInfo DEVICE{"aabbccddeeff", "esp32-power-meter", "9f2c41ab", 812000};
-const ScanState NO_SCAN = scan_state(1, 0, 0, false);
+/// The scan before any run.
+const ScanState NO_RUN = scan_state(ScanFields{});
 
 /// A with_lock() that records whether the lock is held, so a sink can check it.
 struct FakeLock {
@@ -106,7 +116,7 @@ struct FakeLock {
   }
 };
 
-std::string data_json(const PropertyStore &store, uint32_t since, const ScanState &scan = NO_SCAN) {
+std::string data_json(const PropertyStore &store, uint32_t since, const ScanState &scan = NO_RUN) {
   static RecordSnapshot scratch;
   FakeLock lock;
   std::string out;
@@ -248,89 +258,122 @@ TEST(SnifferData, ADeltaAtTheCurrentSeqSelectsNothing) {
 
 // --- Scan ---
 
-TEST(SnifferData, WithoutAScanRangeTheScanIsNull) {
-  EXPECT_FALSE(NO_SCAN.available);
-  EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, NO_SCAN); }), "null");
+namespace {
+
+/// The spec example's discover range. 42 and 208 are unknown properties, so a discover of it queries both.
+constexpr ScanRun DISCOVER_1_208{ScanGoal::SCAN_GOAL_DISCOVER, 1, 208};
+constexpr int MID_RANGE_ID = 42;
+
+ScanFields running(const ScanRun &run, int current) {
+  return ScanFields{.ran = true, .active = true, .completed = false, .run = run, .current = current};
 }
 
-TEST(SnifferData, BeforeTheFirstScanItStartsAtFrom) {
-  EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, scan_state(1, 208, 0, false)); }),
-            R"({"active":false,"from":1,"to":208,"next":1,"done":false})");
+ScanFields stopped(const ScanRun &run, int current) {
+  return ScanFields{.ran = true, .active = false, .completed = false, .run = run, .current = current};
 }
 
-TEST(SnifferData, ARunningScanShowsItsNextId) {
-  EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, scan_state(1, 255, 42, true)); }),
-            R"({"active":true,"from":1,"to":255,"next":42,"done":false})");
+ScanFields completed(const ScanRun &run) {
+  return ScanFields{.ran = true, .active = false, .completed = true, .run = run, .current = NO_SCAN_ID};
 }
 
-TEST(SnifferData, AStoppedScanResumesAtItsNextId) {
-  EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, scan_state(1, 255, 42, false)); }),
-            R"({"active":false,"from":1,"to":255,"next":42,"done":false})");
+std::string scan_json(const ScanState &scan) {
+  return written([&](JsonChunkWriter &w) { write_scan_json(w, scan); });
 }
 
-TEST(SnifferData, ACompletedScanIsDoneAndRestartsAtFrom) {
-  EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, scan_state(1, 255, 256, false)); }),
-            R"({"active":false,"from":1,"to":255,"next":1,"done":true})");
+std::string check_json(bool active, const std::string &next, bool done) {
+  return std::string(R"({"active":)") + (active ? "true" : "false") + R"(,"goal":"check","from":null,"to":null,)" +
+         R"("next":)" + next + R"(,"done":)" + (done ? "true" : "false") + "}";
 }
 
-// The sniffer moves past an ID when it queues the query, so while the last ID's query is in flight the scan is at
-// scan_end + 1 and still running.
-TEST(SnifferData, WhileTheLastIdIsQueriedTheScanIsNotDone) {
-  EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, scan_state(1, 208, 209, true)); }),
-            R"({"active":true,"from":1,"to":208,"next":208,"done":false})");
+/// DISCOVER_1_208 just started: running at its first ID.
+std::string discover_1_208_start_json() {
+  return R"({"active":true,"goal":"discover","from":1,"to":208,"next":)" +
+         std::to_string(first_scan_id(DISCOVER_1_208)) + R"(,"done":false})";
 }
 
-TEST(SnifferData, ARunStoppedAfterQueueingTheLastIdIsDone) {
-  EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, scan_state(1, 208, 209, false)); }),
-            R"({"active":false,"from":1,"to":208,"next":1,"done":true})");
+}  // namespace
+
+TEST(SnifferData, BeforeAnyRunTheScanIsAnIdleDiscoverWithNoRangeOrPosition) {
+  EXPECT_EQ(scan_json(NO_RUN), R"({"active":false,"goal":"discover","from":null,"to":null,"next":null,"done":false})");
 }
 
-TEST(SnifferData, AScanStartedAgainAfterARunIsNotDone) {
-  EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, scan_state(1, 208, 1, true)); }),
-            R"({"active":true,"from":1,"to":208,"next":1,"done":false})");
+TEST(SnifferData, ARunningDiscoverShowsItsRangeAndNextId) {
+  EXPECT_EQ(scan_json(scan_state(running(DISCOVER_1_208, MID_RANGE_ID))),
+            R"({"active":true,"goal":"discover","from":1,"to":208,"next":42,"done":false})");
+}
+
+TEST(SnifferData, WhileTheLastIdIsQueriedTheScanShowsItAndIsNotDone) {
+  EXPECT_EQ(scan_json(scan_state(running(DISCOVER_1_208, NO_SCAN_ID))),
+            R"({"active":true,"goal":"discover","from":1,"to":208,"next":208,"done":false})");
+}
+
+TEST(SnifferData, AStoppedScanShowsTheIdItStoppedAt) {
+  EXPECT_EQ(scan_json(scan_state(stopped(DISCOVER_1_208, MID_RANGE_ID))),
+            R"({"active":false,"goal":"discover","from":1,"to":208,"next":42,"done":false})");
+}
+
+// Stopped with the last query in flight: its outcome was never recorded, so the run did not cover all its IDs.
+TEST(SnifferData, ARunStoppedWithTheLastQueryInFlightIsNotDone) {
+  EXPECT_EQ(scan_json(scan_state(stopped(DISCOVER_1_208, NO_SCAN_ID))),
+            R"({"active":false,"goal":"discover","from":1,"to":208,"next":208,"done":false})");
+}
+
+TEST(SnifferData, ACompletedScanIsDoneWithNoNextId) {
+  EXPECT_EQ(scan_json(scan_state(completed(DISCOVER_1_208))),
+            R"({"active":false,"goal":"discover","from":1,"to":208,"next":null,"done":true})");
+}
+
+TEST(SnifferData, AScanStartedAgainAfterACompletedRunIsNotDone) {
+  ScanFields fields = completed(DISCOVER_1_208);
+  fields.active = true;
+  fields.current = first_scan_id(DISCOVER_1_208);
+  EXPECT_FALSE(scan_state(fields).done);
+}
+
+TEST(SnifferData, ACheckHasNoRange) {
+  EXPECT_EQ(scan_json(scan_state(running(CHECK_RUN, FAN_LABEL_IDS.front()))),
+            check_json(true, std::to_string(FAN_LABEL_IDS.front()), false));
+  EXPECT_EQ(scan_json(scan_state(running(CHECK_RUN, NO_SCAN_ID))),
+            check_json(true, std::to_string(FAN_LEVEL_IDS.back()), false));
+  EXPECT_EQ(scan_json(scan_state(stopped(CHECK_RUN, FAN_LABEL_IDS.front()))),
+            check_json(false, std::to_string(FAN_LABEL_IDS.front()), false));
+  EXPECT_EQ(scan_json(scan_state(completed(CHECK_RUN))), check_json(false, "null", true));
 }
 
 // --- Scan start and stop replies ---
 
-TEST(SnifferData, AScanBeginsAtFromTheFirstTime) { EXPECT_EQ(scan_resume_id(1, 208, 0), 1); }
-
-TEST(SnifferData, AScanResumesWhereItStopped) { EXPECT_EQ(scan_resume_id(1, 208, 42), 42); }
-
-TEST(SnifferData, AScanBeginsAgainAtFromAfterQueueingTheWholeRange) { EXPECT_EQ(scan_resume_id(1, 208, 209), 1); }
-
-std::string reply_json(int current_id, bool scanning, bool start) {
-  return written([&](JsonChunkWriter &w) { write_scan_json(w, scan_reply(1, 208, current_id, scanning, start)); });
+TEST(SnifferData, AStartReplyBeginsTheRequestedRunAtItsFirstId) {
+  EXPECT_EQ(scan_json(scan_reply(ScanFields{}, true, DISCOVER_1_208)), discover_1_208_start_json());
+  EXPECT_EQ(scan_json(scan_reply(ScanFields{}, true, CHECK_RUN)),
+            check_json(true, std::to_string(DATE_PROPERTY_ID), false));
 }
 
-TEST(SnifferData, AStartReplyResumesAStoppedScan) {
-  EXPECT_EQ(reply_json(42, false, true), R"({"active":true,"from":1,"to":208,"next":42,"done":false})");
+// No resume: a start after a stop begins at the goal's first ID, not where the last run stopped.
+TEST(SnifferData, AStartReplyAfterAStopBeginsAgain) {
+  const ScanRun requested{ScanGoal::SCAN_GOAL_DISCOVER, 5, 208};
+  EXPECT_EQ(scan_json(scan_reply(stopped(DISCOVER_1_208, MID_RANGE_ID), true, requested)),
+            R"({"active":true,"goal":"discover","from":5,"to":208,"next":5,"done":false})");
 }
 
-TEST(SnifferData, AStartReplyAfterACompletedRunRestartsAtFrom) {
-  EXPECT_EQ(reply_json(209, false, true), R"({"active":true,"from":1,"to":208,"next":1,"done":false})");
+TEST(SnifferData, AStartReplyAfterACompletedRunIsNotDone) {
+  EXPECT_EQ(scan_json(scan_reply(completed(CHECK_RUN), true, DISCOVER_1_208)), discover_1_208_start_json());
 }
 
-TEST(SnifferData, AStopReplyMidScanKeepsThePosition) {
-  EXPECT_EQ(reply_json(42, true, false), R"({"active":false,"from":1,"to":208,"next":42,"done":false})");
+TEST(SnifferData, AStartReplyDuringAScanIsTheRunningScanWhateverItsGoal) {
+  EXPECT_EQ(scan_json(scan_reply(running(CHECK_RUN, FAN_LABEL_IDS.front()), true, DISCOVER_1_208)),
+            check_json(true, std::to_string(FAN_LABEL_IDS.front()), false));
+  EXPECT_EQ(scan_json(scan_reply(running(DISCOVER_1_208, MID_RANGE_ID), true, CHECK_RUN)),
+            R"({"active":true,"goal":"discover","from":1,"to":208,"next":42,"done":false})");
 }
 
-// Stopped after queueing the last ID: the run counts as covering the range, so the next start begins at `from`.
-TEST(SnifferData, AStopReplyWithTheLastQueryInFlightIsDone) {
-  EXPECT_EQ(reply_json(209, true, false), R"({"active":false,"from":1,"to":208,"next":1,"done":true})");
-}
-
-TEST(SnifferData, AStartReplyDuringAScanIsTheRunningScan) {
-  EXPECT_EQ(reply_json(42, true, true), R"({"active":true,"from":1,"to":208,"next":42,"done":false})");
-  EXPECT_EQ(reply_json(209, true, true), R"({"active":true,"from":1,"to":208,"next":208,"done":false})");
+TEST(SnifferData, AStopReplyMidScanShowsWhereItStopped) {
+  EXPECT_EQ(scan_json(scan_reply(running(DISCOVER_1_208, MID_RANGE_ID), false, DEFAULT_DISCOVER_RUN)),
+            R"({"active":false,"goal":"discover","from":1,"to":208,"next":42,"done":false})");
 }
 
 TEST(SnifferData, AStopReplyWhileIdleIsTheIdleScan) {
-  EXPECT_EQ(reply_json(42, false, false), R"({"active":false,"from":1,"to":208,"next":42,"done":false})");
-  EXPECT_EQ(reply_json(209, false, false), R"({"active":false,"from":1,"to":208,"next":1,"done":true})");
-}
-
-TEST(SnifferData, WithoutAScanRangeAReplyIsNull) {
-  EXPECT_EQ(written([](JsonChunkWriter &w) { write_scan_json(w, scan_reply(1, 0, 0, false, true)); }), "null");
+  EXPECT_EQ(scan_json(scan_reply(ScanFields{}, false, DEFAULT_DISCOVER_RUN)), scan_json(NO_RUN));
+  EXPECT_EQ(scan_json(scan_reply(completed(CHECK_RUN), false, DEFAULT_DISCOVER_RUN)), check_json(false, "null", true));
 }
 
 // --- Data response ---
@@ -339,11 +382,12 @@ TEST(SnifferData, SinceZeroIsAFullResponse) {
   PropertyStore store = allocated_store();
   record_spec_example(store);
 
-  EXPECT_EQ(data_json(store, 0, scan_state(1, 255, 42, true)),
-            R"({"mac":"aabbccddeeff","name":"esp32-power-meter","boot":"9f2c41ab","uptime":812000,)"
-            R"("seq":4,"full":true,"dropped":0,"scan":{"active":true,"from":1,"to":255,"next":42,"done":false},)"
-            R"("records":[{"id":5,"cmd":32,"raw":"0100","first":1000,"last":5000,"changed":3000,"changes":1,)"
-            R"("status":"ok","status_at":4000,"reg":false,"hist":[[3000,"0100"],[1000,"0000"]]}]})");
+  EXPECT_EQ(
+      data_json(store, 0, scan_state(running(DISCOVER_1_208, MID_RANGE_ID))),
+      R"({"mac":"aabbccddeeff","name":"esp32-power-meter","boot":"9f2c41ab","uptime":812000,)"
+      R"("seq":4,"full":true,"dropped":0,"scan":{"active":true,"goal":"discover","from":1,"to":208,"next":42,"done":false},)"
+      R"("records":[{"id":5,"cmd":32,"raw":"0100","first":1000,"last":5000,"changed":3000,"changes":1,)"
+      R"("status":"ok","status_at":4000,"reg":false,"hist":[[3000,"0100"],[1000,"0000"]]}]})");
 }
 
 TEST(SnifferData, ADeltaIsNotFullAndHoldsOnlyChangedRecords) {
@@ -354,13 +398,14 @@ TEST(SnifferData, ADeltaIsNotFullAndHoldsOnlyChangedRecords) {
   record(store, 3, "c", 3);
   store.record_message(COMMANDID_SET, MAX_PROPERTY_ID + 1, "x", 3);
 
-  EXPECT_EQ(data_json(store, since),
-            R"({"mac":"aabbccddeeff","name":"esp32-power-meter","boot":"9f2c41ab","uptime":812000,)"
-            R"("seq":3,"full":false,"dropped":1,"scan":null,"records":[)"
-            R"({"id":2,"cmd":32,"raw":"b","first":2000,"last":2000,"changed":2000,"changes":0,)"
-            R"("status":"unqueried","status_at":null,"reg":false,"hist":[[2000,"b"]]},)"
-            R"({"id":3,"cmd":32,"raw":"c","first":3000,"last":3000,"changed":3000,"changes":0,)"
-            R"("status":"unqueried","status_at":null,"reg":false,"hist":[[3000,"c"]]}]})");
+  EXPECT_EQ(
+      data_json(store, since),
+      R"({"mac":"aabbccddeeff","name":"esp32-power-meter","boot":"9f2c41ab","uptime":812000,)"
+      R"("seq":3,"full":false,"dropped":1,"scan":{"active":false,"goal":"discover","from":null,"to":null,"next":null,"done":false},"records":[)"
+      R"({"id":2,"cmd":32,"raw":"b","first":2000,"last":2000,"changed":2000,"changes":0,)"
+      R"("status":"unqueried","status_at":null,"reg":false,"hist":[[2000,"b"]]},)"
+      R"({"id":3,"cmd":32,"raw":"c","first":3000,"last":3000,"changed":3000,"changes":0,)"
+      R"("status":"unqueried","status_at":null,"reg":false,"hist":[[3000,"c"]]}]})");
 }
 
 TEST(SnifferData, NoChangesGiveAnEmptyRecordList) {
@@ -377,7 +422,7 @@ TEST(SnifferData, TheNameIsEscaped) {
   std::string out;
   JsonChunkWriter w(&collect, &out);
   const DeviceInfo device{"m", "a\"b", "b", 0};
-  write_data_json(w, store, device, NO_SCAN, 0, scratch, lock.with_lock(), [](int) { return false; });
+  write_data_json(w, store, device, NO_RUN, 0, scratch, lock.with_lock(), [](int) { return false; });
 
   EXPECT_NE(out.find(R"("name":"a\"b")"), std::string::npos);
 }
@@ -390,7 +435,7 @@ TEST(SnifferData, RegisteredIdsAreReadPerRecord) {
   FakeLock lock;
   std::string out;
   JsonChunkWriter w(&collect, &out);
-  write_data_json(w, store, DEVICE, NO_SCAN, 0, scratch, lock.with_lock(), [](int id) { return id == 2; });
+  write_data_json(w, store, DEVICE, NO_RUN, 0, scratch, lock.with_lock(), [](int id) { return id == 2; });
 
   EXPECT_NE(out.find(R"("id":1,)"), std::string::npos);
   EXPECT_NE(out.find(R"("reg":false,"hist":[[1000,"a"]])"), std::string::npos);
@@ -421,7 +466,7 @@ TEST(SnifferData, NothingIsSentWhileTheLockIsHeld) {
   LockedSink sink{&lock};
   JsonChunkWriter w(&LockedSink::sink, &sink);
 
-  EXPECT_TRUE(write_data_json(w, store, DEVICE, NO_SCAN, 0, scratch, lock.with_lock(), [](int) { return false; }));
+  EXPECT_TRUE(write_data_json(w, store, DEVICE, NO_RUN, 0, scratch, lock.with_lock(), [](int) { return false; }));
 
   EXPECT_GT(sink.out.size(), 10 * JSON_CHUNK_BYTES);
   EXPECT_EQ(sink.sends_under_lock, 0);
@@ -437,7 +482,7 @@ TEST(SnifferData, AFailedSendIsReported) {
   FakeLock lock;
   JsonChunkWriter w([](void *, const char *, size_t) { return false; }, nullptr);
 
-  EXPECT_FALSE(write_data_json(w, store, DEVICE, NO_SCAN, 0, scratch, lock.with_lock(), [](int) { return false; }));
+  EXPECT_FALSE(write_data_json(w, store, DEVICE, NO_RUN, 0, scratch, lock.with_lock(), [](int) { return false; }));
 }
 
 // --- Request parsing ---

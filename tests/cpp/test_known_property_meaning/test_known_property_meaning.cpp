@@ -20,6 +20,7 @@ using esphome::sec_touch::known_property_meaning;
 using esphome::sec_touch::KnownMeaning;
 using esphome::sec_touch::label_name;
 using esphome::sec_touch::MAX_LEVEL;
+using esphome::sec_touch::max_known_property_id;
 using esphome::sec_touch::MAX_NORMAL_LEVEL;
 using esphome::sec_touch::MeaningKind;
 using esphome::sec_touch::MIN_NORMAL_LEVEL;
@@ -124,6 +125,20 @@ TEST(IsKnownProperty, DoesNotKnowTheIdsAroundThem) {
   EXPECT_FALSE(is_known_property(FAN_6_LABEL_ID + 1));
   EXPECT_FALSE(is_known_property(SUMMER_VENTILATION_PROPERTY_ID + 1));
   EXPECT_FALSE(is_known_property(255));
+}
+
+TEST(MaxKnownPropertyId, IsKnownAndNoKnownIdIsAboveIt) {
+  const int max = max_known_property_id();
+  EXPECT_TRUE(is_known_property(max)) << max;
+  for (int id : FAN_LEVEL_IDS) {
+    EXPECT_LE(id, max);
+  }
+  for (int id : FAN_LABEL_IDS) {
+    EXPECT_LE(id, max);
+  }
+  EXPECT_LE(SUMMER_VENTILATION_PROPERTY_ID, max);
+  EXPECT_LE(DATE_PROPERTY_ID, max);
+  EXPECT_LE(CLOCK_PROPERTY_ID, max);
 }
 
 TEST(KnownPropertyMeaning, IsNulloptForAnUnknownId) {

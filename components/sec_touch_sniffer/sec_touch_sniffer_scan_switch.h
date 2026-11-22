@@ -12,11 +12,8 @@ class SecTouchSnifferScanSwitch : public switch_::Switch, public Parented<SecTou
   SecTouchSnifferScanSwitch() = default;
 
  protected:
-  void write_state(bool state) override {
-    if (state != this->parent_->is_scanning()) {
-      this->parent_->toggle_scan();
-    }
-  }
+  /// On starts a discover over the default range, off stops; both go through the same request path as the page.
+  void write_state(bool state) override { this->parent_->request_scan(state); }
 };
 
 }  // namespace sec_touch

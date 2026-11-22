@@ -52,8 +52,8 @@
   #feed div { cursor:pointer; border-bottom:1px solid var(--line); padding:2px 0; }
   .s-ok { color:var(--ok); } .s-nak { color:var(--bad); } .s-timeout { color:#b9770e; } .s-unqueried { color:#999; }
   .bigtabs { display:flex; margin:8px 0; border-bottom:2px solid var(--line); }
-  .bigtabs button { flex:1; border:none; background:none; padding:8px 16px; font-size:14px; border-bottom:3px solid transparent;
-    margin-bottom:-2px; text-align:left; }
+  .bigtabs button { flex:1; border:none; background:none; padding:8px 16px; font-size:14px;
+    border-bottom:3px solid transparent; margin-bottom:-2px; text-align:left; }
   .bigtabs button.on { border-bottom-color:var(--acc); font-weight:600; }
   .bigtabs small { font-weight:400; color:var(--mute); font-size:12px; }
   #range input { width:4em; }
@@ -78,7 +78,8 @@
 <div id="scan" class="row" hidden>
   <button id="scan-toggle"></button>
   <span id="range">
-    IDs <input id="range-from" inputmode="numeric" aria-label="from ID"> – <input id="range-to" inputmode="numeric" aria-label="to ID">
+    IDs <input id="range-from" inputmode="numeric" aria-label="from ID">
+    – <input id="range-to" inputmode="numeric" aria-label="to ID">
     <span id="range-error" class="unexpected"></span>
   </span>
   <div class="bar grow"><i id="scan-bar"></i></div>

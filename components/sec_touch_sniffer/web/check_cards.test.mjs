@@ -43,7 +43,12 @@ test("one card per fan, in fan order, with its level and label", () => {
 });
 
 test("a fan is registered when the hub registered its level or its label", () => {
-  const cards = checkCards(CATALOGUE, [row(LEVEL_1, "7", true), row(LABEL_1, "1"), row(LEVEL_2, "0"), row(LABEL_2, "1", true)]);
+  const cards = checkCards(CATALOGUE, [
+    row(LEVEL_1, "7", true),
+    row(LABEL_1, "1"),
+    row(LEVEL_2, "0"),
+    row(LABEL_2, "1", true),
+  ]);
 
   assert.deepEqual(cards.fans.map((card) => card.registered), [true, true]);
   assert.equal(checkCards(CATALOGUE, [row(LEVEL_1, "7")]).fans[0].registered, false);

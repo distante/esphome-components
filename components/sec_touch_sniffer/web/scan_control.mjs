@@ -62,15 +62,30 @@ export function rangeError(bodyText) {
   return bodyText.trim() || RANGE_REFUSED;
 }
 
+const isIdOrNull = (value) => value === null || Number.isInteger(value);
+
+/**
+ * @param {unknown} value a parsed JSON value
+ * @returns {boolean} whether it is a whole `scan` object as .specs/sniffer.md, "JSON shape" lists it
+ */
+const isScanObject = (value) =>
+  isObject(value) &&
+  typeof value.active === "boolean" &&
+  typeof value.goal === "string" &&
+  isIdOrNull(value.from) &&
+  isIdOrNull(value.to) &&
+  isIdOrNull(value.next) &&
+  typeof value.done === "boolean";
+
 /**
  * @param {string} bodyText the body of a start or stop the device answered with 200
- * @returns {{active: boolean, goal: string} | null} the `scan` object it carries; null when the body is no scan
- *   object, which only means the page learns the scan from the next poll
+ * @returns {object | null} the `scan` object it carries; null when the body is no whole scan object, which only
+ *   means the page learns the scan from the next poll
  */
 export function scanReply(bodyText) {
   try {
     const scan = JSON.parse(bodyText);
-    if (isObject(scan) && typeof scan.active === "boolean" && typeof scan.goal === "string") {
+    if (isScanObject(scan)) {
       return scan;
     }
   } catch {

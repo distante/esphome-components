@@ -63,7 +63,8 @@ test("a device stored without a discover range gets the default range", () => {
 });
 
 test("a stored range that is not two integers gives the default range", () => {
-  for (const range of [null, "1-255", [1, 255], {}, { from: 1 }, { to: 255 }, { from: "1", to: 255 }, { from: 1.5, to: 255 }]) {
+  const broken = [null, "1-255", [1, 255], {}, { from: 1 }, { to: 255 }, { from: "1", to: 255 }, { from: 1.5, to: 255 }];
+  for (const range of broken) {
     assert.deepEqual(parseStored(JSON.stringify({ range }), DEFAULT_RANGE).range, DEFAULT_RANGE, JSON.stringify(range));
   }
 });

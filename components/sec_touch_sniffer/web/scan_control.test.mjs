@@ -90,8 +90,28 @@ test("a reply body that is no scan object gives none", () => {
   }
 });
 
+// The progress labels read every field: a reply missing one would show "Scanning ID undefined".
+test("a reply body that is not a full scan object gives none", () => {
+  const full = scan({ active: true, from: 3, to: 200, next: 3 });
+  const broken = [
+    ...["from", "to", "next", "done"].map((key) => ({ ...full, [key]: undefined })),
+    { ...full, from: "3" },
+    { ...full, to: 2.5 },
+    { ...full, next: "3" },
+    { ...full, done: "false" },
+    { ...full, done: null },
+  ];
+  for (const reply of broken) {
+    const body = JSON.stringify(reply);
+    assert.equal(scanReply(body), null, body);
+  }
+});
+
 test("an accepted discover start's reply gives the range to remember", () => {
-  assert.deepEqual(acceptedRange(CATALOGUE, scan({ active: true, from: 3, to: 200 }), "3", "200"), { from: 3, to: 200 });
+  assert.deepEqual(acceptedRange(CATALOGUE, scan({ active: true, from: 3, to: 200 }), "3", "200"), {
+    from: 3,
+    to: 200,
+  });
 });
 
 // A start while a scan runs is a no-op that replies with the running scan: its range is not the one sent.
@@ -104,7 +124,10 @@ test("a reply that runs another range than the one sent gives none", () => {
 });
 
 test("a range typed with leading zeros is the same range", () => {
-  assert.deepEqual(acceptedRange(CATALOGUE, scan({ active: true, from: 3, to: 20 }), "003", "020"), { from: 3, to: 20 });
+  assert.deepEqual(acceptedRange(CATALOGUE, scan({ active: true, from: 3, to: 20 }), "003", "020"), {
+    from: 3,
+    to: 20,
+  });
 });
 
 // A start while a check runs is a no-op that replies with the running check: there is no range to remember.

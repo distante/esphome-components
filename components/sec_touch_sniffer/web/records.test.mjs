@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { applyResponse, changeFeed, emptyCopy, fromStored, rowsOf, toStored, wallOf } from "./records.mjs";
+import { applyResponse, changeFeed, emptyCopy, fromStored, rowsOf, toStored, wallOf, withScan } from "./records.mjs";
 
 const BROWSER_NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
 
@@ -244,4 +244,22 @@ test("the device and its records share the anchor of the response that carried t
 
   assert.deepEqual(copy.device.anchor, { browserNowMs: BROWSER_NOW_MS, uptimeMs: 10_000 });
   assert.equal(copy.device.anchor, copy.records[5].anchor);
+});
+
+// A start or stop replies with the scan object: the scan control decides on it before the next poll arrives.
+test("a start or stop reply replaces the device's scan and nothing else", () => {
+  const running = { active: true, goal: "discover", from: 1, to: 255, next: 40, done: false };
+  const stopped = { ...running, active: false };
+  const { copy } = applyResponse(emptyCopy(), response([deviceRecord(5, "0100")], { scan: running }), BROWSER_NOW_MS);
+
+  const updated = withScan(copy, stopped);
+
+  assert.deepEqual(updated, { ...copy, device: { ...copy.device, scan: stopped } });
+  assert.equal(copy.device.scan, running, "the copy passed in is left unchanged");
+});
+
+test("a reply before any device answered leaves the copy as it is", () => {
+  const copy = emptyCopy();
+
+  assert.equal(withScan(copy, { active: false, goal: "discover" }), copy);
 });

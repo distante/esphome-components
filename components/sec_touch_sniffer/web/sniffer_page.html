@@ -13,6 +13,8 @@
 <style>
   :root { --bg:#fafafa; --fg:#1d1d1f; --mute:#6e6e73; --line:#ddd; --acc:#0a66c2; --bad:#c0392b; --ok:#1e8449; }
   * { box-sizing:border-box; }
+  /* Beats the display of .row, .cards and the rest, so `hidden` always hides. */
+  [hidden] { display:none !important; }
   body { margin:0; font:13px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--fg); padding:0 12px 24px; }
   h1 { font-size:15px; margin:10px 0; }
   button, input, select, textarea { font:inherit; }
@@ -107,11 +109,18 @@
 </div>
 </div>
 <script type="module">
-import { applyResponse, changeFeed, emptyCopy, rowsOf } from "./records.mjs";
+import { applyResponse, changeFeed, emptyCopy, rowsOf, withScan } from "./records.mjs";
 import { createPoller, resyncReason, sinceFor } from "./poll.mjs";
 import { allPass, matchesFilter } from "./filters.mjs";
 import { scanProgress } from "./scan_progress.mjs";
-import { acceptedRange, GOAL_CHECK, GOAL_DISCOVER, rangeError, scanButtonLabel, scanStartPath, switchStopsScan } from "./scan_control.mjs";
+import {
+  acceptedRange,
+  rangeError,
+  scanButtonLabel,
+  scanReply,
+  scanStartPath,
+  switchStopsScan,
+} from "./scan_control.mjs";
 import { checkCards } from "./check_cards.mjs";
 import { exportCsv, exportJson } from "./export.mjs";
 import { deviceKey, LAST_MAC_KEY, parseStored, storedText } from "./storage.mjs";
@@ -132,12 +141,16 @@ const CHANGED_WITHIN_PRESETS = [
   [5 * MINUTE_MS, "changed < 5 min"],
   [HOUR_MS, "changed < 1 h"],
 ];
+/** The goals as the device names them. */
+const GOALS = CATALOGUE.goals;
 /** The page tabs, as [goal, title, what the goal does]. */
 const GOAL_TABS = [
-  [GOAL_DISCOVER, "Discover", "find unknown properties"],
-  [GOAL_CHECK, "Check", "confirm known properties"],
+  [GOALS.discover, "Discover", "find unknown properties"],
+  [GOALS.check, "Check", "confirm known properties"],
 ];
 const SWITCH_STOPS_SCAN = "Switching stops the running scan";
+/** The registered badge's tooltip, in discover's drawer and on check's fan cards. */
+const REGISTERED_TITLE = "registered: polled by the hub for this YAML";
 
 // Empty on the device; `?device=http://<ip>` while working on the page from a local server.
 const DEVICE_URL = new URLSearchParams(location.search).get("device") ?? "";
@@ -171,7 +184,7 @@ let mutes = new Set();
 // The last discover range the device accepted, filled into the range inputs when a device loads.
 let range = CATALOGUE.discoverRange;
 // The open tab's goal. Not stored: the page always opens in discover.
-let goal = GOAL_DISCOVER;
+let goal = GOALS.discover;
 // The device's error text for the last refused discover start, null after an accepted one.
 let rangeErrorText = null;
 let selected = null;
@@ -194,6 +207,8 @@ function load(newMac) {
     // Blocked storage: the device starts from an empty copy.
   }
   ({ copy, notes, mutes, range } = parseStored(text, CATALOGUE.discoverRange));
+  // A refused range of the previous device says nothing about this one.
+  rangeErrorText = null;
   fillRange();
 }
 
@@ -276,30 +291,59 @@ const poller = createPoller({
   },
 });
 
+/** A reply's body; a body that breaks off reads as empty, which scanReply() takes as no scan object. */
+const replyText = (response) => response.text().catch(() => "");
+
+/**
+ * Puts the scan of a start or stop reply into the copy at once, so the scan control decides on it rather than on the
+ * last poll's. Dropped when another device answered while the request was out.
+ *
+ * @returns {object | null} the reply's scan, null when it was dropped or the body held none
+ */
+function takeScanReply(requestMac, bodyText) {
+  const scan = scanReply(bodyText);
+  if (scan === null || mac !== requestMac) {
+    return null;
+  }
+  copy = withScan(copy, scan);
+  return scan;
+}
+
+/** @returns {Promise<boolean>} whether the device accepted the stop */
 async function stopScan() {
+  const requestMac = mac;
+  let stopped = false;
   try {
-    await fetchOk("/sniffer/scan/stop", { method: "POST" });
+    const response = await fetchOk("/sniffer/scan/stop", { method: "POST" });
     scanRequestFailed = false;
+    stopped = true;
+    takeScanReply(requestMac, await replyText(response));
     poller.pollNow();
   } catch (error) {
     // No poll at once: it would clear the failure before it shows. The next scheduled poll clears it.
     console.error("scan stop request failed", error);
     scanRequestFailed = true;
   }
-  renderHeader();
+  renderLogged();
+  return stopped;
 }
 
 /** Starts the open tab's goal; discover sends the range as typed, and the device decides whether it is valid. */
 async function startScan() {
   const startGoal = goal;
-  const path = scanStartPath(startGoal, $("range-from").value, $("range-to").value);
+  const requestMac = mac;
+  const fromText = $("range-from").value;
+  const toText = $("range-to").value;
   try {
-    const response = await fetch(`${DEVICE_URL}${path}`, { method: "POST" });
+    const response = await fetch(`${DEVICE_URL}${scanStartPath(CATALOGUE, startGoal, fromText, toText)}`, {
+      method: "POST",
+    });
     if (response.status === 400) {
-      rangeErrorText = rangeError(await response.text());
       scanRequestFailed = false;
-      renderHeader();
-      renderScan();
+      if (mac === requestMac) {
+        rangeErrorText = rangeError(await replyText(response));
+      }
+      renderLogged();
       return;
     }
     if (!response.ok) {
@@ -307,12 +351,13 @@ async function startScan() {
     }
     scanRequestFailed = false;
     rangeErrorText = null;
-    if (startGoal === GOAL_DISCOVER) {
-      const accepted = acceptedRange(await response.json());
-      if (accepted !== null) {
-        range = accepted;
-        save();
-      }
+    // The device accepted the start: a body the page cannot read is no failure, the poll brings the scan.
+    const scan = takeScanReply(requestMac, await replyText(response));
+    // A start while a scan runs replies with the running scan: only a range that was sent and runs is remembered.
+    const accepted = startGoal === GOALS.discover ? acceptedRange(CATALOGUE, scan, fromText, toText) : null;
+    if (accepted !== null) {
+      range = accepted;
+      save();
     }
     poller.pollNow();
   } catch (error) {
@@ -320,16 +365,18 @@ async function startScan() {
     console.error("scan start request failed", error);
     scanRequestFailed = true;
   }
-  renderHeader();
-  renderScan();
+  renderLogged();
 }
 
 function toggleScan() {
   return currentScan()?.active ? stopScan() : startScan();
 }
 
-/** Opens a goal's tab. Leaving a running scan's goal stops that scan, after asking; the page never starts one. */
-function setGoal(target) {
+/**
+ * Opens a goal's tab. Leaving a running scan's goal stops that scan, after asking; the page never starts one. The
+ * confirm promised a stop, so a stop that fails keeps the tab, and the header shows the failure.
+ */
+async function setGoal(target) {
   if (target === goal) {
     return;
   }
@@ -337,10 +384,14 @@ function setGoal(target) {
     if (!confirm(SWITCH_STOPS_SCAN)) {
       return;
     }
-    stopScan();
+    if (!(await stopScan())) {
+      return;
+    }
   }
   goal = target;
-  render();
+  // The range error belongs to discover's last start, not to the tab opened now.
+  rangeErrorText = null;
+  renderLogged();
 }
 
 // ───── rendering ─────
@@ -381,7 +432,7 @@ function renderScan() {
   $("scan-toggle").textContent = scanButtonLabel(scan, goal);
   $("scan-bar").style.width = `${progress.percent}%`;
   $("scan-label").textContent = progress.label;
-  $("range").hidden = goal !== GOAL_DISCOVER;
+  $("range").hidden = goal !== GOALS.discover;
   $("range-error").textContent = rangeErrorText ?? "";
 }
 
@@ -389,8 +440,8 @@ function renderTabs() {
   for (const tab of $("goal-tabs").children) {
     tab.classList.toggle("on", tab.dataset.goal === goal);
   }
-  $("discover-view").hidden = goal !== GOAL_DISCOVER;
-  $("check-view").hidden = goal !== GOAL_CHECK;
+  $("discover-view").hidden = goal !== GOALS.discover;
+  $("check-view").hidden = goal !== GOALS.check;
 }
 
 /** A known property's meaning: red when unexpected, "not seen" while it has no value. */
@@ -402,6 +453,8 @@ function meaningView(meaning, size = "") {
   return el("span", classes ? { class: classes } : {}, escapeControlBytes(meaning.text));
 }
 
+const registeredBadge = () => el("span", { class: "badge", title: REGISTERED_TITLE }, "registered");
+
 const rawView = (property) => el("span", { class: "mute" }, `${property.id} = `, el("code", {}, shown(property.raw)));
 
 function renderCheck(rows) {
@@ -409,7 +462,7 @@ function renderCheck(rows) {
   const fanCards = fans.map((card) =>
     el("div", { class: "card" },
       el("h3", {}, `Fan ${card.fan} `,
-        card.registered ? el("span", { class: "badge", title: "registered: used by this YAML" }, "registered") : null),
+        card.registered ? registeredBadge() : null),
       el("div", {}, meaningView(card.level.meaning, "big")),
       el("div", {}, rawView(card.level)),
       el("div", { class: "gap" }, "label: ", meaningView(card.label.meaning)),
@@ -510,7 +563,7 @@ function renderDrawer(rowsById) {
   }
   head.append(
     row.type ? el("span", { class: "badge", style: `background:${TYPE_COLOURS[row.type]}` }, row.type) : null,
-    row.registered ? el("span", { class: "badge", title: "registered: polled by the hub" }, "registered") : null,
+    row.registered ? registeredBadge() : null,
     row.stale ? el("span", { class: "badge" }, "stale: browser copy only") : null,
     el("span", { class: "grow" }),
     el("button", { "data-action": "mute" }, mutes.has(selected) ? "Unmute in feed" : "Mute in feed"),
@@ -543,7 +596,7 @@ function render() {
   renderHeader();
   renderTabs();
   renderScan();
-  if (goal === GOAL_CHECK) {
+  if (goal === GOALS.check) {
     // Check has no map: changes seen meanwhile do not flash when discover opens again.
     flashIds.clear();
     renderCheck(rows);

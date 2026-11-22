@@ -114,6 +114,18 @@ def test_reads_the_discover_range_from_the_given_sniffer_directory(sniffer_heade
     assert parse_catalogue(sniffer_header_dir=sniffer_header_dir)["discoverRange"] == {"from": 3, "to": 200}
 
 
+def test_parses_the_goal_names_the_device_uses() -> None:
+    assert parse_catalogue()["goals"] == {"discover": "discover", "check": "check"}
+
+
+def test_reads_the_goal_names_from_the_given_sniffer_directory(sniffer_header_dir: Path) -> None:
+    edit(sniffer_header_dir / SCAN_GOAL, 'SCAN_GOAL_CHECK_NAME = "check";', 'SCAN_GOAL_CHECK_NAME = "confirm";')
+
+    goals = parse_catalogue(sniffer_header_dir=sniffer_header_dir)["goals"]
+
+    assert goals == {"discover": "discover", "check": "confirm"}
+
+
 @pytest.mark.parametrize(
     ("file", "old", "new", "error"),
     [
@@ -123,6 +135,10 @@ def test_reads_the_discover_range_from_the_given_sniffer_directory(sniffer_heade
                      id="missing bound"),
         pytest.param(PROPERTY_SLOTS, "constexpr int MAX_PROPERTY_ID = 255;", "", "MAX_PROPERTY_ID",
                      id="missing max property id"),
+        pytest.param(SCAN_GOAL, 'constexpr const char *SCAN_GOAL_DISCOVER_NAME = "discover";', "",
+                     "SCAN_GOAL_DISCOVER_NAME", id="missing goal name"),
+        pytest.param(SCAN_GOAL, 'SCAN_GOAL_CHECK_NAME = "check";', "SCAN_GOAL_CHECK_NAME = SCAN_GOAL_DISCOVER_NAME;",
+                     "SCAN_GOAL_CHECK_NAME", id="goal name not a literal"),
     ],
 )
 def test_fails_loudly_on_a_sniffer_header_it_cannot_parse(

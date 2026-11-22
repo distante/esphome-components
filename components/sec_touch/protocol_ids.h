@@ -4,10 +4,11 @@
 // ventilation meaning tables, shared by _definitions.h, the host-built tests in tests/cpp and the sniffer page. The
 // level and preset names live in fan_level.h, beside the level constants they are keyed by.
 // components/sec_touch_sniffer/page_bundle.py parses this file and fan_level.h at every build, and with them the
-// sniffer's property_slots.h and scan_goal.h (the default discover range). In all four headers keep each declaration
-// it reads in its current form: `constexpr [const] int` or `constexpr [const] uint8_t` set to a (possibly negative)
-// int literal or an earlier such constant, `constexpr const char *`, a `std::array` of ints or of {value, name} pairs,
-// and the NAME_MAPPING string table. Anything it cannot read fails the build.
+// sniffer's property_slots.h and scan_goal.h (the default discover range and the goal names). In all four headers keep
+// each declaration it reads in its current form: `constexpr [const] int` or `constexpr [const] uint8_t` set to a
+// (possibly negative) int literal or an earlier such constant, `constexpr const char *` set to a string literal, a
+// `std::array` of ints or of {value, name} pairs, and the NAME_MAPPING string table. Anything it cannot read fails the
+// build.
 // Its limits:
 // - no comma inside the string of a {value, name} entry: the entry is split at commas;
 // - no constexpr locals of those forms in a function body of any of the four headers: the declaration regexes would

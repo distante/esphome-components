@@ -1,7 +1,7 @@
 /**
  * What the page keeps in browser storage (see .specs/sniffer.md, "Browser storage"): per device MAC, its browser
- * copy, notes, feed mutes and last discover range, plus the MAC of the last device that answered. DOM-free: the page only reads and
- * writes the strings.
+ * copy, notes, feed mutes and last discover range, plus the MAC of the last device that answered. DOM-free: the page
+ * only reads and writes the strings.
  */
 
 import { emptyCopy, fromStored, isObject, toStored } from "./records.mjs";

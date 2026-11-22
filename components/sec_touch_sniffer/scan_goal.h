@@ -1,8 +1,8 @@
 #pragma once
 
 // Plain C++, no ESPHome includes: built on the host by tests/cpp/test_scan_goal.
-// page_bundle.py reads the default discover range from this header: keep its declarations in the forms the comment at
-// the top of ../sec_touch/protocol_ids.h lists.
+// page_bundle.py reads the default discover range and the goal names from this header: keep their declarations in the
+// forms the comment at the top of ../sec_touch/protocol_ids.h lists.
 //
 // The sniffer goals' scans (.specs/sniffer.md, "Sniffer goals" and "Active scan"): which IDs a run queries, in what
 // order, and the start request that picks them ("Device/page contract", start parameters).
@@ -44,8 +44,14 @@ constexpr ScanRun CHECK_RUN{ScanGoal::SCAN_GOAL_CHECK, DEFAULT_DISCOVER_FROM, DE
 /// No ID: past a run's last ID, or a run with no IDs.
 constexpr int NO_SCAN_ID = -1;
 
+/// The goals as the device names them in `scan.goal` and the start's `goal` parameter; the page reads them too.
+constexpr const char *SCAN_GOAL_DISCOVER_NAME = "discover";
+constexpr const char *SCAN_GOAL_CHECK_NAME = "check";
+
 /// The goal as the page names it.
-constexpr const char *scan_goal_name(ScanGoal goal) { return goal == ScanGoal::SCAN_GOAL_CHECK ? "check" : "discover"; }
+constexpr const char *scan_goal_name(ScanGoal goal) {
+  return goal == ScanGoal::SCAN_GOAL_CHECK ? SCAN_GOAL_CHECK_NAME : SCAN_GOAL_DISCOVER_NAME;
+}
 
 /// Whether `run` queries `id`. Check covers every record slot, so its IDs are exactly the known ones.
 constexpr bool scan_queries(const ScanRun &run, int id) {

@@ -10,8 +10,8 @@ anything else fails the build rather than shipping a page that breaks in the bro
 
 `catalogue.mjs` is virtual: no file in web/. The resolver serves it from memory, built at every bundle from sec_touch's
 protocol_ids.h and fan_level.h (the known-property catalogue, .specs/sniffer.md), plus the default discover range
-from this component's property_slots.h and scan_goal.h. Only the page may import it; the
-tested modules take the catalogue as an argument. A header it cannot read fails the build.
+and the goal names from this component's property_slots.h and scan_goal.h. Only the page may import it; the tested
+modules take the catalogue as an argument. A header it cannot read fails the build.
 """
 
 import gzip
@@ -34,7 +34,7 @@ _TOP_LEVEL_NAME = re.compile(r"^(?:async )?(?:function\*?|const|let|class) (\w+)
 # The catalogue headers. Each regex reads one declaration form; see the comment at the top of protocol_ids.h.
 PROTOCOL_IDS_FILE = "protocol_ids.h"
 FAN_LEVEL_FILE = "fan_level.h"
-# The sniffer headers of the default discover range, read with the same regexes and limits.
+# The sniffer headers of the default discover range and the goal names, read with the same regexes and limits.
 PROPERTY_SLOTS_FILE = "property_slots.h"
 SCAN_GOAL_FILE = "scan_goal.h"
 _STRING_OR_COMMENT = re.compile(r'"(?:[^"\\\n]|\\.)*"|//[^\n]*|/\*.*?\*/', re.S)
@@ -184,7 +184,7 @@ def _names_by(header: _Header, name: str, key_type: type) -> dict:
 
 def parse_catalogue(header_dir: Path = HEADER_DIR, sniffer_header_dir: Path = SNIFFER_HEADER_DIR) -> dict:
     """The known-property catalogue (.specs/sniffer.md), read from sec_touch's protocol_ids.h and fan_level.h, plus
-    the default discover range, read from the sniffer's property_slots.h and scan_goal.h."""
+    the default discover range and the goal names, read from the sniffer's property_slots.h and scan_goal.h."""
     header = _Header()
     header.read(header_dir / FAN_LEVEL_FILE)
     header.read(header_dir / PROTOCOL_IDS_FILE)
@@ -202,6 +202,10 @@ def parse_catalogue(header_dir: Path = HEADER_DIR, sniffer_header_dir: Path = SN
         "discoverRange": {
             "from": header.get(header.ints, "DEFAULT_DISCOVER_FROM"),
             "to": header.get(header.ints, "DEFAULT_DISCOVER_TO"),
+        },
+        "goals": {
+            "discover": header.get(header.strings, "SCAN_GOAL_DISCOVER_NAME"),
+            "check": header.get(header.strings, "SCAN_GOAL_CHECK_NAME"),
         },
     }
 

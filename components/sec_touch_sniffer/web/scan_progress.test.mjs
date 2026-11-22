@@ -2,7 +2,6 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { knownIds } from "./known_meaning.mjs";
-import { GOAL_CHECK, GOAL_DISCOVER } from "./scan_control.mjs";
 import { scanProgress } from "./scan_progress.mjs";
 
 // A small catalogue in the shape catalogue.mjs has, with made-up IDs: its known IDs are 3, 5, 10, 11, 20, 21, 30.
@@ -16,13 +15,15 @@ const CATALOGUE = {
   labelNames: [],
   summerVentilationNames: {},
   discoverRange: { from: 1, to: 255 },
+  goals: { discover: "discover", check: "check" },
 };
 const KNOWN_COUNT = knownIds(CATALOGUE).length;
+const { discover: DISCOVER, check: CHECK } = CATALOGUE.goals;
 
-const discover = (fields) => ({ active: false, goal: GOAL_DISCOVER, from: 1, to: 100, next: null, done: false, ...fields });
-const check = (fields) => ({ active: false, goal: GOAL_CHECK, from: null, to: null, next: null, done: false, ...fields });
-const onDiscover = (scan) => scanProgress(scan, CATALOGUE, GOAL_DISCOVER);
-const onCheck = (scan) => scanProgress(scan, CATALOGUE, GOAL_CHECK);
+const discover = (fields) => ({ active: false, goal: DISCOVER, from: 1, to: 100, next: null, done: false, ...fields });
+const check = (fields) => ({ active: false, goal: CHECK, from: null, to: null, next: null, done: false, ...fields });
+const onDiscover = (scan) => scanProgress(scan, CATALOGUE, DISCOVER);
+const onCheck = (scan) => scanProgress(scan, CATALOGUE, CHECK);
 
 test("a running scan names the ID it queries next and the range", () => {
   assert.deepEqual(onDiscover(discover({ active: true, next: 26 })), {
@@ -99,5 +100,17 @@ test("the percent stays within 0–100 for a next ID outside the range or the kn
 });
 
 test("a check past every known ID counts no further than the known IDs", () => {
-  assert.equal(onCheck(check({ active: true, next: 255 })).label, `Scanning ID 255 (${KNOWN_COUNT} of ${KNOWN_COUNT} known IDs)`);
+  assert.equal(
+    onCheck(check({ active: true, next: 255 })).label,
+    `Scanning ID 255 (${KNOWN_COUNT} of ${KNOWN_COUNT} known IDs)`,
+  );
+});
+
+test("the check goal's name comes from the catalogue", () => {
+  const renamed = { ...CATALOGUE, goals: { discover: "find", check: "confirm" } };
+
+  assert.deepEqual(scanProgress(check({ goal: "confirm", done: true }), renamed, "confirm"), {
+    label: `Check of ${KNOWN_COUNT} known IDs complete`,
+    percent: 100,
+  });
 });

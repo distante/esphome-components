@@ -85,19 +85,19 @@ test("nothing stored, or text that is not JSON, gives nothing", () => {
 test("notes keep only text values keyed by an ID", () => {
   const text = JSON.stringify({ notes: { 5: "Fan level?", 6: 7, 7: null, 8: { a: 1 }, x: "not an ID" } });
 
-  assert.deepEqual(parseStored(text).notes, { 5: "Fan level?" });
-  assert.deepEqual(parseStored(JSON.stringify({ notes: "nope" })).notes, {});
-  assert.deepEqual(parseStored(JSON.stringify({ notes: ["a"] })).notes, {});
+  assert.deepEqual(parseStored(text, DEFAULT_RANGE).notes, { 5: "Fan level?" });
+  assert.deepEqual(parseStored(JSON.stringify({ notes: "nope" }), DEFAULT_RANGE).notes, {});
+  assert.deepEqual(parseStored(JSON.stringify({ notes: ["a"] }), DEFAULT_RANGE).notes, {});
 });
 
 test("mutes that are not an array of integer IDs are dropped", () => {
   for (const mutes of [5, "5", null, { 5: true }, [5, "6"], [1.5]]) {
-    assert.deepEqual(parseStored(JSON.stringify({ mutes })).mutes, new Set(), JSON.stringify(mutes));
+    assert.deepEqual(parseStored(JSON.stringify({ mutes }), DEFAULT_RANGE).mutes, new Set(), JSON.stringify(mutes));
   }
 });
 
 test("a corrupt copy gives an empty copy but keeps the notes and mutes", () => {
-  const stored = parseStored(JSON.stringify({ copy: "nope", notes: { 5: "x" }, mutes: [5] }));
+  const stored = parseStored(JSON.stringify({ copy: "nope", notes: { 5: "x" }, mutes: [5] }), DEFAULT_RANGE);
 
   assert.deepEqual(stored.copy, emptyCopy());
   assert.deepEqual(stored.notes, { 5: "x" });

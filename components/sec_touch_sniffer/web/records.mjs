@@ -47,6 +47,21 @@ export function applyResponse(copy, response, browserNowMs) {
 }
 
 /**
+ * A start or stop replies with the scan object (.specs/sniffer.md, "Device/page contract"): the copy takes it at once,
+ * so the scan control decides on it rather than on the last poll's.
+ *
+ * @param {object} copy the browser copy, left unchanged
+ * @param {object} scan the `scan` object of a start or stop reply
+ * @returns {object} the copy with that scan; the same copy while no device has answered
+ */
+export function withScan(copy, scan) {
+  if (copy.device === null) {
+    return copy;
+  }
+  return { ...copy, device: { ...copy.device, scan } };
+}
+
+/**
  * @param {object} record a record of the copy
  * @param {number | null} uptimeMs one of its device uptimes
  * @returns {number | null} that uptime as wall time (epoch ms), or null when unset

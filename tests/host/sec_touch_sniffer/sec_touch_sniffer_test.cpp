@@ -159,6 +159,16 @@ TEST(SecTouchSnifferTest, RecordsAPropertyTheHubSends) {
   EXPECT_EQ(rig.sniffer.store().raw_value(UNREGISTERED_ID), "10");
 }
 
+TEST(SecTouchSnifferTest, RecordsARegisteredPropertyTheHubSends) {
+  SnifferRig rig;
+  rig.hub.register_manual_update_listener(REGISTERED_ID, [](int, int) {});
+  ASSERT_TRUE(rig.hub.is_property_registered(REGISTERED_ID));
+
+  rig.receive(REGISTERED_ID, "3");
+
+  EXPECT_EQ(rig.sniffer.store().raw_value(REGISTERED_ID), "3");
+}
+
 // Always on: the page is always compiled in, and its records list each property's previous values.
 TEST(SecTouchSnifferTest, KeepsAHistoryOfPreviousRawValues) {
   SnifferRig rig;

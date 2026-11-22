@@ -35,7 +35,7 @@ void SecTouchSniffer::setup() {
 
 #ifdef USE_ESP32
   get_mac_address_into_buffer(this->mac_);
-  format_hex_to(this->boot_, random_uint32());
+  this->new_boot_id_();
   web_server_base::global_web_server_base->init();
   web_server_base::global_web_server_base->add_handler(this);
 #endif
@@ -232,6 +232,9 @@ void SecTouchSniffer::handleRequest(AsyncWebServerRequest *request) {
     case SnifferRoute::ROUTE_SCAN_STOP:
       this->serve_scan_(*request, /*start=*/false);
       return;
+    case SnifferRoute::ROUTE_CLEAR:
+      this->serve_clear_(*request);
+      return;
     case SnifferRoute::ROUTE_NONE:
       return;
   }
@@ -307,6 +310,21 @@ void SecTouchSniffer::serve_scan_(httpd_req_t *req, bool start) {
   this->request_scan(start, run);
   this->begin_json_response_(req);
   write_scan_json(this->json_, scan_reply(fields, start, run));
+  this->end_json_response_(req);
+}
+
+void SecTouchSniffer::new_boot_id_() { format_hex_to(this->boot_, random_uint32()); }
+
+void SecTouchSniffer::serve_clear_(httpd_req_t *req) {
+  {
+    LockGuard guard(this->store_lock_);
+    this->store_.clear();
+  }
+  // Only the httpd task reads boot_, in serve_data_(), so no lock. Every open page sees the boot change and resyncs.
+  this->new_boot_id_();
+  ESP_LOGI(TAG, "Records cleared by the page");
+  this->begin_json_response_(req);
+  this->json_.raw("{}");
   this->end_json_response_(req);
 }
 

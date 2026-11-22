@@ -312,12 +312,20 @@ inline uint32_t since_from_uri(std::string_view uri) {
 
 enum class SnifferMethod : uint8_t { METHOD_GET, METHOD_POST, METHOD_OTHER };
 
-enum class SnifferRoute : uint8_t { ROUTE_NONE, ROUTE_PAGE, ROUTE_DATA, ROUTE_SCAN_START, ROUTE_SCAN_STOP };
+enum class SnifferRoute : uint8_t {
+  ROUTE_NONE,
+  ROUTE_PAGE,
+  ROUTE_DATA,
+  ROUTE_SCAN_START,
+  ROUTE_SCAN_STOP,
+  ROUTE_CLEAR
+};
 
 constexpr std::string_view SNIFFER_PAGE_PATH = "/sniffer";
 constexpr std::string_view SNIFFER_DATA_PATH = "/sniffer/data";
 constexpr std::string_view SNIFFER_SCAN_START_PATH = "/sniffer/scan/start";
 constexpr std::string_view SNIFFER_SCAN_STOP_PATH = "/sniffer/scan/stop";
+constexpr std::string_view SNIFFER_CLEAR_PATH = "/sniffer/clear";
 
 /// Which sniffer endpoint a request is for. `path` is the URL without its query string.
 inline SnifferRoute sniffer_route(SnifferMethod method, std::string_view path) {
@@ -336,6 +344,9 @@ inline SnifferRoute sniffer_route(SnifferMethod method, std::string_view path) {
     }
     if (path == SNIFFER_SCAN_STOP_PATH) {
       return SnifferRoute::ROUTE_SCAN_STOP;
+    }
+    if (path == SNIFFER_CLEAR_PATH) {
+      return SnifferRoute::ROUTE_CLEAR;
     }
   }
   return SnifferRoute::ROUTE_NONE;

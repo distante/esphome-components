@@ -36,6 +36,7 @@ using esphome::sec_touch::ScanRun;
 using esphome::sec_touch::ScanState;
 using esphome::sec_touch::since_from_uri;
 using esphome::sec_touch::sniffer_route;
+using esphome::sec_touch::SNIFFER_CLEAR_PATH;
 using esphome::sec_touch::SNIFFER_DATA_PATH;
 using esphome::sec_touch::SNIFFER_PAGE_PATH;
 using esphome::sec_touch::SNIFFER_SCAN_START_PATH;
@@ -508,11 +509,22 @@ TEST(SnifferData, RequestsAreRoutedByMethodAndPath) {
   EXPECT_EQ(sniffer_route(SnifferMethod::METHOD_GET, SNIFFER_DATA_PATH), SnifferRoute::ROUTE_DATA);
   EXPECT_EQ(sniffer_route(SnifferMethod::METHOD_POST, SNIFFER_SCAN_START_PATH), SnifferRoute::ROUTE_SCAN_START);
   EXPECT_EQ(sniffer_route(SnifferMethod::METHOD_POST, SNIFFER_SCAN_STOP_PATH), SnifferRoute::ROUTE_SCAN_STOP);
+  EXPECT_EQ(sniffer_route(SnifferMethod::METHOD_POST, SNIFFER_CLEAR_PATH), SnifferRoute::ROUTE_CLEAR);
+}
+
+TEST(SnifferData, AFullResponseAfterAClearHasNoRecords) {
+  PropertyStore store = allocated_store();
+  record_spec_example(store);
+
+  store.clear();
+
+  EXPECT_EQ(next_record_in_delta(store, 0, 0), DELTA_END);
 }
 
 TEST(SnifferData, OtherRequestsAreLeftToOtherHandlers) {
   EXPECT_EQ(sniffer_route(SnifferMethod::METHOD_POST, SNIFFER_DATA_PATH), SnifferRoute::ROUTE_NONE);
   EXPECT_EQ(sniffer_route(SnifferMethod::METHOD_GET, SNIFFER_SCAN_START_PATH), SnifferRoute::ROUTE_NONE);
+  EXPECT_EQ(sniffer_route(SnifferMethod::METHOD_GET, SNIFFER_CLEAR_PATH), SnifferRoute::ROUTE_NONE);
   EXPECT_EQ(sniffer_route(SnifferMethod::METHOD_OTHER, SNIFFER_PAGE_PATH), SnifferRoute::ROUTE_NONE);
   EXPECT_EQ(sniffer_route(SnifferMethod::METHOD_GET, "/"), SnifferRoute::ROUTE_NONE);
   EXPECT_EQ(sniffer_route(SnifferMethod::METHOD_GET, "/sniffer/"), SnifferRoute::ROUTE_NONE);

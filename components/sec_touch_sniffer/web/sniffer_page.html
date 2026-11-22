@@ -108,7 +108,7 @@
   <span class="badge" style="border:1px dashed #bbb">never seen</span>
   <span class="badge dim">filtered out</span>
   <span class="badge marked">changed since mark</span>
-  <span class="mute">blank: known, see Check</span>
+  <span id="known-gap-legend" class="mute"></span>
 </div>
 <div class="row">
   <span id="f-types" class="row" style="margin:0"></span>
@@ -168,6 +168,8 @@ import { CATALOGUE } from "./catalogue.mjs";
 const ID_COUNT = 256;
 /** Known properties are fixed by the catalogue: discover's map leaves a gap for each, once, at page start. */
 const KNOWN_ID_SET = new Set(knownIds(CATALOGUE));
+/** What a known ID's gap in discover's map means: the gap's tooltip and the legend. */
+const KNOWN_GAP_TEXT = "known, see Check";
 const FEED_LENGTH = 60;
 /** A grid cell previews this many characters of its value; the full value is in its tooltip. */
 const CELL_CHARS = 6;
@@ -443,11 +445,12 @@ function buildStatic() {
   for (let id = 0; id < ID_COUNT; id++) {
     // Their gaps never change.
     const cell = KNOWN_ID_SET.has(id)
-      ? el("div", { class: "cell gone", title: `${id}: known, see Check` })
+      ? el("div", { class: "cell gone", title: `${id}: ${KNOWN_GAP_TEXT}` })
       : el("div", { class: "cell", "data-id": id });
     cells.push(cell);
     $("grid").append(cell);
   }
+  $("known-gap-legend").textContent = `blank: ${KNOWN_GAP_TEXT}`;
   addChips($("f-types"), TYPE_COLOURS, filter.types);
   addChips($("f-statuses"), STATUS_COLOURS, filter.statuses);
   $("f-changed").append(...CHANGED_WITHIN_PRESETS.map(([ms, label]) => el("option", { value: ms }, label)));

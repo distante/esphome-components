@@ -6,6 +6,7 @@
 #include <optional>
 #include <string_view>
 
+#include "fan_level.h"
 #include "protocol_ids.h"
 
 namespace esphome {

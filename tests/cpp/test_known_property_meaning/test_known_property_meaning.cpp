@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 
+#include "sec_touch/fan_level.h"
 #include "sec_touch/known_property_meaning.h"
 
 using esphome::sec_touch::AUTOMATIC_CO2_LEVEL;

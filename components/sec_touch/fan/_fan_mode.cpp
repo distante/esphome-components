@@ -2,7 +2,6 @@
 #include "_fan_mode.h"
 #include "vector"
 #include "../fan_level.h"
-#include "../protocol_ids.h"
 
 namespace level = esphome::sec_touch;
 

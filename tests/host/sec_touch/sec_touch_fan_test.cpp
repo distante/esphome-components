@@ -5,6 +5,7 @@
 
 #include "common.h"
 #include "esphome/components/sec_touch/fan/sec_touch_fan.h"
+#include "esphome/components/sec_touch/fan_level.h"
 
 namespace esphome::sec_touch::testing {
 

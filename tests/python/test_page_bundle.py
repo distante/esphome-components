@@ -128,11 +128,11 @@ def test_fails_loudly_on_a_header_it_cannot_parse(header_dir: Path, file: str, o
         parse_catalogue(header_dir)
 
 
-def test_fails_on_a_name_defined_twice_across_two_kinds(header_dir: Path) -> None:
+def test_fails_on_a_name_defined_twice_across_two_headers(header_dir: Path) -> None:
     edit(header_dir / PROTOCOL_IDS, "// Names a fan's label property selects",
          "constexpr const std::array<int, 1> LEVEL_NAMES = {1};\n// Names a fan's label property selects")
 
-    with pytest.raises(ValueError, match="LEVEL_NAMES is defined twice"):
+    with pytest.raises(ValueError, match=re.escape(f"{PROTOCOL_IDS}: LEVEL_NAMES is defined twice (first in {FAN_LEVEL})")):
         parse_catalogue(header_dir)
 
 

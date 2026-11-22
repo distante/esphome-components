@@ -96,6 +96,7 @@ import { exportCsv, exportJson } from "./export.mjs";
 import { deviceKey, LAST_MAC_KEY, parseStored, storedText } from "./storage.mjs";
 import { STATUS_COLOURS, TYPE_COLOURS } from "./colours.mjs";
 import { isKnownId, knownMeaning } from "./known_meaning.mjs";
+import { escapeControlBytes } from "./control_bytes.mjs";
 import { CATALOGUE } from "./catalogue.mjs";
 
 const ID_COUNT = 256;
@@ -130,7 +131,7 @@ function shown(raw) {
   if (raw === null) {
     return "—";
   }
-  return raw.trim().replace(/[\x00-\x1f\x7f]/g, (c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, "0")}`);
+  return escapeControlBytes(raw.trim());
 }
 const isPadded = (raw) => raw !== null && raw !== raw.trim();
 const formatWall = (wallMs) => (wallMs === null ? "—" : new Date(wallMs).toLocaleString());
@@ -393,7 +394,7 @@ function renderDrawer(rowsById) {
     isKnownId(CATALOGUE, selected)
       ? fact("Meaning", meaning === null
         ? el("span", { class: "mute" }, "not seen")
-        : el("span", meaning.unexpected ? { class: "unexpected" } : {}, meaning.text))
+        : el("span", meaning.unexpected ? { class: "unexpected" } : {}, escapeControlBytes(meaning.text)))
       : null,
     fact("Query status",
       el("span", { class: `s-${row.status}` }, row.status), row.statusAtMs === null ? "" : ` · ${formatWall(row.statusAtMs)}`),

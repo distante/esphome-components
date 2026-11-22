@@ -241,7 +241,7 @@ let showKnown = false;
 const flashIds = new Set();
 // The ID whose note the drawer's note field holds.
 let drawerFor = null;
-// Counts the device clears this page made, so a poll fetched before one is dropped.
+// Counts the clears that emptied the copy, so a poll fetched before one is dropped.
 let clears = 0;
 
 function load(newMac) {
@@ -395,7 +395,6 @@ async function clearData() {
   const requestMac = mac;
   try {
     await fetchOk("/sniffer/clear", { method: "POST" });
-    clears += 1;
   } catch (error) {
     console.error("clear request failed", error);
     alert("The device did not clear its records; nothing was cleared.");
@@ -403,6 +402,7 @@ async function clearData() {
   }
   // Another device answered while the request was out: its copy is not the one cleared.
   if (mac === requestMac) {
+    clears += 1;
     copy = emptyCopy();
     clearMark();
     flashIds.clear();

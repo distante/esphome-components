@@ -41,7 +41,7 @@
   .cell.unseen { background:#fff; border:1px dashed #bbb; }
   /* A known property: discover leaves a gap, check shows it. */
   .cell.gone { background:transparent; border:none; cursor:default; }
-  .cell.marked { box-shadow:inset 0 0 0 3px var(--mark); }
+  .marked { box-shadow:inset 0 0 0 3px var(--mark); }
   .cell.stale { opacity:.45; font-style:italic; }
   .dim { background-image:repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,0,0,.3) 4px 6px); }
   .cell.dim { opacity:.5; }
@@ -106,7 +106,7 @@
   colour by <select id="colour-by"><option>type</option><option>status</option></select>
   <span class="badge" style="border:1px dashed #bbb">never seen</span>
   <span class="badge dim">filtered out</span>
-  <span class="badge" style="box-shadow:inset 0 0 0 2px var(--mark)">changed since mark</span>
+  <span class="badge marked">changed since mark</span>
   <span class="mute">blank: known, see Check</span>
 </div>
 <div class="row">
@@ -160,11 +160,13 @@ import { checkCards } from "./check_cards.mjs";
 import { exportCsv, exportJson } from "./export.mjs";
 import { deviceKey, LAST_MAC_KEY, parseStored, storedText } from "./storage.mjs";
 import { STATUS_COLOURS, TYPE_COLOURS } from "./colours.mjs";
-import { isKnownId } from "./known_meaning.mjs";
+import { knownIds } from "./known_meaning.mjs";
 import { escapeControlBytes } from "./control_bytes.mjs";
 import { CATALOGUE } from "./catalogue.mjs";
 
 const ID_COUNT = 256;
+/** Known properties are fixed by the catalogue: discover's map leaves a gap for each, once, at page start. */
+const KNOWN_ID_SET = new Set(knownIds(CATALOGUE));
 const FEED_LENGTH = 60;
 /** A grid cell previews this many characters of its value; the full value is in its tooltip. */
 const CELL_CHARS = 6;
@@ -438,8 +440,8 @@ const cells = [];
 
 function buildStatic() {
   for (let id = 0; id < ID_COUNT; id++) {
-    // Known properties are fixed by the catalogue: their gaps never change.
-    const cell = isKnownId(CATALOGUE, id)
+    // Their gaps never change.
+    const cell = KNOWN_ID_SET.has(id)
       ? el("div", { class: "cell gone", title: `${id}: known, see Check` })
       : el("div", { class: "cell", "data-id": id });
     cells.push(cell);
@@ -523,7 +525,7 @@ function cellColour(row) {
 function renderGrid(rowsById, visible) {
   const scan = currentScan();
   for (let id = 0; id < ID_COUNT; id++) {
-    if (isKnownId(CATALOGUE, id)) {
+    if (KNOWN_ID_SET.has(id)) {
       continue;
     }
     const cell = cells[id];

@@ -9,7 +9,7 @@ anything else fails the build rather than shipping a page that breaks in the bro
 - `export function`, `export async function`, `export const`, `export let`, `export class`
 
 `catalogue.mjs` is virtual: no file in web/. The resolver serves it from memory, built at every bundle from sec_touch's
-protocol_ids.h and fan/fan_level.h (the known-property catalogue, .specs/sniffer.md). Only the page may import it; the
+protocol_ids.h and fan_level.h (the known-property catalogue, .specs/sniffer.md). Only the page may import it; the
 tested modules take the catalogue as an argument. A header it cannot read fails the build.
 """
 
@@ -31,7 +31,7 @@ _TOP_LEVEL_NAME = re.compile(r"^(?:async )?(?:function\*?|const|let|class) (\w+)
 
 # The catalogue headers. Each regex reads one declaration form; see the comment at the top of protocol_ids.h.
 PROTOCOL_IDS_FILE = "protocol_ids.h"
-FAN_LEVEL_FILE = "fan/fan_level.h"
+FAN_LEVEL_FILE = "fan_level.h"
 _STRING_OR_COMMENT = re.compile(r'"(?:[^"\\\n]|\\.)*"|//[^\n]*|/\*.*?\*/', re.S)
 _STRING = re.compile(r'"(?:[^"\\\n]|\\.)*"')
 _INT_CONSTANT = re.compile(r"\bconstexpr\s+(?:const\s+)?int\s+(\w+)\s*=\s*([^;]*);")
@@ -165,7 +165,7 @@ def _names_by(entries: list, name: str, key_type: type) -> dict:
 
 
 def parse_catalogue(header_dir: Path = HEADER_DIR) -> dict:
-    """The known-property catalogue (.specs/sniffer.md), read from sec_touch's protocol_ids.h and fan/fan_level.h."""
+    """The known-property catalogue (.specs/sniffer.md), read from sec_touch's protocol_ids.h and fan_level.h."""
     header = _Header()
     header.read(header_dir / FAN_LEVEL_FILE)
     header.read(header_dir / PROTOCOL_IDS_FILE)

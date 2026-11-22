@@ -6,7 +6,7 @@
 #include "../sec_touch.h"
 #include "_fan_mode.h"
 #include "fan_control.h"
-#include "fan_level.h"
+#include "../fan_level.h"
 
 namespace esphome {
 namespace sec_touch {

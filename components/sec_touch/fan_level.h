@@ -1,6 +1,7 @@
 #pragma once
 
-// Plain C++, no ESPHome includes: shared by the fan component, FanModeEnum and tests/cpp.
+// Plain C++, no ESPHome includes: shared by the fan component, FanModeEnum, protocol_ids.h and tests/cpp. It sits in
+// the component root, not in fan/, because ESPHome copies fan/ only into builds that load the fan platform.
 
 namespace esphome {
 namespace sec_touch {

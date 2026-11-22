@@ -24,14 +24,14 @@ from page_bundle import (  # noqa: E402
 )
 
 PROTOCOL_IDS = "protocol_ids.h"
-FAN_LEVEL = "fan/fan_level.h"
+FAN_LEVEL = "fan_level.h"
 
 
 @pytest.fixture
 def header_dir(tmp_path: Path) -> Path:
     """A copy of the real headers the catalogue is parsed from, for a test to break."""
     copy = tmp_path / "sec_touch"
-    (copy / "fan").mkdir(parents=True)
+    copy.mkdir(parents=True)
     shutil.copy(HEADER_DIR / PROTOCOL_IDS, copy / PROTOCOL_IDS)
     shutil.copy(HEADER_DIR / FAN_LEVEL, copy / FAN_LEVEL)
     return copy

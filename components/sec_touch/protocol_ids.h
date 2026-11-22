@@ -2,14 +2,14 @@
 
 // Plain C++, no ESPHome includes: the command and property ids of the SEC-Touch protocol and the meaning tables of the
 // known properties, shared by _definitions.h, the host-built tests in tests/cpp and the sniffer page.
-// components/sec_touch_sniffer/page_bundle.py parses this file and fan/fan_level.h at every build, so keep each
+// components/sec_touch_sniffer/page_bundle.py parses this file and fan_level.h at every build, so keep each
 // declaration it reads in its current form: `constexpr [const] int`, `constexpr const char *`, a `std::array` of ints
 // or of {value, name} pairs, and the NAME_MAPPING string table. Anything it cannot read fails the build.
 
 #include <array>
 #include <cstddef>
 
-#include "fan/fan_level.h"
+#include "fan_level.h"
 
 namespace esphome {
 namespace sec_touch {
@@ -41,7 +41,7 @@ constexpr std::array<RawValueName, 2> SUMMER_VENTILATION_NAMES = {{
     {SUMMER_VENTILATION_OFF, "off"},
 }};
 
-// Names of the fan presets (FanModeEnum) and of the level each one carries, keyed by fan/fan_level.h.
+// Names of the fan presets (FanModeEnum) and of the level each one carries, keyed by fan_level.h.
 constexpr const char *NORMAL_PRESET_NAME = "Normal";
 constexpr const char *BURST_NAME = "Burst";
 constexpr const char *AUTOMATIC_HUMIDITY_NAME = "Automatic Humidity";
@@ -57,7 +57,7 @@ struct LevelName {
   const char *name;
 };
 
-// Every level a fan's level property can report. Levels 2 to 5 have no constant in fan/fan_level.h: they sit inside
+// Every level a fan's level property can report. Levels 2 to 5 have no constant in fan_level.h: they sit inside
 // MIN_NORMAL_LEVEL..MAX_NORMAL_LEVEL, so their entries spell the level out.
 constexpr std::array<LevelName, 13> LEVEL_NAMES = {{
     {OFF_LEVEL, OFF_NAME},

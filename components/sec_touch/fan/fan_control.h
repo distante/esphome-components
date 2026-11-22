@@ -4,7 +4,7 @@
 
 #include <optional>
 
-#include "fan_level.h"
+#include "../fan_level.h"
 
 namespace esphome {
 namespace sec_touch {

@@ -315,6 +315,31 @@ TEST_F(SECTouchGetRetryTest, MalformedReplyDuringScanIsNotRetried) {
   EXPECT_EQ(this->hub_.get_last_scan_outcome(), ScanOutcome::SCAN_OUTCOME_TIMEOUT);
 }
 
+// The sniffer's stop can end scan mode while a scan query is still in flight. Its late reply belongs to the scan.
+TEST_F(SECTouchGetRetryTest, MalformedReplyAfterScanStoppedIsNotRetried) {
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
+  this->send_next_task();
+  this->hub_.exit_scan_mode();
+
+  EXPECT_EQ(this->panel_answers(data_frame_with_bad_crc(FAN_1_LEVEL_ID, "10")), ack_frame());
+}
+
+// Without a reply, the watchdog still ends the scan query, so polling goes on after the scan.
+TEST_F(SECTouchGetRetryTest, WatchdogEndsAScanQueryStillInFlightAfterScanStopped) {
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
+  this->send_next_task();
+  this->hub_.exit_scan_mode();
+  this->queue_label_reads({LABEL_1_ID});
+
+  this->uart_.tx.clear();
+  this->age_task_past_watchdog();
+  this->hub_.loop();
+
+  EXPECT_EQ(this->uart_.tx, get_frame(LABEL_1_ID));
+}
+
 TEST_F(SECTouchGetRetryTest, QueuedTasksKeepTheirOrderBehindTheRetry) {
   this->queue_label_reads({LABEL_1_ID, LABEL_2_ID, LABEL_3_ID});
   this->send_next_task();

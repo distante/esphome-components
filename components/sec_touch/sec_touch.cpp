@@ -340,6 +340,8 @@ void SECTouchComponent::enter_scan_mode() {
 
 void SECTouchComponent::exit_scan_mode() {
   ESP_LOGI(TAG, "Exiting scan mode — resuming regular polling");
+  // A scan query may still be in flight. Its reply or the watchdog still ends it, but it is never sent again.
+  this->in_flight_task_.reset();
   this->scan_mode_active_ = false;
   this->add_recursive_tasks_to_get_queue();
   this->add_global_setting_tasks_to_queue();

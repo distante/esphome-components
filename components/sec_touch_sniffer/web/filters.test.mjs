@@ -60,6 +60,7 @@ test("no filter hides a registered row", () => {
   const registered = row({ registered: true });
 
   assert.equal(matchesFilter(registered, allPass(), NOW_MS, null), true);
+  // hideRegistered is a removed filter key, kept to prove a stale stored filter hides nothing.
   assert.equal(matchesFilter(registered, { ...allPass(), hideRegistered: true }, NOW_MS, null), true);
 });
 
@@ -95,7 +96,7 @@ test("discover's visible IDs are the unknown rows that pass the filter", () => {
 });
 
 test("only changed since mark keeps the IDs whose raw value differs from the mark", () => {
-  const mark = markNow(copyOf({ 5: "0100", 6: "1", 7: null }), NOW_MS, null);
+  const mark = markNow(copyOf({ 5: "0100", 6: "1", 7: null }), NOW_MS);
   const filter = { ...allPass(), onlyChangedSinceMark: true };
 
   assert.equal(matchesFilter(row({ id: 5, raw: "0200" }), filter, NOW_MS, mark), true);
@@ -107,7 +108,7 @@ test("only changed since mark keeps the IDs whose raw value differs from the mar
 });
 
 test("only changed since mark adds to the other filters", () => {
-  const mark = markNow(copyOf({ 5: "0100", 6: "1" }), NOW_MS, null);
+  const mark = markNow(copyOf({ 5: "0100", 6: "1" }), NOW_MS);
   const filter = { ...allPass(), onlyChangedSinceMark: true, types: new Set(["int"]) };
 
   assert.equal(matchesFilter(row({ id: 5, raw: "0200", type: "padded int" }), filter, NOW_MS, mark), false);

@@ -167,13 +167,20 @@ void SecTouchSniffer::on_queue_empty_() {
 void SecTouchSniffer::on_message_(int command_id, int property_id, const std::string &raw_value) {
   const uint32_t now_s = uptime_s();
   RecordResult result;
+  // Read under the lock too: the httpd task's clear also writes the store.
+  uint32_t dropped = 0;
+  uint32_t change_count = 0;
   {
     LockGuard guard(this->store_lock_);
     result = this->store_.record_message(command_id, property_id, raw_value, now_s);
+    dropped = this->store_.dropped();
+    if (result == RecordResult::RECORD_CHANGED) {
+      change_count = this->store_.fields(property_id).change_count;
+    }
   }
 
   if (result == RecordResult::RECORD_DROPPED) {
-    if (this->store_.dropped() == 1) {
+    if (dropped == 1) {
       ESP_LOGW(TAG, "property_id %d has no record slot (0-%d); such messages are dropped and counted", property_id,
                MAX_PROPERTY_ID);
     }
@@ -194,7 +201,7 @@ void SecTouchSniffer::on_message_(int command_id, int property_id, const std::st
     return;
   }
   ESP_LOGI(TAG, "property_id %d changed (cmd=%d raw='%s' at=%" PRIu32 "s, change %" PRIu32 ")", property_id, command_id,
-           raw_value.c_str(), now_s, this->store_.fields(property_id).change_count);
+           raw_value.c_str(), now_s, change_count);
 }
 
 #ifdef USE_ESP32

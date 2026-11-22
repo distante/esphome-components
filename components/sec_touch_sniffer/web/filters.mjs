@@ -2,10 +2,8 @@
  * The page's filters (see .specs/sniffer.md, "Page"). They dim non-matching cells and apply to the change feed.
  */
 
+import { STATUSES } from "./records.mjs";
 import { TYPES } from "./type_guess.mjs";
-
-/** The query statuses, as the device names them. */
-export const STATUSES = ["unqueried", "ok", "nak", "timeout"];
 
 /** @returns {object} a filter every row passes */
 export function allPass() {

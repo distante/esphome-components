@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { STATUS_COLOURS, TYPE_COLOURS } from "./colours.mjs";
-import { STATUSES } from "./filters.mjs";
+import { STATUSES } from "./records.mjs";
 import { TYPES } from "./type_guess.mjs";
 
 test("every guessed type has a colour, and only those", () => {

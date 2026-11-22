@@ -8,9 +8,11 @@
  * read its uptimes as wall time) and `stale` (only in the browser copy since the device rebooted).
  */
 
-import { STATUSES } from "./filters.mjs";
 import { guessIdType } from "./type_guess.mjs";
 import { wallTimeMs } from "./wall_time.mjs";
+
+/** The query statuses, as the device names them. */
+export const STATUSES = ["unqueried", "ok", "nak", "timeout"];
 
 /** @returns {object} a copy that has seen no response yet */
 export function emptyCopy() {

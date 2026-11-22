@@ -2,18 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { isKnownId, knownIds, knownMeaning } from "./known_meaning.mjs";
+import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
 
-// A small catalogue in the shape catalogue.mjs has, with made-up IDs so the tests don't lean on the real ones.
-const CATALOGUE = {
-  levelIds: [10, 11],
-  labelIds: [20, 21],
-  summerVentilationId: 30,
-  dateId: 31,
-  clockId: 32,
-  levelNames: { 0: "off", 3: "level 3", 7: "Burst", 255: "not connected" },
-  labelNames: ["-", "Bad", "Küche"],
-  summerVentilationNames: { "0A00": "on", "0800": "off" },
-};
+const CATALOGUE = FIXTURE_CATALOGUE;
 const [LEVEL, OTHER_LEVEL] = CATALOGUE.levelIds;
 const [LABEL] = CATALOGUE.labelIds;
 

@@ -201,7 +201,7 @@ Today's page minus known properties, plus the mark.
 - **Mark** (browser only), in a box at the top of the side column, above the drawer and the list:
   - "Set mark" snapshots every raw value, with the wall time and device uptime.
   - An "only changed since mark (n)" filter dims every cell whose value equals the snapshot. Changed cells get an orange ring.
-  - While the mark is set, the side list swaps the change feed for "changed since mark: ID mark value → now".
+  - While the mark is set, the side column shows "changed since mark: ID mark value → now" above the change feed, which stays because the mark diff can't show a value toggled away and back.
   - "Move mark to now" and "Clear mark" sit with it.
   - The mark lives in page memory only; it is not stored in the browser and is lost on reload.
 

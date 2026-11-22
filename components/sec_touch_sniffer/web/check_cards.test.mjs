@@ -50,7 +50,11 @@ test("a fan is registered when the hub registered its level or its label", () =>
 });
 
 test("the global card holds summer ventilation, date and clock, each with meaning and raw", () => {
-  const cards = checkCards(CATALOGUE, [row(32, "13:47:00"), row(30, "0A00"), row(31, "16.11.26 ")]);
+  const cards = checkCards(CATALOGUE, [
+    row(CATALOGUE.clockId, "13:47:00"),
+    row(CATALOGUE.summerVentilationId, "0A00"),
+    row(CATALOGUE.dateId, "16.11.26 "),
+  ]);
 
   assert.deepEqual(cards.global, [
     { name: "summer ventilation", id: CATALOGUE.summerVentilationId, raw: "0A00", meaning: named("on") },

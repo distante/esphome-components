@@ -3,7 +3,7 @@
  * parameters of "Device/page contract"). DOM-free: the page sends the requests and renders the text.
  */
 
-import { isObject } from "./records.mjs";
+import { isObject, wholeDecimal } from "./records.mjs";
 
 /** Shown for a refused start whose body carries no text. */
 export const RANGE_REFUSED = "the device refused the range";
@@ -79,9 +79,6 @@ export function scanReply(bodyText) {
   return null;
 }
 
-/** A range bound as typed, as a number; null when it is not plain digits. */
-const typedBound = (text) => (/^\d+$/.test(text) ? Number(text) : null);
-
 /**
  * @param {object} catalogue the CATALOGUE of catalogue.mjs: `goals` names the goals as the device does
  * @param {{goal: string, from: number | null, to: number | null} | null} scan the reply to an accepted start
@@ -95,7 +92,7 @@ export function acceptedRange(catalogue, scan, fromText, toText) {
   if (scan?.goal !== catalogue.goals.discover || !Number.isInteger(scan.from) || !Number.isInteger(scan.to)) {
     return null;
   }
-  if (scan.from !== typedBound(fromText) || scan.to !== typedBound(toText)) {
+  if (scan.from !== wholeDecimal(fromText) || scan.to !== wholeDecimal(toText)) {
     return null;
   }
   return { from: scan.from, to: scan.to };

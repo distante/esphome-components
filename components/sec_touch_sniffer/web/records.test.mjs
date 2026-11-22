@@ -1,7 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { applyResponse, changeFeed, emptyCopy, fromStored, rowsOf, toStored, wallOf, withScan } from "./records.mjs";
+import {
+  applyResponse,
+  changeFeed,
+  emptyCopy,
+  fromStored,
+  rowsOf,
+  toStored,
+  wallOf,
+  wholeDecimal,
+  withScan,
+} from "./records.mjs";
 
 const BROWSER_NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
 
@@ -262,4 +272,12 @@ test("a reply before any device answered leaves the copy as it is", () => {
   const copy = emptyCopy();
 
   assert.equal(withScan(copy, { active: false, goal: "discover" }), copy);
+});
+
+test("only plain ASCII digits read as a whole decimal, leading zeros included", () => {
+  assert.equal(wholeDecimal("42"), 42);
+  assert.equal(wholeDecimal("007"), 7);
+  for (const text of ["", " 42", "42 ", "-1", "+1", "4.2", "1e3", "0x1F", "٤٢"]) {
+    assert.equal(wholeDecimal(text), null, text);
+  }
 });

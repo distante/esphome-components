@@ -233,7 +233,12 @@ def test_a_repeated_key_names_the_header_that_declares_the_table(
 def test_a_missing_name_names_the_headers_it_was_looked_for_in(header_dir: Path) -> None:
     edit(header_dir / FAN_LEVEL, "LEVEL_NAMES = {{", "LEVEL_NAMES_RENAMED = {{")
 
-    with pytest.raises(ValueError, match=re.escape("no LEVEL_NAMES in the parsed headers (fan_level.h, protocol_ids.h, property_slots.h, scan_goal.h)")):
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "no LEVEL_NAMES in the parsed headers (fan_level.h, protocol_ids.h, property_slots.h, scan_goal.h)"
+        ),
+    ):
         parse_catalogue(header_dir)
 
 

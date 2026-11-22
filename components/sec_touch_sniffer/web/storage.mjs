@@ -4,7 +4,7 @@
  * only reads and writes the strings.
  */
 
-import { emptyCopy, fromStored, isObject, toStored } from "./records.mjs";
+import { emptyCopy, fromStored, isObject, toStored, wholeDecimal } from "./records.mjs";
 
 /** Every key the page stores starts with this. */
 export const STORAGE_PREFIX = "sec_touch_sniffer:";
@@ -19,8 +19,6 @@ export const LAST_MAC_KEY = `${STORAGE_PREFIX}last_mac`;
 export function deviceKey(mac) {
   return `${STORAGE_PREFIX}${mac}`;
 }
-
-const ID_KEY = /^\d+$/;
 
 /** The device decides which ranges are valid: a stored range only has to be two integers. */
 const isRange = (range) => isObject(range) && Number.isInteger(range.from) && Number.isInteger(range.to);
@@ -48,7 +46,7 @@ export function parseStored(text, defaultRange) {
   }
   const notes = isObject(stored.notes)
     ? Object.fromEntries(
-        Object.entries(stored.notes).filter(([id, note]) => ID_KEY.test(id) && typeof note === "string"),
+        Object.entries(stored.notes).filter(([id, note]) => wholeDecimal(id) !== null && typeof note === "string"),
       )
     : {};
   const mutes =

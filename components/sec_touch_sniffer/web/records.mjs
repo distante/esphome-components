@@ -78,6 +78,14 @@ export function toStored(copy) {
   return { boot: copy.boot, device: copy.device, records: copy.records };
 }
 
+/**
+ * @param {string} text the text to read
+ * @returns {number | null} the text read as a whole decimal number; null when it is not plain ASCII digits
+ */
+export function wholeDecimal(text) {
+  return /^[0-9]+$/.test(text) ? Number(text) : null;
+}
+
 /** @returns {boolean} whether the value is a plain JSON object (not null, not an array) */
 export const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 

@@ -9,6 +9,7 @@
 #include "sec_touch_sniffer/property_slots.h"
 #include "sec_touch_sniffer/scan_goal.h"
 
+using esphome::sec_touch::CHECK_RUN;
 using esphome::sec_touch::DEFAULT_DISCOVER_FROM;
 using esphome::sec_touch::DEFAULT_DISCOVER_RUN;
 using esphome::sec_touch::DEFAULT_DISCOVER_TO;
@@ -29,8 +30,6 @@ using esphome::sec_touch::ScanStart;
 using esphome::sec_touch::SUMMER_VENTILATION_PROPERTY_ID;
 
 namespace {
-
-constexpr ScanRun CHECK_RUN{ScanGoal::SCAN_GOAL_CHECK, DEFAULT_DISCOVER_FROM, DEFAULT_DISCOVER_TO};
 
 ScanRun discover(int from, int to) {
   return ScanRun{ScanGoal::SCAN_GOAL_DISCOVER, static_cast<uint8_t>(from), static_cast<uint8_t>(to)};

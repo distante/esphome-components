@@ -10,11 +10,10 @@
 #include "sec_touch_sniffer/property_store.h"
 #include "sec_touch_sniffer/sniffer_data.h"
 
+using esphome::sec_touch::CHECK_RUN;
 using esphome::sec_touch::COMMANDID_SET;
 using esphome::sec_touch::DATE_PROPERTY_ID;
-using esphome::sec_touch::DEFAULT_DISCOVER_FROM;
 using esphome::sec_touch::DEFAULT_DISCOVER_RUN;
-using esphome::sec_touch::DEFAULT_DISCOVER_TO;
 using esphome::sec_touch::DELTA_END;
 using esphome::sec_touch::DeviceInfo;
 using esphome::sec_touch::FAN_LABEL_IDS;
@@ -263,7 +262,6 @@ namespace {
 
 /// The spec example's discover range. 42 and 208 are unknown properties, so a discover of it queries both.
 constexpr ScanRun DISCOVER_1_208{ScanGoal::SCAN_GOAL_DISCOVER, 1, 208};
-constexpr ScanRun CHECK_RUN{ScanGoal::SCAN_GOAL_CHECK, DEFAULT_DISCOVER_FROM, DEFAULT_DISCOVER_TO};
 constexpr int MID_RANGE_ID = 42;
 
 ScanFields running(const ScanRun &run, int current) {
@@ -285,6 +283,12 @@ std::string scan_json(const ScanState &scan) {
 std::string check_json(bool active, const std::string &next, bool done) {
   return std::string(R"({"active":)") + (active ? "true" : "false") + R"(,"goal":"check","from":null,"to":null,)" +
          R"("next":)" + next + R"(,"done":)" + (done ? "true" : "false") + "}";
+}
+
+/// DISCOVER_1_208 just started: running at its first ID.
+std::string discover_1_208_start_json() {
+  return R"({"active":true,"goal":"discover","from":1,"to":208,"next":)" +
+         std::to_string(first_scan_id(DISCOVER_1_208)) + R"(,"done":false})";
 }
 
 }  // namespace
@@ -339,8 +343,7 @@ TEST(SnifferData, ACheckHasNoRange) {
 // --- Scan start and stop replies ---
 
 TEST(SnifferData, AStartReplyBeginsTheRequestedRunAtItsFirstId) {
-  EXPECT_EQ(scan_json(scan_reply(ScanFields{}, true, DISCOVER_1_208)),
-            R"({"active":true,"goal":"discover","from":1,"to":208,"next":3,"done":false})");
+  EXPECT_EQ(scan_json(scan_reply(ScanFields{}, true, DISCOVER_1_208)), discover_1_208_start_json());
   EXPECT_EQ(scan_json(scan_reply(ScanFields{}, true, CHECK_RUN)),
             check_json(true, std::to_string(DATE_PROPERTY_ID), false));
 }
@@ -353,8 +356,7 @@ TEST(SnifferData, AStartReplyAfterAStopBeginsAgain) {
 }
 
 TEST(SnifferData, AStartReplyAfterACompletedRunIsNotDone) {
-  EXPECT_EQ(scan_json(scan_reply(completed(CHECK_RUN), true, DISCOVER_1_208)),
-            R"({"active":true,"goal":"discover","from":1,"to":208,"next":3,"done":false})");
+  EXPECT_EQ(scan_json(scan_reply(completed(CHECK_RUN), true, DISCOVER_1_208)), discover_1_208_start_json());
 }
 
 TEST(SnifferData, AStartReplyDuringAScanIsTheRunningScanWhateverItsGoal) {

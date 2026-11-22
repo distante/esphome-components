@@ -51,7 +51,8 @@ class SecTouchSniffer : public Component,
   /// Stops the scan; on the main loop only. A stop while idle changes nothing.
   void stop_scan();
   /// Queues a scan start of `run`, or a stop, from any task (the page's handler runs on the httpd task); the next
-  /// loop() applies it with start_scan() or stop_scan().
+  /// loop() applies it with start_scan() or stop_scan(). The queue is one last-wins slot: two requests before the
+  /// next loop() keep only the later one.
   void request_scan(bool start, const ScanRun &run = DEFAULT_DISCOVER_RUN);
 
   void setup() override;
@@ -126,6 +127,8 @@ class SecTouchSniffer : public Component,
   };
   static constexpr PendingScanRequest NO_SCAN_REQUEST{ScanRequest::SCAN_REQUEST_NONE, DEFAULT_DISCOVER_RUN};
   std::atomic<PendingScanRequest> scan_request_{NO_SCAN_REQUEST};
+  static_assert(std::atomic<PendingScanRequest>::is_always_lock_free,
+                "scan_request_ must stay lock-free: request_scan() writes it from the httpd task");
 
 #ifdef USE_SEC_TOUCH_SNIFFER_WEB_PAGE
   /// Hex MAC, which the page files its browser storage under.

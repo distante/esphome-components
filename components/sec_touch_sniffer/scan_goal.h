@@ -35,6 +35,8 @@ static_assert(MAX_PROPERTY_ID <= UINT8_MAX, "a ScanRun range bound no longer fit
 constexpr uint8_t DEFAULT_DISCOVER_FROM = 1;
 constexpr uint8_t DEFAULT_DISCOVER_TO = MAX_PROPERTY_ID;
 constexpr ScanRun DEFAULT_DISCOVER_RUN{ScanGoal::SCAN_GOAL_DISCOVER, DEFAULT_DISCOVER_FROM, DEFAULT_DISCOVER_TO};
+/// The check run. Its range is unused; it carries the discover default.
+constexpr ScanRun CHECK_RUN{ScanGoal::SCAN_GOAL_CHECK, DEFAULT_DISCOVER_FROM, DEFAULT_DISCOVER_TO};
 
 /// No ID: past a run's last ID, or a run with no IDs.
 constexpr int NO_SCAN_ID = -1;
@@ -124,7 +126,7 @@ constexpr int property_id_from(std::string_view text) {
 /// (DEFAULT_DISCOVER_RUN) or both IDs with from <= to. Check ignores `from`/`to`, so they can't make it invalid.
 inline ScanStart scan_start_from_uri(std::string_view uri) {
   if (query_value(uri, "goal") == scan_goal_name(ScanGoal::SCAN_GOAL_CHECK)) {
-    return ScanStart{true, ScanRun{ScanGoal::SCAN_GOAL_CHECK, DEFAULT_DISCOVER_FROM, DEFAULT_DISCOVER_TO}};
+    return ScanStart{true, CHECK_RUN};
   }
   const auto from_text = query_value(uri, "from");
   const auto to_text = query_value(uri, "to");

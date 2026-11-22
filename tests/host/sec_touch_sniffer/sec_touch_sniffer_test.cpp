@@ -28,8 +28,6 @@ const std::string UNREGISTERED_STATE = std::to_string(UNREGISTERED_ID) + "=10";
 /// Another ID no entity registers, scanned right after UNREGISTERED_ID.
 constexpr int NEXT_UNREGISTERED_ID = UNREGISTERED_ID + 1;
 
-constexpr ScanRun CHECK_RUN{ScanGoal::SCAN_GOAL_CHECK, DEFAULT_DISCOVER_FROM, DEFAULT_DISCOVER_TO};
-
 ScanRun discover(int from, int to) {
   return ScanRun{ScanGoal::SCAN_GOAL_DISCOVER, static_cast<uint8_t>(from), static_cast<uint8_t>(to)};
 }

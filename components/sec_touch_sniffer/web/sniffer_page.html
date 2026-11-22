@@ -167,6 +167,7 @@ import { checkCards } from "./check_cards.mjs";
 import { exportCsv, exportJson } from "./export.mjs";
 import { deviceKey, LAST_MAC_KEY, parseStored, storedText } from "./storage.mjs";
 import { STATUS_COLOURS, TYPE_COLOURS } from "./colours.mjs";
+import { drawerBadges } from "./drawer_head.mjs";
 import { knownCellTitle, knownIds, meaningText } from "./known_meaning.mjs";
 import { shown } from "./control_bytes.mjs";
 import { CATALOGUE } from "./catalogue.mjs";
@@ -644,7 +645,7 @@ function renderDrawer(rowsById) {
     return;
   }
   const row = rowsById.get(selected);
-  const head = el("div", { class: "row" }, el("b", {}, `ID ${selected}`));
+  const title = el("b", {}, `ID ${selected}`);
   // The note field stays in place across polls, so typing keeps focus; it is refilled only for another ID.
   const note = $("note");
   if (drawerFor !== selected) {
@@ -654,13 +655,17 @@ function renderDrawer(rowsById) {
   }
   note.hidden = !row;
   if (!row) {
-    head.append(el("span", { class: "mute" }, "never seen"), el("span", { class: "grow" }), el("button", { "data-action": "close" }, "×"));
-    $("drawer-info").replaceChildren(head);
+    $("drawer-info").replaceChildren(
+      el("div", { class: "row" },
+        title, el("span", { class: "mute" }, "never seen"), el("span", { class: "grow" }),
+        el("button", { "data-action": "close" }, "×")));
     return;
   }
-  head.append(
-    row.type ? el("span", { class: "badge", style: `background:${TYPE_COLOURS[row.type]}` }, row.type) : null,
-    row.stale ? el("span", { class: "badge" }, "stale: browser copy only") : null,
+  const head = el("div", { class: "row" },
+    title,
+    ...drawerBadges(row).map((badge) =>
+      el("span", badge.colour === null ? { class: "badge" } : { class: "badge", style: `background:${badge.colour}` },
+        badge.text)),
     el("span", { class: "grow" }),
     el("button", { "data-action": "mute" }, mutes.has(selected) ? "Unmute in feed" : "Mute in feed"),
     el("button", { "data-action": "close" }, "×"),

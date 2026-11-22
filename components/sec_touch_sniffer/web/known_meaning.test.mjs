@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { isKnownId, knownMeaning } from "./known_meaning.mjs";
+import { isKnownId, knownIds, knownMeaning } from "./known_meaning.mjs";
 
 // A small catalogue in the shape catalogue.mjs has, with made-up IDs so the tests don't lean on the real ones.
 const CATALOGUE = {
@@ -30,6 +30,12 @@ test("every ID of the catalogue is known, and only those", () => {
   for (const id of [0, 1, 12, 19, 22, 33, 255]) {
     assert.equal(isKnownId(CATALOGUE, id), false, `ID ${id}`);
   }
+});
+
+test("the known IDs are every ID of the catalogue, once each, in ascending order", () => {
+  assert.deepEqual(knownIds(CATALOGUE), [10, 11, 20, 21, 30, 31, 32]);
+  const unsorted = { ...CATALOGUE, levelIds: [40, 12], dateId: 5, clockId: 1 };
+  assert.deepEqual(knownIds(unsorted), [1, 5, 12, 20, 21, 30, 40]);
 });
 
 test("an unknown ID or a never-seen value has no meaning", () => {

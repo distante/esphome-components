@@ -7,12 +7,21 @@
 
 /**
  * @param {object} catalogue the CATALOGUE of catalogue.mjs
+ * @returns {number[]} every known property ID, ascending: the IDs a check scan queries, in its order
+ */
+export function knownIds(catalogue) {
+  const ids = [...catalogue.levelIds, ...catalogue.labelIds, catalogue.summerVentilationId, catalogue.dateId,
+    catalogue.clockId];
+  return [...new Set(ids)].sort((a, b) => a - b);
+}
+
+/**
+ * @param {object} catalogue the CATALOGUE of catalogue.mjs
  * @param {number} id a property ID
  * @returns {boolean} whether the ID is a known property
  */
 export function isKnownId(catalogue, id) {
-  return catalogue.levelIds.includes(id) || catalogue.labelIds.includes(id) ||
-    [catalogue.summerVentilationId, catalogue.dateId, catalogue.clockId].includes(id);
+  return knownIds(catalogue).includes(id);
 }
 
 // ASCII whitespace only, matching the trim of known_property_meaning() in C++. The page's display trim

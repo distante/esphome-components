@@ -34,7 +34,10 @@ function deviceCopy() {
   return applyResponse(emptyCopy(), response, BROWSER_NOW_MS).copy;
 }
 
-const nothing = () => ({ copy: emptyCopy(), notes: {}, mutes: new Set() });
+// The catalogue's default discover range, made up so the tests don't lean on the real one.
+const DEFAULT_RANGE = { from: 7, to: 99 };
+
+const nothing = () => ({ copy: emptyCopy(), notes: {}, mutes: new Set(), range: DEFAULT_RANGE });
 
 test("every key shares the storage prefix", () => {
   assert.ok(LAST_MAC_KEY.startsWith(STORAGE_PREFIX));
@@ -42,20 +45,41 @@ test("every key shares the storage prefix", () => {
   assert.notEqual(deviceKey("aabbccddeeff"), LAST_MAC_KEY);
 });
 
-test("a stored device reloads with its copy, notes and mutes", () => {
-  const stored = parseStored(storedText(deviceCopy(), { 5: "Fan level?" }, new Set([5, 9])));
+test("a stored device reloads with its copy, notes, mutes and discover range", () => {
+  const range = { from: 3, to: 200 };
+  const stored = parseStored(storedText(deviceCopy(), { 5: "Fan level?" }, new Set([5, 9]), range), DEFAULT_RANGE);
 
   assert.equal(stored.copy.records[5].raw, "0100");
   assert.equal(stored.copy.since, null);
   assert.deepEqual(stored.notes, { 5: "Fan level?" });
   assert.deepEqual(stored.mutes, new Set([5, 9]));
+  assert.deepEqual(stored.range, range);
+});
+
+test("a device stored without a discover range gets the default range", () => {
+  const text = JSON.stringify({ notes: { 5: "x" } });
+
+  assert.deepEqual(parseStored(text, DEFAULT_RANGE).range, DEFAULT_RANGE);
+});
+
+test("a stored range that is not two integers gives the default range", () => {
+  for (const range of [null, "1-255", [1, 255], {}, { from: 1 }, { to: 255 }, { from: "1", to: 255 }, { from: 1.5, to: 255 }]) {
+    assert.deepEqual(parseStored(JSON.stringify({ range }), DEFAULT_RANGE).range, DEFAULT_RANGE, JSON.stringify(range));
+  }
+});
+
+// The device decides which ranges are valid; storage only checks the shape.
+test("a stored range of two integers is kept whatever its bounds", () => {
+  const range = { from: 300, to: 2 };
+
+  assert.deepEqual(parseStored(JSON.stringify({ range }), DEFAULT_RANGE).range, range);
 });
 
 test("nothing stored, or text that is not JSON, gives nothing", () => {
-  assert.deepEqual(parseStored(null), nothing());
-  assert.deepEqual(parseStored("{not json"), nothing());
-  assert.deepEqual(parseStored("5"), nothing());
-  assert.deepEqual(parseStored("[1, 2]"), nothing());
+  assert.deepEqual(parseStored(null, DEFAULT_RANGE), nothing());
+  assert.deepEqual(parseStored("{not json", DEFAULT_RANGE), nothing());
+  assert.deepEqual(parseStored("5", DEFAULT_RANGE), nothing());
+  assert.deepEqual(parseStored("[1, 2]", DEFAULT_RANGE), nothing());
 });
 
 test("notes keep only text values keyed by an ID", () => {

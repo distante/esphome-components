@@ -405,6 +405,10 @@ An experiment finds the unknown ID behind one panel setting: you change the sett
    - **Write probe** reads the original, writes the value, reads it back and restores the original, all within about a second: "✓ writable · restore ok" says the ID takes writes. It is too quick to see on the panel.
    - **Set and keep** writes the value and leaves it, so you can check the panel: "kept: ID 101 is 03, was 02", and the "Aktiv" box is ticked. Then click **set back to “02”**.
 
+   | The card after "Set and keep" | The panel with ID 101 at `03` |
+   |---|---|
+   | <img src="images/sniffer-set-and-keep.png" alt="Card ID 101, corroborated: off = 02 and on = 03 seen, set and keep 03, SET 03 ACK, GET 03, kept: ID 101 is 03, was 02, and a set back to 02 button" width="380" /> | <img src="images/panel-zeitprogramm-kellerraum.jpg" alt="Panel screen Zeitprogramm Kellerraum: Schaltzeit 1 at 16:00 with Aktiv ticked, circled" width="380" /> |
+
    Each result is also added to the ID's note. A write that a reboot cut short shows as interrupted, with a button to restore the original when the page knows it. "original unknown" means the device rebooted before it read the original, so nothing was written.
 8. **Keep the evidence.** Click the ID's cell and add to its note what it controls, such as `Zeitprogramm Kellerraum, Schaltzeit 1, Aktiv: 02 off, 03 on`. Then click **Export JSON** with "only the open experiment" ticked: the file has the captures, the candidates and every write with its steps. The page keeps experiments only in this browser, so the export is the copy to attach to an issue or PR.
 

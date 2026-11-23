@@ -2,9 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  isProbeEntry,
   isProbeValue,
   isPendingProbe,
   latestProbe,
+  newKeptSet,
   newPendingProbe,
   probeChoices,
   probeNote,
@@ -43,6 +45,38 @@ test("a pending probe starts with no steps; only a restore knows its original: t
   assert.deepEqual(probe, { ...request, kind: "probe", value: PROBE_VALUE, original: null });
   assert.deepEqual(restore, { ...request, kind: "restore", value: PROBE_ORIGINAL, original: PROBE_ORIGINAL });
   assert.equal(isPendingProbe(probe) && isPendingProbe(restore), true);
+});
+
+test("a set and keep is a restore to the chosen value that remembers what the ID was", () => {
+  const kept = newKeptSet("e1", ID, PROBE_VALUE, PROBE_ORIGINAL, PROBE_AT_MS);
+
+  assert.deepEqual(kept, {
+    experimentKey: "e1",
+    kind: "restore",
+    id: ID,
+    value: PROBE_VALUE,
+    original: PROBE_VALUE,
+    steps: [],
+    atMs: PROBE_AT_MS,
+    was: PROBE_ORIGINAL,
+  });
+  assert.equal(isPendingProbe(kept), true);
+  assert.equal(isPendingProbe(newKeptSet("e1", ID, PROBE_VALUE, null, PROBE_AT_MS)), true);
+  assert.equal(isPendingProbe({ ...kept, was: 3 }), false);
+});
+
+test("a set and keep's result and interruption keep what the ID was", () => {
+  const kept = newKeptSet("e1", ID, PROBE_VALUE, PROBE_ORIGINAL, PROBE_AT_MS);
+  const device = deviceProbe({ kind: "restore", original: PROBE_VALUE, verdict: null, restore: "ok",
+    steps: [probeStep("set", "ok", PROBE_VALUE, 100), probeStep("get", "ok", PROBE_VALUE, 200)] });
+
+  const result = reconcileProbe(kept, device, true);
+  assert.equal(result.entry.was, PROBE_ORIGINAL);
+  assert.equal(isProbeEntry(result.entry), true);
+  const interrupted = reconcileProbe(kept, null, true);
+  assert.equal(interrupted.entry.was, PROBE_ORIGINAL);
+  assert.equal(isProbeEntry(interrupted.entry), true);
+  assert.equal("was" in reconcileProbe(pendingProbe({}), deviceProbe({}), true).entry, false);
 });
 
 // ───── values ─────
@@ -298,12 +332,53 @@ test("values show trimmed with control bytes escaped", () => {
   assert.deepEqual(probeTexts(probe).steps, ["SET 0\\x01 → ACK"]);
 });
 
+/** A set and keep of ID to PROBE_VALUE that took, from PROBE_ORIGINAL, as stored; `fields` overrides any field. */
+const keptEntry = (fields) => ({
+  ...deviceProbe({ kind: "restore", original: PROBE_VALUE, verdict: null, restore: "ok",
+    steps: [probeStep("set", "ok", PROBE_VALUE, 100), probeStep("get", "ok", PROBE_VALUE, 200)] }),
+  atMs: PROBE_AT_MS,
+  was: PROBE_ORIGINAL,
+  ...fields,
+});
+
+test("a set and keep that took says the ID is kept at the value, and what it was", () => {
+  assert.deepEqual(probeTexts(keptEntry({})), {
+    title: `set and keep ${PROBE_VALUE}`,
+    steps: [`SET ${PROBE_VALUE} → ACK`, `GET → ${PROBE_VALUE}`],
+    verdict: null,
+    restore: `kept: ID ${ID} is ${PROBE_VALUE}, was ${PROBE_ORIGINAL}`,
+  });
+  assert.equal(probeTexts(keptEntry({ was: null })).restore, `kept: ID ${ID} is ${PROBE_VALUE}, was unknown`);
+  assert.equal(
+    probeNote(keptEntry({})),
+    `set and keep ${PROBE_VALUE}: SET ${PROBE_VALUE} → ACK · GET → ${PROBE_VALUE} · kept: ID ${ID} is ${PROBE_VALUE}, was ${PROBE_ORIGINAL}`,
+  );
+});
+
+test("a set and keep that failed, runs or was interrupted says so, with what the ID was", () => {
+  const failed = keptEntry({ restore: "failed", steps: [probeStep("set", "nak", PROBE_VALUE, 100),
+    probeStep("get", "ok", "02", 200)] });
+
+  assert.equal(probeTexts(failed).restore, `set failed: ID ${ID} is now 02, was ${PROBE_ORIGINAL}`);
+  assert.equal(probeTexts(keptEntry({ active: true, restore: null })).verdict, "setting…");
+  assert.equal(probeTexts(keptEntry({ restore: null, interrupted: true })).verdict,
+    `set interrupted: ID ${ID} may be ${PROBE_VALUE}, was ${PROBE_ORIGINAL}`);
+});
+
 // ───── restore button ─────
 
 test("a failed restore or an interrupted probe offers to restore the original", () => {
   assert.equal(restoreOffer(CATALOGUE, deviceProbe({ restore: "failed" })), PROBE_ORIGINAL);
   const interrupted = { ...deviceProbe({ verdict: null, restore: null }), interrupted: true };
   assert.equal(restoreOffer(CATALOGUE, interrupted), PROBE_ORIGINAL);
+});
+
+test("after a set and keep, whatever came of it, the offer is to set the ID back to what it was", () => {
+  for (const fields of [{}, { restore: "failed" }, { restore: null, interrupted: true }]) {
+    assert.equal(restoreOffer(CATALOGUE, keptEntry(fields)), PROBE_ORIGINAL, JSON.stringify(fields));
+  }
+  assert.equal(restoreOffer(CATALOGUE, keptEntry({ was: null })), null);
+  assert.equal(restoreOffer(CATALOGUE, keptEntry({ was: "x".repeat(CAP + 1) })), null);
 });
 
 test("there is nothing to restore without a failure, without an original, or to an original a SET can't carry", () => {

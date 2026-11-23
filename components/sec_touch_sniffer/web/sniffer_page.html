@@ -40,7 +40,10 @@
   #grid { flex:1; min-width:0; display:grid; gap:2px;
     grid-template-columns:repeat(16, minmax(0, 1fr)); grid-template-rows:repeat(16, minmax(0, 1fr)); }
   .cell { font-size:10px; display:flex; flex-direction:column; align-items:center; justify-content:center;
-    overflow:hidden; cursor:pointer; background:#f7f7f7; border:1px solid #e2e2e2; }
+    overflow:hidden; cursor:pointer; background:#f7f7f7; border:1px solid #e2e2e2; position:relative; }
+  /* An ID with a note: a dot in the corner, so the cell keeps its room for the value. */
+  .cell .note-dot { position:absolute; top:2px; right:2px; width:6px; height:6px; border-radius:50%;
+    background:#d33; }
   .cell code { font-size:10px; max-width:100%; overflow:hidden; white-space:nowrap; }
   .cell.unseen { background:#fff; border:1px dashed #bbb; }
   /* A known property: discover leaves a gap, check shows it. */
@@ -228,6 +231,7 @@ import {
 import { captureStep, isCaptureRun } from "./capture_run.mjs";
 import {
   latestProbe,
+  newKeptSet,
   newPendingProbe,
   probeChoices,
   probeNote,
@@ -695,8 +699,11 @@ async function startCapture() {
   renderLogged();
 }
 
-/** Starts a write probe or a restore of `id` to `value` from the open experiment's card. */
-async function startProbe(kind, id, value) {
+/**
+ * Starts a write probe or a restore of `id` to `value` from the open experiment's card. With `was` (the ID's value
+ * now, null when unknown) the restore is a set and keep.
+ */
+async function startProbe(kind, id, value, was = undefined) {
   const experiment = openExperiment();
   if (experiment === null || pendingProbe !== null || deviceRuns()) {
     return;
@@ -704,7 +711,9 @@ async function startProbe(kind, id, value) {
   const requestMac = mac;
   probeErrors.delete(id);
   // Stored before the request: if the device reboots mid-probe, the page can still tell it was interrupted.
-  pendingProbe = newPendingProbe(experiment.key, kind, id, value, Date.now());
+  pendingProbe = was === undefined
+    ? newPendingProbe(experiment.key, kind, id, value, Date.now())
+    : newKeptSet(experiment.key, id, value, was, Date.now());
   // No poll judges it while the request is out: the device may not have it yet.
   probeAfterPoll = Infinity;
   save();
@@ -886,7 +895,7 @@ function renderGrid(rowsById, visible, statuses) {
       cell.append(el("code", {}, shown(row.raw).slice(0, CELL_CHARS)));
     }
     if (row && notes[id]) {
-      cell.append(el("span", {}, "✎"));
+      cell.append(el("span", { class: "note-dot", title: "has a note" }));
     }
     cell.classList.toggle("stale", Boolean(row?.stale));
     cell.classList.toggle("dim", Boolean(row) && !visible.has(id));
@@ -1023,7 +1032,9 @@ function probeControls(experiment, candidate, row) {
   select.value = String(choices.values.indexOf(chosen));
   const probeButton = button({ "data-probe": candidate.id, title: "SET the value, read it back, then restore" },
     runs || chosen === null, "Write probe");
-  const parts = [el("div", { class: "row" }, "write ", select, probeButton)];
+  const keepButton = button({ "data-keep": candidate.id, title: "SET the value and leave it, to watch the unit react" },
+    runs || chosen === null, "Set and keep");
+  const parts = [el("div", { class: "row" }, "write ", select, probeButton, keepButton)];
   const error = probeErrors.get(candidate.id);
   if (error !== undefined) {
     parts.push(el("div", { class: "probe unexpected" }, error));
@@ -1035,7 +1046,8 @@ function probeControls(experiment, candidate, row) {
   }
   const restoreTo = mine ? null : restoreOffer(CATALOGUE, shownProbe);
   if (restoreTo !== null) {
-    parts.push(button({ "data-restore": candidate.id }, runs, `restore “${shown(restoreTo)}”`));
+    const action = shownProbe.was === undefined ? "restore" : "set back to";
+    parts.push(button({ "data-restore": candidate.id }, runs, `${action} “${shown(restoreTo)}”`));
   }
   return parts;
 }
@@ -1261,7 +1273,7 @@ $("drawer").addEventListener("input", (event) => {
     delete notes[selected];
   }
   save();
-  // The note field is not rebuilt by render, so it keeps focus; the ✎ marker and note search update now.
+  // The note field is not rebuilt by render, so it keeps focus; the note dot and note search update now.
   render();
 });
 $("f-query").addEventListener("input", (event) => {
@@ -1350,11 +1362,18 @@ $("experiment-view").addEventListener("click", (event) => {
     updateExperiment(experiment.key, (stored) => withoutCapture(stored, Number(target.dataset.delete)));
     save();
     render();
-  } else if (target.dataset.probe !== undefined) {
-    const id = Number(target.dataset.probe);
-    const { values } = probeChoices(CATALOGUE, experiment, id, copy.records[id]?.raw ?? null);
+  } else if (target.dataset.probe !== undefined || target.dataset.keep !== undefined) {
+    const keep = target.dataset.keep !== undefined;
+    const id = Number(keep ? target.dataset.keep : target.dataset.probe);
+    const current = copy.records[id]?.raw ?? null;
+    const { values } = probeChoices(CATALOGUE, experiment, id, current);
     const index = Number(target.closest(".card").querySelector("[data-probe-select]").value);
-    if (values[index] !== undefined) {
+    if (values[index] === undefined) {
+      return;
+    }
+    if (keep) {
+      startProbe("restore", id, values[index], current);
+    } else {
       startProbe("probe", id, values[index]);
     }
   } else if (target.dataset.restore !== undefined) {

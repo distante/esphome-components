@@ -89,7 +89,28 @@ export function newPendingProbe(experimentKey, kind, id, value, atMs) {
   return { experimentKey, kind, id, value, original: kind === "restore" ? value : null, steps: [], atMs };
 }
 
-const isOneOfOrNull = (values) => (value) => value === null || values.includes(value);
+/**
+ * Set and keep: the device's restore request writes `value` and checks it, with no restore after. The ID stays at
+ * `value` until the page sets it back to `was`, so the panel shows the change for as long as needed.
+ *
+ * @param {string} experimentKey the experiment whose card started it
+ * @param {number} id the property ID
+ * @param {string} value the value to set, one code point per byte
+ * @param {string | null} was the ID's raw value when it was started, null when unknown
+ * @param {number} atMs browser time it was started (epoch ms)
+ * @returns {object} the pending restore, with `was`
+ */
+export function newKeptSet(experimentKey, id, value, was, atMs) {
+  return { ...newPendingProbe(experimentKey, "restore", id, value, atMs), was };
+}
+
+/** A set and keep's `was`: the field when the pending probe or entry has one, else nothing. */
+const wasOf = (probe) => (probe.was === undefined ? {} : { was: probe.was });
+
+/** Whether a stored value's `was`, when it has one, is a raw value or null. */
+const hasValidWas = (value) => value.was === undefined || isStringOrNull(value.was);
+
+const isOneOfOrNull =(values) => (value) => value === null || values.includes(value);
 
 const isStep = (step) =>
   isObject(step) &&
@@ -122,14 +143,17 @@ const isProbeObject = (value) => hasResultFields(value) && typeof value.active =
  * @returns {boolean} whether it is a whole probe entry
  */
 export const isProbeEntry = (value) =>
-  hasResultFields(value) && Number.isFinite(value.atMs) && (value.interrupted === undefined || value.interrupted === true);
+  hasResultFields(value) &&
+  Number.isFinite(value.atMs) &&
+  (value.interrupted === undefined || value.interrupted === true) &&
+  hasValidWas(value);
 
 /**
  * @param {unknown} value a stored value
  * @returns {boolean} whether it is a whole pending probe
  */
 export const isPendingProbe = (value) =>
-  hasRequestFields(value) && typeof value.experimentKey === "string" && Number.isFinite(value.atMs);
+  hasRequestFields(value) && typeof value.experimentKey === "string" && Number.isFinite(value.atMs) && hasValidWas(value);
 
 /**
  * @param {string} bodyText the body of a probe or restore the device answered with 200
@@ -176,7 +200,7 @@ export function reconcileProbe(pending, probe, fresh) {
   }
   if (isSameRun(pending, probe)) {
     const { active, ...result } = probe;
-    return { kind: "result", entry: { ...result, atMs: pending.atMs } };
+    return { kind: "result", entry: { ...result, atMs: pending.atMs, ...wasOf(pending) } };
   }
   return {
     kind: "interrupted",
@@ -190,6 +214,7 @@ export function reconcileProbe(pending, probe, fresh) {
       restore: null,
       interrupted: true,
       atMs: pending.atMs,
+      ...wasOf(pending),
     },
   };
 }
@@ -229,6 +254,9 @@ function lastGetValue(probe) {
  *   `verdict` also says a probe or restore runs or was interrupted, `restore` is null when none was needed or decided
  */
 export function probeTexts(probe) {
+  if (probe.was !== undefined) {
+    return keptSetTexts(probe);
+  }
   const isRestore = probe.kind === "restore";
   const title = `${isRestore ? "restore" : "write probe"} ${shown(probe.value)}`;
   let verdict = probe.verdict === null ? null : VERDICT_TEXT[probe.verdict];
@@ -249,6 +277,24 @@ export function probeTexts(probe) {
   return { title, steps: probe.steps.map(stepText), verdict, restore };
 }
 
+/** probeTexts() of a set and keep: its restore request's outcome, said against what the ID was. */
+function keptSetTexts(probe) {
+  const was = orUnknown(probe.was);
+  let verdict = null;
+  if (probe.interrupted) {
+    verdict = `set interrupted: ID ${probe.id} may be ${shown(probe.value)}, was ${was}`;
+  } else if (probe.active) {
+    verdict = "setting…";
+  }
+  let restore = null;
+  if (probe.restore === "ok") {
+    restore = `kept: ID ${probe.id} is ${shown(probe.value)}, was ${was}`;
+  } else if (probe.restore === "failed") {
+    restore = `set failed: ID ${probe.id} is now ${orUnknown(lastGetValue(probe))}, was ${was}`;
+  }
+  return { title: `set and keep ${shown(probe.value)}`, steps: probe.steps.map(stepText), verdict, restore };
+}
+
 /**
  * @param {object} probe a probe entry
  * @returns {string} the line appended to the ID's note
@@ -262,17 +308,22 @@ export function probeNote(probe) {
 /**
  * @param {object} catalogue the CATALOGUE of catalogue.mjs
  * @param {object | null} probe an ID's latest probe entry
- * @returns {string | null} the original to offer a restore to: after a failed restore or an interrupted probe, when
- *   the original is known and a SET can carry it
+ * @returns {string | null} the value to offer a restore to, when it is known and a SET can carry it: after a set and
+ *   keep, whatever came of it, what the ID was; after a failed restore or an interrupted probe, the original
  */
 export function restoreOffer(catalogue, probe) {
-  if (probe === null || !(probe.restore === "failed" || probe.interrupted)) {
+  if (probe === null) {
     return null;
   }
-  if (probe.original === null || !isProbeValue(catalogue, probe.original)) {
+  const kept = probe.was !== undefined;
+  if (!kept && !(probe.restore === "failed" || probe.interrupted)) {
     return null;
   }
-  return probe.original;
+  const value = kept ? probe.was : probe.original;
+  if (value === null || !isProbeValue(catalogue, value)) {
+    return null;
+  }
+  return value;
 }
 
 /**

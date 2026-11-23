@@ -204,7 +204,7 @@
 import { applyResponse, changeFeed, emptyCopy, rowsOf, wholeDecimal, withProbe, withScan } from "./records.mjs";
 import { createPoller, resyncReason, sinceFor } from "./poll.mjs";
 import { allPass, feedIds, visibleIds } from "./filters.mjs";
-import { captureProgress, scanProgress } from "./scan_progress.mjs";
+import { candidateCount, captureProgress, scanProgress } from "./scan_progress.mjs";
 import {
   acceptedRange,
   busyLine,
@@ -995,7 +995,7 @@ function renderCoach(experiment, analysis) {
   $("full-rescan").hidden = !forceFull && next.full;
   $("next-capture").textContent = next.full
     ? `next capture: full range ${next.from ?? "?"}–${next.to ?? "?"}`
-    : `next capture: ${next.ids.length} candidates`;
+    : `next capture: ${candidateCount(next.ids.length)}`;
   $("capture-note").textContent = captureNote ?? "";
 }
 

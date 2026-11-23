@@ -99,6 +99,14 @@ function scanRunProgress(scan, catalogue) {
 }
 
 /**
+ * @param {number} count how many candidates
+ * @returns {string} e.g. `1 candidate`, `3 candidates`
+ */
+export function candidateCount(count) {
+  return `${count} ${count === 1 ? "candidate" : "candidates"}`;
+}
+
+/**
  * The scan row while this page's own capture runs.
  *
  * @param {object} catalogue the CATALOGUE of catalogue.mjs
@@ -110,7 +118,7 @@ function scanRunProgress(scan, catalogue) {
 export function captureProgress(catalogue, capture, scan) {
   const ids = runIds(catalogue, scan) ?? [];
   const behind = scan.next === null && !scan.done ? 0 : behindCount(scan, ids);
-  const scope = capture.next.full ? "full range" : `${ids.length} candidates`;
+  const scope = capture.next.full ? "full range" : candidateCount(ids.length);
   return {
     label: `capturing “${capture.label.trim()}” for ${capture.experimentName} · ${behind}/${ids.length} · ${scope}`,
     percent: ids.length === 0 ? 0 : clampPercent((100 * behind) / ids.length),

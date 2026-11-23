@@ -387,9 +387,30 @@ For a known property, the Check tab shows what its value means. Known properties
 - **Open on the LAN without auth:** without `web_server: auth:`, anyone on your network can open the page, start or stop a scan, which pauses normal polling, clear the captured records, and **write values to the panel's unknown properties** with a write probe. Set `web_server: auth:` while the sniffer is enabled. When set, `web_server: auth:` and `allowed_origins` also apply to `/sniffer`, `/sniffer/data`, `/sniffer/scan/*`, `/sniffer/clear`, `/sniffer/probe` and `/sniffer/restore`.
 - **Captive portal:** while the device runs its captive-portal access point (the Wi-Fi fallback), the portal answers every GET request, so the page may be unreachable until the device is back on your network.
 - **Scripting a scan:** `curl -X POST -H 'Content-Length: 0' 'http://<device>/sniffer/scan/start?goal=discover&from=1&to=208'` (or `?goal=check`, or `/stop`). Without the explicit empty body the server answers `411`. A missing or unknown `goal` means discover; without `from` and `to` discover covers 1–255. Discover with only one of them, a non-numeric one, one above 255 or `from` above `to` gets a `400` and starts nothing; check ignores them. Instead of a range, discover takes `ids=12,40,77` (at most 100 distinct IDs) and queries only those, in ascending order. One run at a time: a scan, write probe or restore start while another runs gets `409` and starts nothing; a stop works during a scan only.
-- **Scripting a write probe:** `curl -X POST -H 'Content-Type: text/plain' --data-binary '03' 'http://<device>/sniffer/probe?id=77'` writes `03` to unknown property 77, reads it back, and restores the original; `/sniffer/restore?id=77` with the original as the body only restores. The value is the exact body, at most 15 bytes; send it as `text/plain` (a form body never reaches the sniffer). The data endpoint, its `probe` result and its JSON are described in the [spec](../../.specs/sniffer.md#devicepage-contract).
+- **Scripting a write probe:** `curl -X POST -H 'Content-Type: text/plain' --data-binary '03' 'http://<device>/sniffer/probe?id=77'` writes `03` to unknown property 77, reads it back, and restores the original; `/sniffer/restore?id=77` writes its body and checks it without restoring anything, which is how the page puts an original back and how its "Set and keep" works. The value is the exact body, at most 15 bytes; send it as `text/plain` (a form body never reaches the sniffer). The data endpoint, its `probe` result and its JSON are described in the [spec](../../.specs/sniffer.md#devicepage-contract).
 
 See [RAW_VALUES.md](RAW_VALUES.md#how-to-reproduce) for a capture walkthrough.
+
+#### Finding what an ID controls
+
+An experiment finds the unknown ID behind one panel setting: you change the setting on the panel, capture, and the page keeps only the IDs that follow it. The example is the one that found ID 101, the "Aktiv" checkbox of "Schaltzeit 1" on the panel's "Zeitprogramm Kellerraum" screen.
+
+1. **Open the page** at `http://<device>/sniffer`, on the Discover tab. In the scan row, set **from** and **to** to the range to search. The whole range 1–255 always works. A smaller one, such as 90–130, makes every capture quicker, but the setting's ID must be inside it. The experiment keeps the range of its first capture.
+2. **Start an experiment.** The coach box on the right asks "What setting will you change on the panel?". Type the setting, such as `Schaltzeit 1 aktiv`, and click **Start experiment**. A sub-tab with that name appears.
+3. **Capture a first value.** Set the setting on the panel, type a name for its value in "value label", such as `off`, and click **Capture**. The scan row shows the progress; when it ends, the capture is listed under **Captures**.
+4. **Capture a second value.** The coach says "Change … to a different value". Change it on the panel, name it (`on`) and capture.
+5. **Go back.** The coach says "Go back to “off” and capture". Set the panel back, pick the same label from the suggestions and capture. The IDs that went `off` → `on` → `off` with the panel now show as cards with an orange **candidate** badge, and orange rings in the grid. From here on a capture only queries the candidates ("next capture: 1 candidate").
+6. **Corroborate.** The coach asks for one more capture of a value. Once two values have two captures each, a candidate that kept its values turns green: **corroborated**, and the coach says "ID 101 corroborated". An ID that answered differently for the same label is disqualified, listed under "N disqualified".
+7. **Write to confirm.** A corroborated card offers a select of the values its captures saw, and two buttons:
+   - **Write probe** reads the original, writes the value, reads it back and restores the original, all within about a second: "✓ writable · restore ok" says the ID takes writes. It is too quick to see on the panel.
+   - **Set and keep** writes the value and leaves it, so you can check the panel: "kept: ID 101 is 03, was 02", and the "Aktiv" box is ticked. Then click **set back to “02”**.
+
+   Each result is also added to the ID's note. A write that a reboot cut short shows as interrupted, with a button to restore the original when the page knows it. "original unknown" means the device rebooted before it read the original, so nothing was written.
+8. **Keep the evidence.** Click the ID's cell and add to its note what it controls, such as `Zeitprogramm Kellerraum, Schaltzeit 1, Aktiv: 02 off, 03 on`. Then click **Export JSON** with "only the open experiment" ticked: the file has the captures, the candidates and every write with its steps. The page keeps experiments only in this browser, so the export is the copy to attach to an issue or PR.
+
+**Then:** settings on one panel screen usually sit on nearby IDs, so map them next, one experiment each, before recording any. A known ID drops out of experiments. To record a screen's IDs, open an issue or PR with the exports: the IDs go into [`protocol_ids.h`](protocol_ids.h), their meaning into `known_property_meaning.h`, and this readme's [Known Ids](#known-ids).
+
+Write only to an ID an experiment corroborated, and only values its captures saw. An unknown ID may control anything.
 
 ### Upgrading the sniffer from v1.4
 

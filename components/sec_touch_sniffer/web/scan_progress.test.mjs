@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { knownIds } from "./known_meaning.mjs";
-import { captureProgress, runIds, scanProgress } from "./scan_progress.mjs";
+import { candidateCount, captureProgress, runIds, scanProgress } from "./scan_progress.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
 import { captureInFlight } from "./fixture_experiments.mjs";
 
@@ -159,6 +159,13 @@ test("a narrowed capture counts its candidates", () => {
     label: "capturing “boost” for fan 1 mode · 1/2 · 2 candidates",
     percent: 50,
   });
+});
+
+test("one candidate reads in the singular", () => {
+  const one = captureProgress(CATALOGUE, boost(false), listRun({ ids: [40], active: true, next: 40 }));
+
+  assert.equal(one.label, "capturing “boost” for fan 1 mode · 0/1 · 1 candidate");
+  assert.deepEqual([0, 1, 2].map(candidateCount), ["0 candidates", "1 candidate", "2 candidates"]);
 });
 
 test("a capture whose run is over counts every ID", () => {

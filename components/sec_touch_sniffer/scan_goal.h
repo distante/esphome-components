@@ -40,12 +40,18 @@ class IdSet {
     }
     return ((this->words_[id / BITS_PER_WORD] >> (id % BITS_PER_WORD)) & 1) != 0;
   }
+  /// Calls `f(id)` for each ID in the set, ascending.
+  template<typename F> constexpr void for_each(F f) const {
+    for (int id = 0; id <= MAX_PROPERTY_ID; id++) {
+      if (this->contains(id)) {
+        f(id);
+      }
+    }
+  }
   /// How many IDs are in the set.
   constexpr int count() const {
     int n = 0;
-    for (int id = 0; id <= MAX_PROPERTY_ID; id++) {
-      n += this->contains(id) ? 1 : 0;
-    }
+    this->for_each([&n](int) { n++; });
     return n;
   }
   constexpr bool operator==(const IdSet &other) const {

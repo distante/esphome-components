@@ -56,6 +56,10 @@ class TestableSniffer : public SecTouchSniffer {
   ScanState scan() { return scan_state(this->scan_fields_()); }
   /// The scan object a stop request would get now, as the page handler builds it.
   ScanState stop_reply() { return scan_stop_reply(this->scan_fields_()); }
+  /// loop()'s two halves, so a test can send a request between them.
+  using SecTouchSniffer::Requests;
+  Requests take_requests() { return this->take_requests_(); }
+  void apply_requests(const Requests &requests) { this->apply_requests_(requests); }
   /// The probe object the page would get now; nullopt before any probe.
   std::optional<ProbeResult> probe() {
     ProbeResult result;
@@ -463,6 +467,20 @@ TEST(SecTouchSnifferTest, AStopQueuedWithAStartStopsThatScanOnceItStarts) {
   ASSERT_TRUE(rig.sniffer.request_scan_start(discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID)));
   rig.sniffer.request_scan_stop();
 
+  rig.loop_sniffer();
+
+  EXPECT_FALSE(rig.sniffer.is_scanning());
+  EXPECT_TRUE(rig.sniffer.request_scan_start(CHECK_RUN));
+}
+
+// The gap inside loop(): the queued start is taken, its scan not begun yet. A stop there still stops that scan.
+TEST(SecTouchSnifferTest, AStopWhileLoopBeginsTheQueuedScanStopsIt) {
+  SnifferRig rig;
+  ASSERT_TRUE(rig.sniffer.request_scan_start(discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID)));
+  const TestableSniffer::Requests requests = rig.sniffer.take_requests();
+
+  rig.sniffer.request_scan_stop();
+  rig.sniffer.apply_requests(requests);
   rig.loop_sniffer();
 
   EXPECT_FALSE(rig.sniffer.is_scanning());

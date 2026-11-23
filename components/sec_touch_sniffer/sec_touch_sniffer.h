@@ -81,24 +81,24 @@ class SecTouchSniffer : public Component
   /// Guards store_: the main loop writes it while the httpd task serves it.
   Mutex store_lock_;
 
-  /// What the main loop runs. Read and written on the main loop only.
+  /// A kind of run: a scan, or a probe or restore.
   enum class Running : uint8_t { RUNNING_NONE, RUNNING_SCAN, RUNNING_PROBE };
+  /// What the main loop runs. Read and written on the main loop only.
   Running running_{Running::RUNNING_NONE};
 
-  /// A start claimed by a request_*() and not applied by loop() yet.
+  /// A start claimed by a request_*() and not applied by loop() yet; RUNNING_NONE when none is queued.
   struct PendingRun {
-    enum class Kind : uint8_t { PENDING_NONE, PENDING_SCAN, PENDING_PROBE };
-    Kind kind;
+    Running run;
     ScanRun scan;
     ProbeKind probe_kind;
     uint8_t probe_id;
     ProbeValue probe_value;
   };
 
-  /// Guards the run slot: run_claimed_, pending_, stop_pending_, scan_run_ and probe_.
+  /// Guards the run slot: slot_, pending_, stop_pending_, scan_run_ and probe_.
   Mutex run_lock_;
-  /// A run holds the slot: queued by a request_*() or running, until its end frees it.
-  bool run_claimed_{false};
+  /// The run that holds the slot, from the start that claims it (queued or not) until its end frees it.
+  Running slot_{Running::RUNNING_NONE};
   PendingRun pending_{};
   /// A stop of the running or queued scan. A run's end drops it, so it never stops the run after.
   bool stop_pending_{false};
@@ -134,8 +134,19 @@ class SecTouchSniffer : public Component
   void query_(int property_id);
   /// The ID to query next; moves current_scan_id_ past it.
   int take_next_scan_id_();
+  /// Claims the slot for `run`; the caller holds run_lock_. False when another run holds it.
+  bool claim_slot_(Running run);
   /// Claims the slot for `run` and queues it. False when the slot is busy.
   bool request_run_(const PendingRun &run);
+  /// What loop() applies: the queued start and stop.
+  struct Requests {
+    PendingRun start;
+    bool stop;
+  };
+  /// loop()'s first half: takes the queued start and stop under run_lock_, leaving none queued.
+  Requests take_requests_();
+  /// loop()'s second half: applies the start, then the stop, after run_lock_ is released.
+  void apply_requests_(const Requests &requests);
   /// Frees the slot at a run's end, and drops a stop queued for it.
   void release_run_();
   /// Starts a scan the slot is already claimed for.
@@ -146,6 +157,8 @@ class SecTouchSniffer : public Component
   void begin_probe_(ProbeKind kind, uint8_t id, const ProbeValue &value);
   /// Does what probe_ asked for next.
   void run_probe_command_(ProbeCommand command);
+  /// Runs `step(probe_)` under run_lock_, then does the command it returns.
+  template<typename Step> void advance_probe_(Step step);
   void end_probe_();
   /// Copies the running or last probe's result into `out`; false (and nothing copied) before any.
   bool probe_result_(ProbeResult &out);
@@ -170,14 +183,15 @@ class SecTouchSniffer : public Component
   /// The POST body handleBody() received: its first SET_VALUE_CAP + 1 bytes, enough to tell a value over the cap.
   char body_[SET_VALUE_CAP + 1]{};
   size_t body_received_{0};
-  /// A 400 message with its caps filled in.
+  /// The message of a 400, formatted by send_error_().
   char message_[96]{};
 
   static bool send_chunk_(void *request, const char *data, size_t len);
   void begin_json_response_(httpd_req_t *req, const char *status = HTTPD_200);
   void end_json_response_(httpd_req_t *req);
-  /// A 400 with `{"error": message}`.
-  void send_error_(httpd_req_t *req, const char *message);
+  /// A 400 with `{"error": message}`, the message printf-formatted from `format` (caps filled in from their
+  /// constants).
+  void send_error_(httpd_req_t *req, const char *format, ...) __attribute__((format(printf, 3, 4)));
   /// The 409 of a busy start: the current scan and probe objects.
   void send_busy_(httpd_req_t *req);
   void serve_page_(AsyncWebServerRequest *request);

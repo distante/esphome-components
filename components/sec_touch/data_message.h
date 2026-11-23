@@ -62,7 +62,7 @@ inline DataMessageTabs find_data_message_tabs(const char *buf, int len) {
   DataMessageTabs tabs;
   int found = 0;
   for (int i = 0; i < len && found < 3; ++i) {
-    if (buf[i] != '\t') {
+    if (buf[i] != static_cast<char>(WIRE_TAB)) {
       continue;
     }
     if (found == 0) {

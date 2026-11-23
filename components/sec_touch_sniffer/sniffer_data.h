@@ -253,16 +253,13 @@ inline void write_scan_json(JsonChunkWriter &w, const ScanState &scan) {
   if (scan.listed) {
     w.raw("[");
     bool first = true;
-    for (int id = 0; id <= MAX_PROPERTY_ID; id++) {
-      if (!scan.ids.contains(id)) {
-        continue;
-      }
+    scan.ids.for_each([&w, &first](int id) {
       if (!first) {
         w.raw(",");
       }
       first = false;
       w.number(static_cast<uint64_t>(id));
-    }
+    });
     w.raw("]");
   } else {
     w.null();
@@ -360,6 +357,15 @@ inline void write_probe_json(JsonChunkWriter &w, const ProbeResult *probe) {
   string_or_null(w, probe_verdict_name(probe->verdict));
   w.raw(",\"restore\":");
   string_or_null(w, probe_restore_name(probe->restore));
+  w.raw("}");
+}
+
+/// Writes the 409 of a busy start: the current `scan` and `probe` (nullptr before any).
+inline void write_busy_json(JsonChunkWriter &w, const ScanState &scan, const ProbeResult *probe) {
+  w.raw("{\"error\":\"busy\",\"scan\":");
+  write_scan_json(w, scan);
+  w.raw(",\"probe\":");
+  write_probe_json(w, probe);
   w.raw("}");
 }
 

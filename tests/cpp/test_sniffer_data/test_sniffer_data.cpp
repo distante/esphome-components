@@ -57,6 +57,7 @@ using esphome::sec_touch::ProbeValue;
 using esphome::sec_touch::ProbeVerdict;
 using esphome::sec_touch::SNIFFER_PROBE_PATH;
 using esphome::sec_touch::SNIFFER_RESTORE_PATH;
+using esphome::sec_touch::write_busy_json;
 using esphome::sec_touch::write_data_json;
 using esphome::sec_touch::write_probe_json;
 using esphome::sec_touch::write_record_json;
@@ -544,6 +545,30 @@ TEST(SnifferData, TheDataResponseCarriesTheProbeAfterTheScan) {
   const std::string json = data_json(store, 0, NO_RUN, &probe);
   EXPECT_NE(json.find(R"("done":false},"probe":{"active":false,"kind":"probe","id":77,)"), std::string::npos) << json;
   EXPECT_NE(json.find(R"("restore":"ok"},"records":[)"), std::string::npos) << json;
+}
+
+// --- The 409 of a busy start ---
+
+namespace {
+
+std::string busy_json(const ScanState &scan, const ProbeResult *probe) {
+  return written([&](JsonChunkWriter &w) { write_busy_json(w, scan, probe); });
+}
+
+}  // namespace
+
+TEST(SnifferData, ABusyReplyDuringAScanCarriesTheScanAndANullProbe) {
+  EXPECT_EQ(busy_json(scan_state(running(CHECK_RUN, FAN_LABEL_IDS.front())), nullptr),
+            R"({"error":"busy","scan":)" + check_json(true, std::to_string(FAN_LABEL_IDS.front()), false) +
+                R"(,"probe":null})");
+}
+
+TEST(SnifferData, ABusyReplyDuringAProbeCarriesTheProbe) {
+  const ProbeResult probe = probe_start_result(ProbeKind::PROBE_KIND_PROBE, PROBE_ID, ProbeValue::of("03"));
+  EXPECT_EQ(busy_json(scan_state(completed(CHECK_RUN)), &probe),
+            R"({"error":"busy","scan":)" + check_json(false, "null", true) +
+                R"(,"probe":{"active":true,"kind":"probe","id":77,"value":"03","original":null,)"
+                R"("steps":[],"verdict":null,"restore":null}})");
 }
 
 TEST(SnifferData, ProbeAndRestoreAreRoutedAsPosts) {

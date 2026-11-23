@@ -155,7 +155,8 @@ struct SetDataTask : public BaseTask {
     return nullptr;  // Null unique_ptr if validation fails
   }
 
-  // Bypasses ID validation — for the sniffer's write probe only. A value over SET_VALUE_CAP is cut there.
+  // Bypasses ID validation — for the sniffer's write probe only. A value over SET_VALUE_CAP is cut there. The LEVEL
+  // target type is a placeholder: no SET reads it.
   static std::unique_ptr<SetDataTask> create_unchecked(int property_id, const char *value) {
     return std::unique_ptr<SetDataTask>(new SetDataTask(TaskTargetType::LEVEL, property_id, value));
   }

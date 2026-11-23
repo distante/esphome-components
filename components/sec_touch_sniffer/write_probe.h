@@ -156,9 +156,9 @@ inline ProbeRequest probe_request_from(std::string_view uri, std::string_view bo
   return request;
 }
 
-/// The result a probe or restore starts with, before any step: what its start replies with.
-inline ProbeResult probe_start_result(ProbeKind kind, uint8_t id, const ProbeValue &value) {
-  ProbeResult result{};
+/// Sets `result` to what a probe or restore starts with, before any step: what its start replies with. In place,
+/// because a ProbeResult is about 2.4 KB: a temporary one overflows the httpd task's stack.
+inline void reset_probe_result(ProbeResult &result, ProbeKind kind, uint8_t id, const ProbeValue &value) {
   result.active = true;
   result.kind = kind;
   result.id = id;
@@ -168,6 +168,12 @@ inline ProbeResult probe_start_result(ProbeKind kind, uint8_t id, const ProbeVal
   result.step_count = 0;
   result.verdict = ProbeVerdict::PROBE_VERDICT_NONE;
   result.restore = ProbeRestore::PROBE_RESTORE_NONE;
+}
+
+/// The result a probe or restore starts with (reset_probe_result()), by value: for the host tests only.
+inline ProbeResult probe_start_result(ProbeKind kind, uint8_t id, const ProbeValue &value) {
+  ProbeResult result{};
+  reset_probe_result(result, kind, id, value);
   return result;
 }
 
@@ -294,7 +300,7 @@ class WriteProbe {
   bool restoring_() const { return this->phase_ == Phase::RESTORE_SET || this->phase_ == Phase::RESTORE_VERIFY; }
 
   void begin_(ProbeKind kind, uint8_t id, const ProbeValue &value) {
-    this->result_ = probe_start_result(kind, id, value);
+    reset_probe_result(this->result_, kind, id, value);
     this->retried_ = false;
     this->has_last_read_ = false;
     this->verdict_ = ProbeVerdict::PROBE_VERDICT_NONE;

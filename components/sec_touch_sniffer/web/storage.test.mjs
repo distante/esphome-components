@@ -3,6 +3,16 @@ import assert from "node:assert/strict";
 
 import { applyResponse, emptyCopy } from "./records.mjs";
 import { deviceRecord, deviceResponse } from "./fixture_records.mjs";
+import {
+  CANDIDATE_ID,
+  experimentWith,
+  NAK,
+  pendingProbe,
+  PROBE_ORIGINAL,
+  probeEntry,
+  TIMEOUT,
+  walkOf,
+} from "./fixture_experiments.mjs";
 import { deviceKey, LAST_MAC_KEY, parseStored, STORAGE_PREFIX, storedText } from "./storage.mjs";
 
 const BROWSER_NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
@@ -15,7 +25,18 @@ function deviceCopy() {
 // The catalogue's default discover range, made up so the tests don't lean on the real one.
 const DEFAULT_RANGE = { from: 7, to: 99 };
 
-const nothing = () => ({ copy: emptyCopy(), notes: {}, mutes: new Set(), range: DEFAULT_RANGE });
+const nothing = () => ({
+  copy: emptyCopy(),
+  notes: {},
+  mutes: new Set(),
+  range: DEFAULT_RANGE,
+  experiments: [],
+  pendingProbe: null,
+});
+
+/** What a device stored with `fields` (and the fixture copy) reloads as. */
+const roundTrip = (fields) =>
+  parseStored(storedText({ ...nothing(), copy: deviceCopy(), ...fields }), DEFAULT_RANGE);
 
 test("every key shares the storage prefix", () => {
   assert.ok(LAST_MAC_KEY.startsWith(STORAGE_PREFIX));
@@ -25,7 +46,7 @@ test("every key shares the storage prefix", () => {
 
 test("a stored device reloads with its copy, notes, mutes and discover range", () => {
   const range = { from: 3, to: 200 };
-  const stored = parseStored(storedText(deviceCopy(), { 5: "Fan level?" }, new Set([5, 9]), range), DEFAULT_RANGE);
+  const stored = roundTrip({ notes: { 5: "Fan level?" }, mutes: new Set([5, 9]), range });
 
   assert.equal(stored.copy.records[5].raw, "0100");
   assert.equal(stored.copy.since, null);
@@ -72,6 +93,64 @@ test("notes keep only text values keyed by an ID", () => {
 test("mutes that are not an array of integer IDs are dropped", () => {
   for (const mutes of [5, "5", null, { 5: true }, [5, "6"], [1.5]]) {
     assert.deepEqual(parseStored(JSON.stringify({ mutes }), DEFAULT_RANGE).mutes, new Set(), JSON.stringify(mutes));
+  }
+});
+
+// ───── experiments and the pending probe ─────
+
+const PROBE_ENTRY = probeEntry({});
+// A restore to the original, as the page stores it before the device reports it.
+const PENDING = pendingProbe({ kind: "restore", value: PROBE_ORIGINAL });
+
+function storedExperiment() {
+  const experiment = walkOf(CANDIDATE_ID, [["normal", "01"], ["boost", NAK], ["eco", TIMEOUT], ["off", "0\u0001ÿ"]]);
+  return { ...experiment, probes: [PROBE_ENTRY, { ...PROBE_ENTRY, verdict: null, restore: null, interrupted: true }] };
+}
+
+test("experiments and the pending probe reload as stored", () => {
+  const experiments = [storedExperiment(), experimentWith([], { range: null })];
+
+  const stored = roundTrip({ experiments, pendingProbe: PENDING });
+
+  assert.deepEqual(stored.experiments, experiments);
+  assert.deepEqual(stored.pendingProbe, PENDING);
+});
+
+test("a device stored without experiments or a pending probe has none", () => {
+  assert.deepEqual(nothing().experiments, []);
+  assert.equal(nothing().pendingProbe, null);
+  assert.deepEqual(parseStored(JSON.stringify({ notes: {} }), DEFAULT_RANGE).experiments, []);
+  assert.deepEqual(parseStored(JSON.stringify({ experiments: "x" }), DEFAULT_RANGE).experiments, []);
+});
+
+test("an unreadable experiment is dropped on its own", () => {
+  const good = storedExperiment();
+  const broken = [null, "x", { ...good, key: 5 }, { ...good, name: null }, { ...good, captures: "none" },
+    { ...good, range: { from: 1 } }, { ...good, createdAtMs: "today" }, { ...good, probes: {} }];
+  const text = JSON.stringify({ experiments: [...broken, good] });
+
+  assert.deepEqual(parseStored(text, DEFAULT_RANGE).experiments, [good]);
+});
+
+test("an unreadable capture or probe entry is dropped from its experiment on its own", () => {
+  const good = storedExperiment();
+  const [capture] = good.captures;
+  const badCaptures = [{ ...capture, label: 3 }, { ...capture, full: "yes" }, { ...capture, entries: [] },
+    { ...capture, entries: { x: { outcome: "ok", raw: "1" } } }, { ...capture, entries: { 5: { outcome: "maybe", raw: null } } },
+    { ...capture, atMs: null }];
+  const badProbes = [{ ...PROBE_ENTRY, steps: "none" }, { ...PROBE_ENTRY, verdict: "great" }, { ...PROBE_ENTRY, atMs: null }];
+  const text = JSON.stringify({
+    experiments: [{ ...good, captures: [...badCaptures, ...good.captures], probes: [...badProbes, ...good.probes] }],
+  });
+
+  assert.deepEqual(parseStored(text, DEFAULT_RANGE).experiments, [good]);
+});
+
+test("an unreadable pending probe is dropped", () => {
+  for (const pendingProbe of [5, { ...PENDING, kind: "poke" }, { ...PENDING, id: String(CANDIDATE_ID) }, { ...PENDING, steps: null },
+    { ...PENDING, experimentKey: null }]) {
+    assert.equal(parseStored(JSON.stringify({ pendingProbe }), DEFAULT_RANGE).pendingProbe, null,
+      JSON.stringify(pendingProbe));
   }
 });
 

@@ -28,6 +28,7 @@ PROTOCOL_IDS = "protocol_ids.h"
 FAN_LEVEL = "fan_level.h"
 PROPERTY_SLOTS = "property_slots.h"
 SCAN_GOAL = "scan_goal.h"
+DATA_MESSAGE = "data_message.h"
 
 
 @pytest.fixture
@@ -37,6 +38,7 @@ def header_dir(tmp_path: Path) -> Path:
     copy.mkdir(parents=True)
     shutil.copy(HEADER_DIR / PROTOCOL_IDS, copy / PROTOCOL_IDS)
     shutil.copy(HEADER_DIR / FAN_LEVEL, copy / FAN_LEVEL)
+    shutil.copy(HEADER_DIR / DATA_MESSAGE, copy / DATA_MESSAGE)
     return copy
 
 
@@ -114,6 +116,32 @@ def test_reads_the_discover_range_from_the_given_sniffer_directory(sniffer_heade
     assert parse_catalogue(sniffer_header_dir=sniffer_header_dir)["discoverRange"] == {"from": 3, "to": 200}
 
 
+def test_parses_the_scan_list_cap_the_device_uses() -> None:
+    assert parse_catalogue()["scanListCap"] == 100
+
+
+def test_parses_the_probe_value_rules_the_device_uses() -> None:
+    catalogue = parse_catalogue()
+
+    assert catalogue["probeValueCap"] == 15
+    # NUL, then the wire's TAB, STX and ETX (a line feed).
+    assert catalogue["probeForbiddenBytes"] == [0, 0x09, 0x02, 0x0A]
+
+
+def test_reads_hex_literals(header_dir: Path) -> None:
+    edit(header_dir / DATA_MESSAGE, "WIRE_TAB = 0x09;", "WIRE_TAB = 0x1F;")
+
+    assert parse_catalogue(header_dir)["probeForbiddenBytes"][1] == 31
+
+
+def test_a_constant_it_cannot_read_fails_only_when_the_catalogue_uses_it(header_dir: Path) -> None:
+    # The real data_message.h holds `FRAME_BUFFER_SIZE - 1`, which the catalogue does not need.
+    edit(header_dir / DATA_MESSAGE, "SET_VALUE_CAP = 15;", "SET_VALUE_CAP = 16 - 1;")
+
+    with pytest.raises(ValueError, match=re.escape("data_message.h: SET_VALUE_CAP")):
+        parse_catalogue(header_dir)
+
+
 def test_parses_the_goal_names_the_device_uses() -> None:
     assert parse_catalogue()["goals"] == {"discover": "discover", "check": "check"}
 
@@ -174,7 +202,7 @@ def test_reads_the_headers_from_the_given_directory(header_dir: Path) -> None:
         pytest.param(FAN_LEVEL, "std::array<LevelName, 13>", "std::array<LevelName, 14>", "LEVEL_NAMES",
                      id="table size off"),
         pytest.param(PROTOCOL_IDS, '"Bad",', '"B\\"ad",', "escape", id="escaped string"),
-        pytest.param(PROTOCOL_IDS, "FAN_LEVEL_IDS = {173,", "FAN_LEVEL_IDS = {0xAD,", "FAN_LEVEL_IDS",
+        pytest.param(PROTOCOL_IDS, "FAN_LEVEL_IDS = {173,", "FAN_LEVEL_IDS = {173u,", "FAN_LEVEL_IDS",
                      id="unparseable id"),
         pytest.param(PROTOCOL_IDS, "SUMMER_VENTILATION_PROPERTY_ID = 48;", "SUMMER_VENTILATION_PROPERTY_ID = 6 * 8;",
                      "SUMMER_VENTILATION_PROPERTY_ID", id="expression constant"),
@@ -236,7 +264,7 @@ def test_a_missing_name_names_the_headers_it_was_looked_for_in(header_dir: Path)
     with pytest.raises(
         ValueError,
         match=re.escape(
-            "no LEVEL_NAMES in the parsed headers (fan_level.h, protocol_ids.h, property_slots.h, scan_goal.h)"
+            "no LEVEL_NAMES in the parsed headers (fan_level.h, protocol_ids.h, data_message.h, property_slots.h, scan_goal.h)"
         ),
     ):
         parse_catalogue(header_dir)

@@ -3,6 +3,9 @@
  * "JSON shape").
  */
 
+/** The `boot` of the fixture device. */
+export const FIXTURE_BOOT = "9f2c41ab";
+
 /** The device uptime at which a fixture record was seen, unless a test gives its own `seenAt`. */
 const SEEN_AT = 1000;
 
@@ -33,7 +36,7 @@ export function deviceResponse(records, fields = {}) {
   return {
     mac: "aabbccddeeff",
     name: "ventilation",
-    boot: "9f2c41ab",
+    boot: FIXTURE_BOOT,
     uptime: 10_000,
     seq: 7,
     full: true,

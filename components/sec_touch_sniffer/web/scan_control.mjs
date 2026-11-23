@@ -8,6 +8,12 @@ import { isObject, wholeDecimal } from "./records.mjs";
 /** Shown for a refused start whose body carries no text. */
 export const RANGE_REFUSED = "the device refused the range";
 
+/** Shown for a refused probe or restore whose body carries no text. */
+export const PROBE_REFUSED = "the device refused the value";
+
+/** What runs, for a start refused with 409 whose reply names nothing running. */
+export const BUSY_UNKNOWN = "another run";
+
 /**
  * The device decides whether a range is valid, so the range goes out as typed.
  *
@@ -26,12 +32,98 @@ export function scanStartPath(catalogue, goal, fromText, toText) {
 }
 
 /**
- * @param {{active: boolean, goal: string} | null} scan the device's scan state, null before it answered
- * @param {string} goal the open tab's goal
- * @returns {string} the start/stop button's text: a start names the open tab's goal, a stop the running scan's
+ * A capture is a discover scan of the experiment's full range, or of only its candidates as an ID list.
+ *
+ * @param {object} catalogue the CATALOGUE of catalogue.mjs: `goals` names the goals as the device does
+ * @param {{full: true, from: number, to: number} | {full: false, ids: number[]}} next what the capture scans (see
+ *   experiments.mjs, `nextCapture`)
+ * @returns {string} the start request's path and query
  */
-export function scanButtonLabel(scan, goal) {
-  return scan?.active ? `■ Stop ${scan.goal} scan` : `▶ Start ${goal} scan`;
+export function captureStartPath(catalogue, next) {
+  const path = `/sniffer/scan/start?goal=${encodeURIComponent(catalogue.goals.discover)}`;
+  return next.full ? `${path}&from=${next.from}&to=${next.to}` : `${path}&ids=${next.ids.join(",")}`;
+}
+
+/**
+ * @param {{active: boolean} | null} scan the device's scan state, null before it answered
+ * @param {{active: boolean} | null} probe the device's probe state, null before any probe or restore
+ * @returns {boolean} whether the device runs a scan, a capture, a probe or a restore: no other start is taken then
+ */
+export function isRunning(scan, probe) {
+  return Boolean(scan?.active || probe?.active);
+}
+
+/**
+ * @param {{active: boolean, goal: string} | null} scan the device's scan state, null before it answered
+ * @param {{active: boolean} | null} probe the device's probe state, null before any probe or restore
+ * @param {string} goal the open tab's goal
+ * @returns {{label: string, disabled: boolean}} the start/stop button: a stop names the running scan's goal and
+ *   stops a scan or a capture; a start names the open tab's goal and is disabled while a probe or restore runs,
+ *   which can't be stopped
+ */
+export function scanButton(scan, probe, goal) {
+  if (scan?.active) {
+    return { label: `■ Stop ${scan.goal} scan`, disabled: false };
+  }
+  return { label: `▶ Start ${goal} scan`, disabled: Boolean(probe?.active) };
+}
+
+/**
+ * @param {object} catalogue the CATALOGUE of catalogue.mjs: `goals` names the goals as the device does
+ * @param {object | null} scan the device's scan object
+ * @param {object | null} probe the device's probe object
+ * @returns {string | null} what the device runs, for "busy: <what runs>"; null while it runs nothing
+ */
+export function runningText(catalogue, scan, probe) {
+  if (probe?.active) {
+    return `${probe.kind === "restore" ? "restore" : "write probe"} of ID ${probe.id}`;
+  }
+  if (!scan?.active) {
+    return null;
+  }
+  if (scan.goal === catalogue.goals.discover && Array.isArray(scan.ids)) {
+    return `${scan.goal} scan of ${scan.ids.length} listed IDs`;
+  }
+  return `${scan.goal} scan`;
+}
+
+/**
+ * @param {string} running what the device runs
+ * @returns {string} "busy: <what runs>"
+ */
+const busyLabel = (running) => `busy: ${running}`;
+
+/**
+ * @param {object} catalogue the CATALOGUE of catalogue.mjs
+ * @param {string} bodyText the body of a start the device refused with 409: `{error, scan, probe}`
+ * @returns {string} "busy: <what runs>", from the reply's scan and probe
+ */
+export function busyText(catalogue, bodyText) {
+  let running = null;
+  try {
+    const body = JSON.parse(bodyText);
+    if (isObject(body)) {
+      running = runningText(catalogue, isObject(body.scan) ? body.scan : null, isObject(body.probe) ? body.probe : null);
+    }
+  } catch {
+    // Not JSON: the device still said busy.
+  }
+  return busyLabel(running ?? BUSY_UNKNOWN);
+}
+
+/**
+ * @param {object} catalogue the CATALOGUE of catalogue.mjs
+ * @param {string | null} refusedBusy the busyText of a start refused with 409, null when none is shown
+ * @param {object | null} scan the device's scan object
+ * @param {object | null} probe the device's probe object
+ * @returns {string} the scan row's busy line: the refused start's text, else "busy: <what runs>" while a probe or
+ *   restore runs (it can't be stopped, so the device shows as busy without a refused start), else empty
+ */
+export function busyLine(catalogue, refusedBusy, scan, probe) {
+  if (refusedBusy !== null) {
+    return refusedBusy;
+  }
+  return probe?.active ? busyLabel(runningText(catalogue, scan, probe)) : "";
 }
 
 /**
@@ -47,10 +139,11 @@ export function switchStopsScan(scan, targetGoal) {
 }
 
 /**
- * @param {string} bodyText the body of a start the device answered with 400
- * @returns {string} the text to show next to the range: the device's `error`, else the body, else a fallback
+ * @param {string} bodyText the body of a request the device answered with 400
+ * @param {string} fallback the text for a body with no text
+ * @returns {string} the device's `error`, else the body, else the fallback
  */
-export function rangeError(bodyText) {
+function refusalText(bodyText, fallback) {
   try {
     const body = JSON.parse(bodyText);
     if (typeof body?.error === "string") {
@@ -59,10 +152,28 @@ export function rangeError(bodyText) {
   } catch {
     // Not JSON: the body itself is the best text there is.
   }
-  return bodyText.trim() || RANGE_REFUSED;
+  return bodyText.trim() || fallback;
+}
+
+/**
+ * @param {string} bodyText the body of a start the device answered with 400
+ * @returns {string} the text to show next to the range: the device's `error`, else the body, else RANGE_REFUSED
+ */
+export function rangeError(bodyText) {
+  return refusalText(bodyText, RANGE_REFUSED);
+}
+
+/**
+ * @param {string} bodyText the body of a probe or restore the device answered with 400
+ * @returns {string} the text to show on the card: the device's `error`, else the body, else PROBE_REFUSED
+ */
+export function probeError(bodyText) {
+  return refusalText(bodyText, PROBE_REFUSED);
 }
 
 const isIdOrNull = (value) => value === null || Number.isInteger(value);
+
+const isIdListOrNull = (value) => value === null || (Array.isArray(value) && value.every(Number.isInteger));
 
 /**
  * @param {unknown} value a parsed JSON value
@@ -74,6 +185,7 @@ const isScanObject = (value) =>
   typeof value.goal === "string" &&
   isIdOrNull(value.from) &&
   isIdOrNull(value.to) &&
+  isIdListOrNull(value.ids) &&
   isIdOrNull(value.next) &&
   typeof value.done === "boolean";
 
@@ -100,8 +212,7 @@ export function scanReply(bodyText) {
  * @param {string} fromText the discover range's from, as sent
  * @param {string} toText the discover range's to, as sent
  * @returns {{from: number, to: number} | null} the discover range the device runs, to remember for the next start;
- *   null when the reply runs no discover or another range than the one sent: a start while a scan runs is a no-op
- *   that replies with the running scan
+ *   null when the reply runs no discover range or another range than the one sent
  */
 export function acceptedRange(catalogue, scan, fromText, toText) {
   if (scan?.goal !== catalogue.goals.discover || !Number.isInteger(scan.from) || !Number.isInteger(scan.to)) {

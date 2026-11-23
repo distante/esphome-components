@@ -2,8 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { knownIds } from "./known_meaning.mjs";
-import { scanProgress } from "./scan_progress.mjs";
+import { candidateCount, captureProgress, runIds, scanProgress } from "./scan_progress.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
+import { captureInFlight } from "./fixture_experiments.mjs";
 
 // The date and clock moved below the levels, so a check has known IDs before ID 10 as well as after it: the known
 // IDs are 3, 5, 10, 11, 20, 21, 30.
@@ -11,8 +12,26 @@ const CATALOGUE = { ...FIXTURE_CATALOGUE, dateId: 3, clockId: 5 };
 const KNOWN_COUNT = knownIds(CATALOGUE).length;
 const { discover: DISCOVER, check: CHECK } = CATALOGUE.goals;
 
-const discover = (fields) => ({ active: false, goal: DISCOVER, from: 1, to: 100, next: null, done: false, ...fields });
-const check = (fields) => ({ active: false, goal: CHECK, from: null, to: null, next: null, done: false, ...fields });
+const discover = (fields) => ({
+  active: false,
+  goal: DISCOVER,
+  from: 1,
+  to: 100,
+  ids: null,
+  next: null,
+  done: false,
+  ...fields,
+});
+const check = (fields) => ({
+  active: false,
+  goal: CHECK,
+  from: null,
+  to: null,
+  ids: null,
+  next: null,
+  done: false,
+  ...fields,
+});
 const onDiscover = (scan) => scanProgress(scan, CATALOGUE, DISCOVER);
 const onCheck = (scan) => scanProgress(scan, CATALOGUE, CHECK);
 
@@ -95,6 +114,65 @@ test("a check past every known ID counts no further than the known IDs", () => {
     onCheck(check({ active: true, next: 255 })).label,
     `Scanning ID 255 (${KNOWN_COUNT} of ${KNOWN_COUNT} known IDs)`,
   );
+});
+
+// ───── list runs (a narrowed capture) ─────
+
+const listRun = (fields) => discover({ from: null, to: null, ids: [12, 3, 40], ...fields });
+
+test("a run's IDs are its range or its list, minus the known IDs, ascending", () => {
+  assert.deepEqual(runIds(CATALOGUE, discover({ from: 1, to: 12 })), [1, 2, 4, 6, 7, 8, 9, 12]);
+  assert.deepEqual(runIds(CATALOGUE, listRun({})), [12, 40]);
+  assert.deepEqual(runIds(CATALOGUE, check({})), knownIds(CATALOGUE));
+  assert.equal(runIds(CATALOGUE, discover({ from: null, to: null })), null);
+});
+
+test("a running list run counts the next ID among its listed IDs", () => {
+  assert.deepEqual(onDiscover(listRun({ active: true, next: 40 })), {
+    label: "Scanning ID 40 (2 of 2 listed IDs)",
+    percent: 50,
+  });
+});
+
+test("a stopped list run names the ID it stopped at", () => {
+  assert.deepEqual(onDiscover(listRun({ next: 40 })), { label: "Stopped at ID 40", percent: 50 });
+});
+
+test("a completed list run counts its listed IDs", () => {
+  assert.deepEqual(onDiscover(listRun({ done: true })), { label: "Scan of 2 listed IDs complete", percent: 100 });
+});
+
+// ───── this page's capture ─────
+
+// What each capture scans: the runs `discover` and `listRun` stand for in its tests (experiments.mjs, `nextCapture`).
+const boost = (full) => captureInFlight(full ? { full, from: 1, to: 12 } : { full, ids: [12, 40] });
+
+test("a capture of the full range counts the IDs behind the scan", () => {
+  assert.deepEqual(captureProgress(CATALOGUE, boost(true), discover({ active: true, from: 1, to: 12, next: 6 })), {
+    label: "capturing “boost” for fan 1 mode · 3/8 · full range",
+    percent: 38,
+  });
+});
+
+test("a narrowed capture counts its candidates", () => {
+  assert.deepEqual(captureProgress(CATALOGUE, boost(false), listRun({ active: true, next: 40 })), {
+    label: "capturing “boost” for fan 1 mode · 1/2 · 2 candidates",
+    percent: 50,
+  });
+});
+
+test("one candidate reads in the singular", () => {
+  const one = captureProgress(CATALOGUE, boost(false), listRun({ ids: [40], active: true, next: 40 }));
+
+  assert.equal(one.label, "capturing “boost” for fan 1 mode · 0/1 · 1 candidate");
+  assert.deepEqual([0, 1, 2].map(candidateCount), ["0 candidates", "1 candidate", "2 candidates"]);
+});
+
+test("a capture whose run is over counts every ID", () => {
+  assert.deepEqual(captureProgress(CATALOGUE, boost(false), listRun({ done: true })), {
+    label: "capturing “boost” for fan 1 mode · 2/2 · 2 candidates",
+    percent: 100,
+  });
 });
 
 test("the check goal's name comes from the catalogue", () => {

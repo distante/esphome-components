@@ -12,7 +12,7 @@
 <title>SEC-Touch sniffer</title>
 <style>
   :root { --bg:#fafafa; --fg:#1d1d1f; --mute:#6e6e73; --line:#ddd; --acc:#0a66c2; --bad:#c0392b; --ok:#1e8449;
-    --mark:#e67e22; }
+    --cand:#e67e22; }
   * { box-sizing:border-box; }
   /* Beats the display of .row, .cards and the rest, so `hidden` always hides. */
   [hidden] { display:none !important; }
@@ -22,6 +22,9 @@
   h1 { font-size:15px; margin:10px 0; }
   button, input, select, textarea { font:inherit; }
   button { padding:3px 9px; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  button.primary { background:var(--acc); color:#fff; border:1px solid var(--acc); border-radius:3px; }
+  button.link { border:none; background:none; color:var(--acc); padding:0 2px; text-decoration:underline; }
   code { font-family:ui-monospace, Menlo, monospace; }
   .mute { color:var(--mute); }
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0; }
@@ -37,14 +40,19 @@
   #grid { flex:1; min-width:0; display:grid; gap:2px;
     grid-template-columns:repeat(16, minmax(0, 1fr)); grid-template-rows:repeat(16, minmax(0, 1fr)); }
   .cell { font-size:10px; display:flex; flex-direction:column; align-items:center; justify-content:center;
-    overflow:hidden; cursor:pointer; background:#f7f7f7; border:1px solid #e2e2e2; }
+    overflow:hidden; cursor:pointer; background:#f7f7f7; border:1px solid #e2e2e2; position:relative; }
+  /* An ID with a note: a dot in the corner, so the cell keeps its room for the value. */
+  .cell .note-dot { position:absolute; top:2px; right:2px; width:6px; height:6px; border-radius:50%;
+    background:#d33; }
   .cell code { font-size:10px; max-width:100%; overflow:hidden; white-space:nowrap; }
   .cell.unseen { background:#fff; border:1px dashed #bbb; }
   /* A known property: discover leaves a gap, check shows it. */
   .cell.gone { background:transparent; border:none; cursor:default; }
   /* A known property under "show known": grey, with no type or status colour, and not clickable. */
   .cell.known { background:#e4e4e4; border-color:#d2d2d2; color:#777; cursor:default; }
-  .marked { box-shadow:inset 0 0 0 3px var(--mark); }
+  /* The open experiment's candidates: orange, corroborated green. */
+  .ring-cand { box-shadow:inset 0 0 0 3px var(--cand); }
+  .ring-corr { box-shadow:inset 0 0 0 3px var(--ok); }
   .cell.stale { opacity:.45; font-style:italic; }
   .dim { background-image:repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,0,0,.2) 4px 6px); }
   .cell.dim { opacity:.35; }
@@ -54,7 +62,7 @@
   .flash { animation:flash 2s; }
   /* The chips of the group "colour by" does not use: their colour is not on the map, so it fades. */
   .faded > .badge { background-image:linear-gradient(rgba(255,255,255,.7), rgba(255,255,255,.7)); }
-  /* No `to`: the flash fades into the cell's own box-shadow, the mark's ring on a marked cell. */
+  /* No `to`: the flash fades into the cell's own box-shadow, the candidate ring on a candidate's cell. */
   @keyframes flash { from { box-shadow:inset 0 0 0 40px #ffe58a; } }
   #side { width:340px; flex:none; overflow:auto; }
   .box { background:#fff; border:1px solid var(--line); padding:8px; margin-bottom:10px; }
@@ -76,6 +84,31 @@
   .card h3 { margin:0 0 6px; font-size:14px; }
   .card .big { font-size:18px; }
   .card .gap { margin-top:6px; }
+  /* Experiments: sub-tabs, the coach box, candidate cards and the capture timeline. */
+  .subtabs { display:flex; flex-wrap:wrap; border-bottom:1px solid var(--line); margin:2px 0 8px; }
+  .subtabs button { border:none; background:none; padding:5px 12px; border-bottom:2px solid transparent;
+    margin-bottom:-1px; }
+  .subtabs button.on { border-bottom-color:var(--cand); font-weight:600; }
+  .coach { background:#fffaf2; border:1px solid #f3d9b5; padding:10px; margin-bottom:10px; }
+  .coach .step { font-size:15px; margin-bottom:8px; }
+  .coach input.label { font-size:16px; padding:4px 6px; width:150px; }
+  .coach button.primary { font-size:15px; padding:4px 14px; }
+  #cards .card { margin-bottom:8px; padding:8px; }
+  #cards .card.corr { border-color:var(--ok); }
+  #cards .card h3 { display:flex; gap:6px; align-items:center; }
+  .badge.cand { background:#fdebd0; border-color:var(--cand); }
+  .badge.corr { background:var(--ok); color:#fff; border-color:var(--ok); }
+  table.lr { border-collapse:collapse; margin:4px 0; }
+  table.lr td, table.lr th { padding:1px 8px 1px 0; text-align:left; font-weight:400; }
+  table.lr th { color:var(--mute); font-size:11px; }
+  .probe { font-size:12px; margin-top:3px; }
+  .probe .ok { color:var(--ok); } .probe .bad { color:var(--bad); }
+  .timeline { border-left:2px solid var(--line); margin:4px 0 10px 6px; padding-left:10px; }
+  .timeline div { position:relative; padding:2px 0; }
+  .timeline div::before { content:""; position:absolute; left:-15px; top:8px; width:8px; height:8px;
+    border-radius:50%; background:var(--mute); }
+  /* A narrowed capture gets a hollow dot. */
+  .timeline div.narrow::before { background:#fff; border:2px solid var(--mute); width:4px; height:4px; }
   @media (max-width:900px) {
     body, #discover-view { height:auto; display:block; }
     #main { flex-direction:column; }
@@ -91,13 +124,16 @@
   <span id="online" class="badge">connecting…</span>
   <span id="device" class="mute"></span>
   <span class="grow"></span>
+  <label title="Off: muted IDs are left out of the records and the capture entries"><input id="include-muted" type="checkbox"> include muted IDs</label>
+  <label><input id="only-open" type="checkbox"> only the open experiment</label>
   <button id="export-json">Export JSON</button>
   <button id="export-csv">Export CSV</button>
-  <button id="clear-data" title="Forget every captured value on the device and in this browser; notes and mutes stay">Clear data</button>
+  <button id="clear-data" title="Forget every captured value on the device and in this browser; notes, mutes and experiments stay">Clear data</button>
 </div>
 <div id="goal-tabs" class="bigtabs"></div>
 <div id="scan" class="row" hidden>
   <button id="scan-toggle"></button>
+  <span id="busy" class="unexpected"></span>
   <span id="range">
     IDs <input id="range-from" inputmode="numeric" aria-label="from ID">
     – <input id="range-to" inputmode="numeric" aria-label="to ID">
@@ -108,14 +144,17 @@
 </div>
 <div id="check-view" class="cards" hidden></div>
 <div id="discover-view">
+<div id="exp-tabs" class="subtabs"></div>
 <div class="row">
   <input id="f-query" placeholder="ID, value or note…" style="width:170px">
   <select id="f-changed"></select>
   colour by <select id="colour-by"><option>type</option><option>status</option></select>
   <label><input id="show-known" type="checkbox"> show known</label>
+  <label title="Open an experiment to filter by its candidates"><input id="f-candidates" type="checkbox"> only candidates</label>
   <span class="badge" style="border:1px dashed #bbb">never seen</span>
   <span class="badge dim">filtered out</span>
-  <span class="badge marked">changed since mark</span>
+  <span class="badge ring-cand">candidate</span>
+  <span class="badge ring-corr">corroborated</span>
   <span id="known-gap-legend" class="mute"></span>
 </div>
 <div class="row">
@@ -126,25 +165,35 @@
 <div id="main">
   <div id="grid"></div>
   <div id="side">
-    <div id="mark" class="box">
-      <b>Mark</b> <span class="mute">before and after a panel change</span>
-      <div class="row">
-        <button id="mark-set" title="Remember every value now; then change something on the panel">Set mark</button>
-        <span id="mark-on" class="row" hidden>
-          <label><input id="f-since-mark" type="checkbox"> only changed since mark (<span id="mark-count"></span>)</label>
-          <span id="mark-at" class="mute"></span>
-          <button id="mark-move">Move mark to now</button>
-          <button id="mark-clear">Clear mark</button>
-        </span>
+    <div id="coach" class="coach">
+      <div id="coach-step" class="step"></div>
+      <div id="new-experiment" class="row">
+        <input id="experiment-name" placeholder="setting, e.g. fan 1 mode" style="width:170px">
+        <button id="experiment-start">Start experiment</button>
       </div>
+      <div id="capture-form">
+        <div class="row">
+          <input id="capture-label" class="label" list="capture-labels" placeholder="value label, e.g. boost">
+          <datalist id="capture-labels"></datalist>
+          <button id="capture" class="primary">Capture</button>
+          <button id="full-rescan" class="link" title="Make the next capture scan the experiment's full range"></button>
+        </div>
+        <div id="next-capture" class="mute" style="font-size:12px"></div>
+        <div id="capture-note" class="unexpected" style="font-size:12px"></div>
+      </div>
+    </div>
+    <div id="experiment-view">
+      <div id="cards"></div>
+      <details id="disqualified" class="mute" style="font-size:12px">
+        <summary id="disqualified-count"></summary>
+        <div id="disqualified-list"></div>
+      </details>
+      <b>Captures</b> <span class="mute">(newest first)</span>
+      <div id="timeline" class="timeline"></div>
     </div>
     <div id="drawer" class="box" hidden>
       <div id="drawer-info"></div>
       <textarea id="note"></textarea>
-    </div>
-    <div id="mark-changes-box" hidden>
-      <b>Changed since mark</b> <span class="mute">(mark value → now)</span>
-      <div id="mark-changes" class="list"></div>
     </div>
     <b>Changes</b> <span class="mute">(newest first)</span>
     <div id="feed" class="list"></div>
@@ -152,19 +201,47 @@
 </div>
 </div>
 <script type="module">
-import { applyResponse, changeFeed, emptyCopy, rowsOf, withScan } from "./records.mjs";
+import { applyResponse, changeFeed, emptyCopy, rowsOf, wholeDecimal, withProbe, withScan } from "./records.mjs";
 import { createPoller, resyncReason, sinceFor } from "./poll.mjs";
 import { allPass, feedIds, visibleIds } from "./filters.mjs";
-import { changedSinceMark, markChanges, markNow } from "./mark.mjs";
-import { scanProgress } from "./scan_progress.mjs";
+import { candidateCount, captureProgress, scanProgress } from "./scan_progress.mjs";
 import {
   acceptedRange,
+  busyLine,
+  busyText,
+  captureStartPath,
+  isRunning,
+  probeError,
   rangeError,
-  scanButtonLabel,
+  scanButton,
   scanReply,
   scanStartPath,
   switchStopsScan,
 } from "./scan_control.mjs";
+import {
+  analyseExperiment,
+  coachStep,
+  excludedFromExperiments,
+  labelsUsed,
+  newExperiment,
+  nextCapture,
+  withCapture,
+  withoutCapture,
+} from "./experiments.mjs";
+import { captureStep, isCaptureRun } from "./capture_run.mjs";
+import {
+  latestProbe,
+  newKeptSet,
+  newPendingProbe,
+  probeChoices,
+  probeNote,
+  probeReply,
+  probeRequest,
+  probeTexts,
+  reconcileProbe,
+  restoreOffer,
+  runningProbe,
+} from "./write_probe.mjs";
 import { checkCards } from "./check_cards.mjs";
 import { exportCsv, exportJson } from "./export.mjs";
 import { deviceKey, LAST_MAC_KEY, parseStored, storedText } from "./storage.mjs";
@@ -200,6 +277,14 @@ const GOAL_TABS = [
 const SWITCH_STOPS_SCAN = "Switching stops the running scan";
 /** The registered badge's tooltip, on check's fan cards. */
 const REGISTERED_TITLE = "registered: polled by the hub for this YAML";
+/** Why the page stored no capture, by `captureStep`'s `why`. */
+const ABANDONED_TEXT = {
+  stopped: "the scan was stopped: nothing stored; capture again to retry",
+  "boot changed": "the device rebooted or its data was cleared: nothing stored; capture again to retry",
+  "another run": "another run ended instead: nothing stored; capture again to retry",
+};
+/** The candidate ring of a cell, by candidate status. */
+const RING_CLASSES = { candidate: "ring-cand", corroborated: "ring-corr" };
 
 // Empty on the device; `?device=http://<ip>` while working on the page from a local server.
 const DEVICE_URL = new URLSearchParams(location.search).get("device") ?? "";
@@ -215,29 +300,67 @@ function el(tag, attrs = {}, ...children) {
   return node;
 }
 
+/** A button, disabled when `disabled`. */
+function button(attrs, disabled, ...children) {
+  const node = el("button", attrs, ...children);
+  node.disabled = disabled;
+  return node;
+}
+
 const isPadded = (raw) => raw !== null && raw !== raw.trim();
 const formatWall = (wallMs) => (wallMs === null ? "—" : new Date(wallMs).toLocaleString());
 
-// ───── state: the browser copy, notes and mutes, kept per device MAC ─────
+// ───── state: the browser copy, notes, mutes and experiments, kept per device MAC ─────
 let mac = null;
 let copy = emptyCopy();
 let notes = {};
 let mutes = new Set();
 // The last discover range the device accepted, filled into the range inputs when a device loads.
 let range = CATALOGUE.discoverRange;
+// Every experiment of this device (experiments.mjs), and the probe or restore awaiting its result (write_probe.mjs).
+let experiments = [];
+let pendingProbe = null;
 // The open tab's goal. Not stored: the page always opens in discover.
 let goal = GOALS.discover;
-// The device's error text for the last refused discover start, null after an accepted one.
+// The open experiment's key, null on "+ new experiment". Not stored.
+let openKey = null;
+// This page's capture in flight (capture_run.mjs), null when none. Page memory only: a reload abandons it.
+let capture = null;
+// Why the last capture stored nothing, shown under the coach until the next capture.
+let captureNote = null;
+// Whether "full rescan" was pressed for the next capture.
+let forceFull = false;
+// Polls are numbered: what became of a capture or probe is judged only from polls numbered above its `…AfterPoll`.
+let pollSerial = 0;
+// The number of the poll whose response `copy` last took in: the poll the page renders.
+let appliedPoll = 0;
+let captureAfterPoll = 0;
+// 0 after a page load: any poll can tell what became of a stored pending probe.
+let probeAfterPoll = 0;
+
+/**
+ * The `…AfterPoll` for a request the device just accepted. A poll sent before the 200 shows the run before it. So can
+ * the first poll sent after it: the device's main loop starts the run a moment after the handler accepts it, and until
+ * then /sniffer/data still shows the previous run. The page judges from the second poll on, about 1 s later.
+ */
+const pollAfterAccept = () => pollSerial + 1;
+// "busy: <what runs>" after a start refused with 409, until the device runs nothing.
+let busy = null;
+// The device's error text for the last refused probe or restore, by ID.
+const probeErrors = new Map();
+// The value chosen in each card's probe select, by ID, so a render keeps it.
+const probeSelections = new Map();
+// The device's error text for the last refused discover start or capture, null after an accepted one.
 let rangeErrorText = null;
 let selected = null;
-// The mark (mark.mjs), null while none is set. Page memory only: never stored.
-let mark = null;
 let online = null;
-let scanRequestFailed = false;
+let requestFailed = false;
 const filter = allPass();
 let colourBy = "type";
 // Whether discover's map shows known IDs greyed instead of as gaps. Page memory only: never stored.
 let showKnown = false;
+let includeMuted = false;
+let onlyOpen = false;
 const flashIds = new Set();
 // The ID whose note the drawer's note field holds.
 let drawerFor = null;
@@ -254,11 +377,18 @@ function load(newMac) {
   } catch {
     // Blocked storage: the device starts from an empty copy.
   }
-  ({ copy, notes, mutes, range } = parseStored(text, CATALOGUE.discoverRange));
-  // Another device's values say nothing about this one.
-  clearMark();
-  // A refused range of the previous device says nothing about this one.
+  ({ copy, notes, mutes, range, experiments, pendingProbe } = parseStored(text, CATALOGUE.discoverRange));
+  // Another device's experiments and capture say nothing about this one.
+  openKey = null;
+  capture = null;
+  captureNote = null;
+  forceFull = false;
+  probeAfterPoll = 0;
+  probeErrors.clear();
+  probeSelections.clear();
+  // A refused range or a busy device of the previous device says nothing about this one.
   rangeErrorText = null;
+  busy = null;
   fillRange();
 }
 
@@ -286,9 +416,60 @@ function rememberMac() {
 
 function save() {
   try {
-    localStorage.setItem(deviceKey(mac), storedText(copy, notes, mutes, range));
+    localStorage.setItem(deviceKey(mac), storedText({ copy, notes, mutes, range, experiments, pendingProbe }));
   } catch {
     // Full or blocked storage: the page still works, the copy just does not survive a reload.
+  }
+}
+
+// ───── experiments ─────
+const openExperiment = () => experiments.find((experiment) => experiment.key === openKey) ?? null;
+
+const analyse = (experiment) => analyseExperiment(experiment, excludedFromExperiments(CATALOGUE, mutes));
+
+function updateExperiment(key, update) {
+  experiments = experiments.map((experiment) => (experiment.key === key ? update(experiment) : experiment));
+}
+
+/** Appends a line to an ID's note. */
+function appendNote(id, line) {
+  notes[id] = notes[id] ? `${notes[id]}\n${line}` : line;
+  if (drawerFor === id) {
+    // The note field is refilled only for another ID: refill it for this one.
+    drawerFor = null;
+  }
+}
+
+/** Stores a probe entry in its experiment and appends its line to the ID's note; the pending probe is done. */
+function takeProbeEntry(experimentKey, entry) {
+  updateExperiment(experimentKey, (experiment) => ({ ...experiment, probes: [...experiment.probes, entry] }));
+  appendNote(entry.id, probeNote(entry));
+  pendingProbe = null;
+}
+
+/** What a poll means for this page's capture in flight and its pending probe. */
+function followRuns(pollNo) {
+  if (capture !== null) {
+    const step = captureStep(CATALOGUE, capture, copy, pollNo > captureAfterPoll, Date.now());
+    if (step.kind === "store") {
+      updateExperiment(capture.experimentKey, (experiment) => withCapture(experiment, step.capture, step.range));
+      if (capture.experimentKey === openKey) {
+        $("capture-label").value = "";
+      }
+      capture = null;
+    } else if (step.kind === "abandon") {
+      captureNote = ABANDONED_TEXT[step.why];
+      capture = null;
+    }
+  }
+  const outcome = reconcileProbe(pendingProbe, copy.device?.probe ?? null, pollNo > probeAfterPoll);
+  if (outcome.kind === "running") {
+    pendingProbe = outcome.pending;
+  } else if (outcome.kind === "result" || outcome.kind === "interrupted") {
+    takeProbeEntry(pendingProbe.experimentKey, outcome.entry);
+  }
+  if (!isRunning(currentScan(), currentProbe())) {
+    busy = null;
   }
 }
 
@@ -308,8 +489,12 @@ async function fetchData(since) {
 }
 
 const currentScan = () => copy.device?.scan ?? null;
+const currentProbe = () => copy.device?.probe ?? null;
+const deviceRuns = () => isRunning(currentScan(), currentProbe());
 
 async function pollOnce() {
+  pollSerial += 1;
+  const pollNo = pollSerial;
   const clearsBefore = clears;
   let response = await fetchData(sinceFor(copy));
   if (response.mac !== mac) {
@@ -330,8 +515,10 @@ async function pollOnce() {
   for (const id of result.changedIds) {
     flashIds.add(id);
   }
-  // The device answered, so a failed scan request no longer describes it.
-  scanRequestFailed = false;
+  // The device answered, so a failed request no longer describes it.
+  requestFailed = false;
+  appliedPoll = pollNo;
+  followRuns(pollNo);
   save();
   renderLogged();
 }
@@ -346,7 +533,7 @@ const poller = createPoller({
   },
 });
 
-/** A reply's body; a body that breaks off reads as empty, which scanReply() takes as no scan object. */
+/** A reply's body; a body that breaks off reads as empty, which the reply parsers take as no object. */
 const replyText = (response) => response.text().catch(() => "");
 
 /**
@@ -370,26 +557,26 @@ async function stopScan() {
   let stopped = false;
   try {
     const response = await fetchOk("/sniffer/scan/stop", { method: "POST" });
-    scanRequestFailed = false;
+    requestFailed = false;
     stopped = true;
     takeScanReply(requestMac, await replyText(response));
     poller.pollNow();
   } catch (error) {
     // No poll at once: it would clear the failure before it shows. The next scheduled poll clears it.
     console.error("scan stop request failed", error);
-    scanRequestFailed = true;
+    requestFailed = true;
   }
   renderLogged();
   return stopped;
 }
 
-/** Empties the device's records, then the browser copy; notes, mutes and the range stay. */
+/** Empties the device's records, then the browser copy; notes, mutes, experiments and the range stay. */
 async function clearData() {
   // No device known yet: nothing to clear.
   if (mac === null) {
     return;
   }
-  if (!confirm("Clear every captured value on the device and in this browser? Notes and mutes stay.")) {
+  if (!confirm("Clear every captured value on the device and in this browser? Notes, mutes and experiments stay.")) {
     return;
   }
   const requestMac = mac;
@@ -404,7 +591,6 @@ async function clearData() {
   if (mac === requestMac) {
     clears += 1;
     copy = emptyCopy();
-    clearMark();
     flashIds.clear();
     save();
   }
@@ -412,48 +598,168 @@ async function clearData() {
   poller.pollNow();
 }
 
+/**
+ * Sends a scan start. 400 shows the device's error next to the range, 409 shows what runs.
+ *
+ * @returns {Promise<object | null>} the accepted start's reply scan (or `{}` when its body held none); null when the
+ *   device refused it or did not answer
+ */
+async function sendStart(path) {
+  const requestMac = mac;
+  try {
+    const response = await fetch(`${DEVICE_URL}${path}`, { method: "POST" });
+    if (response.status === 400 || response.status === 409) {
+      requestFailed = false;
+      const text = await replyText(response);
+      if (mac === requestMac) {
+        if (response.status === 400) {
+          rangeErrorText = rangeError(text);
+        } else {
+          busy = busyText(CATALOGUE, text);
+        }
+      }
+      return null;
+    }
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    requestFailed = false;
+    rangeErrorText = null;
+    busy = null;
+    // The device accepted the start: a body the page cannot read is no failure, the poll brings the scan.
+    return takeScanReply(requestMac, await replyText(response)) ?? {};
+  } catch (error) {
+    // No poll at once: it would clear the failure before it shows. The next scheduled poll clears it.
+    console.error("scan start request failed", error);
+    requestFailed = true;
+    return null;
+  } finally {
+    renderLogged();
+  }
+}
+
 /** Starts the open tab's goal; discover sends the range as typed, and the device decides whether it is valid. */
 async function startScan() {
   const startGoal = goal;
-  const requestMac = mac;
   const fromText = $("range-from").value;
   const toText = $("range-to").value;
+  const scan = await sendStart(scanStartPath(CATALOGUE, startGoal, fromText, toText));
+  if (scan === null) {
+    return;
+  }
+  const accepted = startGoal === GOALS.discover ? acceptedRange(CATALOGUE, scan, fromText, toText) : null;
+  if (accepted !== null) {
+    range = accepted;
+    save();
+  }
+  poller.pollNow();
+  renderLogged();
+}
+
+function toggleScan() {
+  if (currentScan()?.active) {
+    return stopScan();
+  }
+  return deviceRuns() ? null : startScan();
+}
+
+/** Captures the open experiment at the label typed: its full range, or only its candidates. */
+async function startCapture() {
+  const experiment = openExperiment();
+  const label = $("capture-label").value;
+  if (experiment === null || label.trim() === "" || capture !== null || deviceRuns()) {
+    return;
+  }
+  const from = wholeDecimal($("range-from").value);
+  const to = wholeDecimal($("range-to").value);
+  if (experiment.range === null && (from === null || to === null)) {
+    rangeErrorText = "the range must be two IDs";
+    renderLogged();
+    return;
+  }
+  const next = nextCapture(CATALOGUE, experiment, analyse(experiment), { from, to }, forceFull);
+  captureNote = null;
+  const bootAtStart = copy.boot;
+  const requestMac = mac;
+  const scan = await sendStart(captureStartPath(CATALOGUE, next));
+  if (scan === null || mac !== requestMac) {
+    // Refused, unanswered, or another device answered meanwhile: its capture is not this one.
+    return;
+  }
+  // A 200 means the next finished run is this page's own.
+  capture = { experimentKey: experiment.key, experimentName: experiment.name, label, next, boot: bootAtStart };
+  captureAfterPoll = pollAfterAccept();
+  forceFull = false;
+  const accepted = next.full ? acceptedRange(CATALOGUE, scan, String(next.from), String(next.to)) : null;
+  if (accepted !== null) {
+    range = accepted;
+    save();
+  }
+  poller.pollNow();
+  renderLogged();
+}
+
+/**
+ * Starts a write probe or a restore of `id` to `value` from the open experiment's card. With `was` (the ID's value
+ * now, null when unknown) the restore is a set and keep.
+ */
+async function startProbe(kind, id, value, was = undefined) {
+  const experiment = openExperiment();
+  if (experiment === null || pendingProbe !== null || deviceRuns()) {
+    return;
+  }
+  const requestMac = mac;
+  probeErrors.delete(id);
+  // Stored before the request: if the device reboots mid-probe, the page can still tell it was interrupted.
+  pendingProbe = was === undefined
+    ? newPendingProbe(experiment.key, kind, id, value, Date.now())
+    : newKeptSet(experiment.key, id, value, was, Date.now());
+  // No poll judges it while the request is out: the device may not have it yet.
+  probeAfterPoll = Infinity;
+  save();
+  renderLogged();
+  const request = probeRequest(kind, id, value);
   try {
-    const response = await fetch(`${DEVICE_URL}${scanStartPath(CATALOGUE, startGoal, fromText, toText)}`, {
+    // text/plain: a form body never reaches the device's handler.
+    const response = await fetch(`${DEVICE_URL}${request.path}`, {
       method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: request.body,
     });
-    if (response.status === 400) {
-      scanRequestFailed = false;
-      if (mac === requestMac) {
-        rangeErrorText = rangeError(await replyText(response));
+    const text = await replyText(response);
+    requestFailed = false;
+    if (mac !== requestMac) {
+      // Another device answered meanwhile: the request's pending probe was the other device's, and load() dropped it.
+      return;
+    }
+    if (response.status === 400 || response.status === 409) {
+      pendingProbe = null;
+      probeAfterPoll = 0;
+      if (response.status === 400) {
+        probeErrors.set(id, probeError(text));
+      } else {
+        busy = busyText(CATALOGUE, text);
       }
-      renderLogged();
+      save();
       return;
     }
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
-    scanRequestFailed = false;
-    rangeErrorText = null;
-    // The device accepted the start: a body the page cannot read is no failure, the poll brings the scan.
-    const scan = takeScanReply(requestMac, await replyText(response));
-    // A start while a scan runs replies with the running scan: only a range that was sent and runs is remembered.
-    const accepted = startGoal === GOALS.discover ? acceptedRange(CATALOGUE, scan, fromText, toText) : null;
-    if (accepted !== null) {
-      range = accepted;
-      save();
+    probeAfterPoll = pollAfterAccept();
+    const probe = probeReply(text);
+    if (probe !== null) {
+      copy = withProbe(copy, probe);
     }
     poller.pollNow();
   } catch (error) {
-    // No poll at once: it would clear the failure before it shows. The next scheduled poll clears it.
-    console.error("scan start request failed", error);
-    scanRequestFailed = true;
+    // The device may have taken it: the pending probe stays, and the polls tell what became of it.
+    console.error("probe request failed", error);
+    probeAfterPoll = pollAfterAccept();
+    requestFailed = true;
+  } finally {
+    renderLogged();
   }
-  renderLogged();
-}
-
-function toggleScan() {
-  return currentScan()?.active ? stopScan() : startScan();
 }
 
 /**
@@ -503,8 +809,9 @@ function renderHeader() {
     $("device").textContent = `${mac} · ${Object.keys(copy.records).length} IDs`;
   }
   const state = online === false ? "offline, retrying" : online ? "live" : "connecting…";
-  $("online").textContent = scanRequestFailed ? `${state} · scan request failed` : state;
-  $("online").classList.toggle("offline", online === false || scanRequestFailed);
+  $("online").textContent = requestFailed ? `${state} · request failed` : state;
+  $("online").classList.toggle("offline", online === false || requestFailed);
+  $("only-open").disabled = openKey === null;
 }
 
 function renderScan() {
@@ -513,8 +820,14 @@ function renderScan() {
   if (scan === null) {
     return;
   }
-  const progress = scanProgress(scan, CATALOGUE, goal);
-  $("scan-toggle").textContent = scanButtonLabel(scan, goal);
+  const progress = capture !== null && isCaptureRun(CATALOGUE, capture, scan, appliedPoll > captureAfterPoll)
+    ? captureProgress(CATALOGUE, capture, scan)
+    : scanProgress(scan, CATALOGUE, goal);
+  const probe = currentProbe();
+  const toggle = scanButton(scan, probe, goal);
+  $("scan-toggle").textContent = toggle.label;
+  $("scan-toggle").disabled = toggle.disabled;
+  $("busy").textContent = busyLine(CATALOGUE, busy, scan, probe);
   $("scan-bar").style.width = `${progress.percent}%`;
   $("scan-label").textContent = progress.label;
   $("range").hidden = goal !== GOALS.discover;
@@ -563,7 +876,8 @@ function cellColour(row) {
   return (colourBy === "type" && TYPE_COLOURS[row.type]) || STATUS_COLOURS[row.status];
 }
 
-function renderGrid(rowsById, visible) {
+/** @param {Map<number, string>} statuses the open experiment's candidate status by ID; empty with none open */
+function renderGrid(rowsById, visible, statuses) {
   const scan = currentScan();
   for (let id = 0; id < ID_COUNT; id++) {
     const cell = cells[id];
@@ -581,11 +895,13 @@ function renderGrid(rowsById, visible) {
       cell.append(el("code", {}, shown(row.raw).slice(0, CELL_CHARS)));
     }
     if (row && notes[id]) {
-      cell.append(el("span", {}, "✎"));
+      cell.append(el("span", { class: "note-dot", title: "has a note" }));
     }
     cell.classList.toggle("stale", Boolean(row?.stale));
     cell.classList.toggle("dim", Boolean(row) && !visible.has(id));
-    cell.classList.toggle("marked", changedSinceMark(mark, id, row?.raw ?? null));
+    for (const [status, ring] of Object.entries(RING_CLASSES)) {
+      cell.classList.toggle(ring, statuses.get(id) === status);
+    }
     cell.classList.toggle("cursor", Boolean(scan?.active) && scan.next === id);
     cell.classList.toggle("sel", selected === id);
     if (flashIds.has(id)) {
@@ -631,34 +947,153 @@ function addChips(parent, colours, chosen) {
   }
 }
 
-function clearMark() {
-  mark = null;
-  filter.onlyChangedSinceMark = false;
+function renderExperimentTabs() {
+  const tabs = experiments.map((experiment) =>
+    el("button", { "data-experiment": experiment.key, class: experiment.key === openKey ? "on" : "" },
+      experiment.name, " ", el("span", { class: "mute" }, `(${analyse(experiment).candidates.length})`)));
+  $("exp-tabs").replaceChildren(
+    el("span", { class: "mute", style: "padding:5px 8px 0 0" }, "Experiments:"),
+    ...tabs,
+    el("button", { "data-experiment": "", class: openKey === null ? "on" : "" }, "+ new experiment"));
 }
 
-/** The mark box, and the changes since the mark above the feed while a mark is set. */
-function renderMark() {
-  $("mark-set").hidden = mark !== null;
-  $("mark-on").hidden = mark === null;
-  $("mark-changes-box").hidden = mark === null;
-  $("f-since-mark").checked = filter.onlyChangedSinceMark;
-  if (mark === null) {
+/** The coach's next-step prompt (experiments.mjs, `coachStep`). */
+function coachText(experiment, analysis) {
+  const step = coachStep(experiment, analysis);
+  const name = experiment.name;
+  switch (step.step) {
+    case "first":
+      return `Set ${name} on the panel to any value, name that value, and capture.`;
+    case "change":
+      return `Change ${name} to a different value, name it, and capture.`;
+    case "round trip":
+      return `Go back to “${step.label}” and capture: a round trip finds candidates.`;
+    case "corroborate":
+      return `Capture “${step.label}” again to corroborate.`;
+    case "probe":
+      return `ID ${step.ids.join(", ")} corroborated: run a write probe, or capture other values.`;
+    default:
+      return "No candidate left: the next capture scans the full range again.";
+  }
+}
+
+function renderCoach(experiment, analysis) {
+  $("new-experiment").hidden = experiment !== null;
+  $("capture-form").hidden = experiment === null;
+  $("experiment-view").hidden = experiment === null;
+  if (experiment === null) {
+    $("coach-step").textContent = "What setting will you change on the panel?";
     return;
   }
-  const changes = markChanges(CATALOGUE, copy, mark);
-  $("mark-count").textContent = String(changes.length);
-  $("mark-at").textContent = `mark set ${new Date(mark.setAtMs).toLocaleTimeString()}`;
-  if (changes.length === 0) {
-    $("mark-changes").replaceChildren(
-      el("span", { class: "mute" }, "nothing yet: change a setting on the panel, then scan again"));
+  $("coach-step").textContent = coachText(experiment, analysis);
+  $("capture-labels").replaceChildren(...labelsUsed(experiment).map((label) => el("option", { value: label })));
+  $("capture").disabled = capture !== null || deviceRuns();
+  $("capture").textContent = capture !== null ? "Capturing…" : "Capture";
+  $("full-rescan").textContent = forceFull ? "narrow again" : "full rescan";
+  const inputRange = { from: wholeDecimal($("range-from").value), to: wholeDecimal($("range-to").value) };
+  const next = nextCapture(CATALOGUE, experiment, analysis, inputRange, forceFull);
+  $("full-rescan").hidden = !forceFull && next.full;
+  $("next-capture").textContent = next.full
+    ? `next capture: full range ${next.from ?? "?"}–${next.to ?? "?"}`
+    : `next capture: ${candidateCount(next.ids.length)}`;
+  $("capture-note").textContent = captureNote ?? "";
+}
+
+function labelTable(candidate) {
+  return el("table", { class: "lr" },
+    el("tr", {}, el("th", {}, "label"), el("th", {}, "raw"), el("th", {}, "seen")),
+    ...candidate.values.map((value) =>
+      el("tr", {},
+        el("td", {}, value.label),
+        el("td", {}, value.raw === null ? el("span", { class: "s-nak" }, "NAK") : el("code", {}, shown(value.raw))),
+        el("td", { class: "mute" }, `${value.count}×`))));
+}
+
+/** A probe's steps, verdict and restore, as on the card. */
+function probeView(probe) {
+  const texts = probeTexts(probe);
+  const good = probe.verdict === "writable" && probe.restore !== "failed";
+  const verdictClass = good ? "ok" : probe.interrupted || probe.restore === "failed" ? "bad" : "";
+  return el("div", { class: "probe" },
+    el("b", {}, texts.title),
+    texts.verdict === null ? null : el("span", { class: verdictClass }, `: ${texts.verdict}`),
+    el("div", { class: "mute" }, texts.steps.join(" · ")),
+    texts.restore === null ? null : el("div", { class: probe.restore === "failed" ? "bad" : "" }, texts.restore));
+}
+
+/** A corroborated candidate's write probe: the select of observed values, the button, the result, a restore. */
+function probeControls(experiment, candidate, row) {
+  const runs = deviceRuns() || pendingProbe !== null;
+  const choices = probeChoices(CATALOGUE, experiment, candidate.id, row?.raw ?? null);
+  const kept = probeSelections.get(candidate.id);
+  const chosen = choices.values.includes(kept) ? kept : choices.chosen;
+  const select = el("select", { "data-probe-select": candidate.id, title: "only values this experiment observed" },
+    ...choices.values.map((value, i) => el("option", { value: String(i) }, `“${shown(value)}”`)));
+  select.value = String(choices.values.indexOf(chosen));
+  const probeButton = button({ "data-probe": candidate.id, title: "SET the value, read it back, then restore" },
+    runs || chosen === null, "Write probe");
+  const keepButton = button({ "data-keep": candidate.id, title: "SET the value and leave it, to watch the unit react" },
+    runs || chosen === null, "Set and keep");
+  const parts = [el("div", { class: "row" }, "write ", select, probeButton, keepButton)];
+  const error = probeErrors.get(candidate.id);
+  if (error !== undefined) {
+    parts.push(el("div", { class: "probe unexpected" }, error));
+  }
+  const mine = pendingProbe !== null && pendingProbe.experimentKey === experiment.key && pendingProbe.id === candidate.id;
+  const shownProbe = mine ? runningProbe(pendingProbe, currentProbe()) : latestProbe(experiment, candidate.id);
+  if (shownProbe !== null) {
+    parts.push(probeView(shownProbe));
+  }
+  const restoreTo = mine ? null : restoreOffer(CATALOGUE, shownProbe);
+  if (restoreTo !== null) {
+    const action = shownProbe.was === undefined ? "restore" : "set back to";
+    parts.push(button({ "data-restore": candidate.id }, runs, `${action} “${shown(restoreTo)}”`));
+  }
+  return parts;
+}
+
+function renderCards(experiment, analysis, rowsById) {
+  // Rebuilding the cards would close a probe select the user has open: they wait until it loses focus.
+  if (document.activeElement?.closest("#cards select")) {
     return;
   }
-  $("mark-changes").replaceChildren(
-    ...changes.map((change) =>
-      el("div", { "data-id": change.id },
-        el("b", {}, String(change.id)), " ",
-        el("code", {}, shown(change.markRaw)), " → ", el("code", {}, shown(change.raw)))),
-  );
+  const cards = analysis.candidates.map((candidate) => {
+    const corroborated = candidate.status === "corroborated";
+    const row = rowsById.get(candidate.id);
+    return el("div", { class: `card ${corroborated ? "corr" : ""}`.trim() },
+      el("h3", {},
+        el("button", { class: "link", "data-select": candidate.id }, `ID ${candidate.id}`),
+        el("span", { class: `badge ${corroborated ? "corr" : "cand"}` }, candidate.status),
+        el("span", { class: "grow" }),
+        el("code", { class: "mute" }, shown(row?.raw ?? null))),
+      labelTable(candidate),
+      ...(corroborated
+        ? probeControls(experiment, candidate, row)
+        : [el("div", { class: "mute", style: "font-size:12px" }, "write probe once corroborated")]));
+  });
+  $("cards").replaceChildren(...cards);
+  const { disqualified } = analysis;
+  $("disqualified").hidden = disqualified.length === 0;
+  $("disqualified-count").textContent = `${disqualified.length} disqualified`;
+  $("disqualified-list").replaceChildren(...disqualified.map((entry) =>
+    el("div", {}, el("button", { class: "link", "data-select": entry.id }, `ID ${entry.id}`), ": ",
+      entry.conflicts.map((conflict) =>
+        `${conflict.label} = ${conflict.raws.map((raw) => (raw === null ? "NAK" : shown(raw))).join(" / ")}`)
+        .join("; "))));
+}
+
+function renderTimeline(experiment) {
+  if (experiment.captures.length === 0) {
+    $("timeline").replaceChildren(el("div", { class: "mute" }, "none yet"));
+    return;
+  }
+  const entries = experiment.captures.map((stored, index) =>
+    el("div", { class: stored.full ? "" : "narrow" },
+      el("b", {}, stored.label.trim()),
+      el("span", { class: "mute" },
+        ` · ${new Date(stored.atMs).toLocaleTimeString()} · ${stored.full ? "full" : `${Object.keys(stored.entries).length} IDs`} `),
+      el("button", { class: "link", "data-delete": index }, "delete")));
+  $("timeline").replaceChildren(...entries.reverse());
 }
 
 function renderFeed(listed) {
@@ -705,7 +1140,8 @@ function renderDrawer(rowsById) {
       el("span", badge.colour === null ? { class: "badge" } : { class: "badge", style: `background:${badge.colour}` },
         badge.text)),
     el("span", { class: "grow" }),
-    el("button", { "data-action": "mute" }, mutes.has(selected) ? "Unmute in feed" : "Mute in feed"),
+    el("button", { "data-action": "mute", title: "A muted ID leaves the feed and experiments; its cell still updates" },
+      mutes.has(selected) ? "Unmute" : "Mute"),
     el("button", { "data-action": "close" }, "×"),
   );
   const value = el("div", { class: "value" }, el("code", {}, shown(row.raw)));
@@ -742,13 +1178,25 @@ function render() {
   }
   const rowsById = new Map(rows.map((row) => [row.id, row]));
   const now = Date.now();
-  const visible = visibleIds(CATALOGUE, rows, filter, now, mark);
+  const experiment = openExperiment();
+  const analysis = experiment === null ? null : analyse(experiment);
+  // No experiment open: no rings, and "only candidates" filters nothing.
+  const statuses = new Map((analysis?.candidates ?? []).map((candidate) => [candidate.id, candidate.status]));
+  const candidates = analysis === null ? null : new Set(statuses.keys());
+  $("f-candidates").disabled = experiment === null;
+  $("f-candidates").checked = filter.onlyCandidates && experiment !== null;
+  const visible = visibleIds(CATALOGUE, rows, filter, now, candidates);
   $("known-gap-legend").textContent = `${showKnown ? "grey" : "blank"}: ${KNOWN_GAP_TEXT}`;
   $("f-types").classList.toggle("faded", colourBy !== "type");
   $("f-statuses").classList.toggle("faded", colourBy !== "status");
-  renderGrid(rowsById, visible);
-  renderMark();
-  renderFeed(feedIds(CATALOGUE, rows, filter, now, mark));
+  renderExperimentTabs();
+  renderGrid(rowsById, visible, statuses);
+  renderCoach(experiment, analysis);
+  if (experiment !== null) {
+    renderCards(experiment, analysis, rowsById);
+    renderTimeline(experiment);
+  }
+  renderFeed(feedIds(CATALOGUE, rows, filter, now));
   renderDrawer(rowsById);
 }
 
@@ -770,6 +1218,15 @@ function download(name, text, type) {
   setTimeout(() => URL.revokeObjectURL(link.href), 0);
 }
 
+const exportOptions = () => ({
+  mutes,
+  includeMuted,
+  experiments,
+  openExperimentKey: openKey,
+  onlyOpen: onlyOpen && openKey !== null,
+  pendingProbe,
+});
+
 // ───── events ─────
 function select(id) {
   selected = selected === id ? null : id;
@@ -782,16 +1239,13 @@ $("grid").addEventListener("click", (event) => {
     select(Number(cell.dataset.id));
   }
 });
-/** A feed or mark-changes entry selects its ID. */
-function selectEntry(event) {
+$("feed").addEventListener("click", (event) => {
   const entry = event.target.closest("[data-id]");
   if (entry) {
     selected = Number(entry.dataset.id);
     render();
   }
-}
-$("feed").addEventListener("click", selectEntry);
-$("mark-changes").addEventListener("click", selectEntry);
+});
 $("drawer").addEventListener("click", (event) => {
   const action = event.target.dataset.action;
   if (action === "close") {
@@ -819,28 +1273,15 @@ $("drawer").addEventListener("input", (event) => {
     delete notes[selected];
   }
   save();
-  // The note field is not rebuilt by render, so it keeps focus; the ✎ marker and note search update now.
+  // The note field is not rebuilt by render, so it keeps focus; the note dot and note search update now.
   render();
 });
 $("f-query").addEventListener("input", (event) => {
   filter.query = event.target.value;
   render();
 });
-$("f-since-mark").addEventListener("change", (event) => {
-  filter.onlyChangedSinceMark = event.target.checked;
-  render();
-});
-$("mark-set").addEventListener("click", () => {
-  mark = markNow(copy, Date.now());
-  filter.onlyChangedSinceMark = true;
-  render();
-});
-$("mark-move").addEventListener("click", () => {
-  mark = markNow(copy, Date.now());
-  render();
-});
-$("mark-clear").addEventListener("click", () => {
-  clearMark();
+$("f-candidates").addEventListener("change", (event) => {
+  filter.onlyCandidates = event.target.checked;
   render();
 });
 $("f-changed").addEventListener("change", (event) => {
@@ -855,6 +1296,12 @@ $("show-known").addEventListener("change", (event) => {
   showKnown = event.target.checked;
   render();
 });
+$("include-muted").addEventListener("change", (event) => {
+  includeMuted = event.target.checked;
+});
+$("only-open").addEventListener("change", (event) => {
+  onlyOpen = event.target.checked;
+});
 $("scan-toggle").addEventListener("click", toggleScan);
 $("goal-tabs").addEventListener("click", (event) => {
   const tab = event.target.closest("[data-goal]");
@@ -862,11 +1309,97 @@ $("goal-tabs").addEventListener("click", (event) => {
     setGoal(tab.dataset.goal);
   }
 });
+$("exp-tabs").addEventListener("click", (event) => {
+  const tab = event.target.closest("[data-experiment]");
+  if (!tab) {
+    return;
+  }
+  openKey = tab.dataset.experiment || null;
+  forceFull = false;
+  captureNote = null;
+  render();
+});
+function startExperiment() {
+  const name = $("experiment-name").value;
+  if (mac === null || name.trim() === "") {
+    return;
+  }
+  const experiment = newExperiment(name, Date.now(), experiments);
+  experiments = [...experiments, experiment];
+  openKey = experiment.key;
+  $("experiment-name").value = "";
+  save();
+  render();
+}
+$("experiment-start").addEventListener("click", startExperiment);
+$("experiment-name").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    startExperiment();
+  }
+});
+$("capture").addEventListener("click", startCapture);
+$("capture-label").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    startCapture();
+  }
+});
+$("full-rescan").addEventListener("click", () => {
+  forceFull = !forceFull;
+  render();
+});
+// The range inputs change the next capture's full range while the experiment has none yet.
+$("range").addEventListener("input", render);
+$("experiment-view").addEventListener("click", (event) => {
+  const target = event.target;
+  const experiment = openExperiment();
+  if (experiment === null) {
+    return;
+  }
+  if (target.dataset.select !== undefined) {
+    selected = Number(target.dataset.select);
+    render();
+  } else if (target.dataset.delete !== undefined) {
+    updateExperiment(experiment.key, (stored) => withoutCapture(stored, Number(target.dataset.delete)));
+    save();
+    render();
+  } else if (target.dataset.probe !== undefined || target.dataset.keep !== undefined) {
+    const keep = target.dataset.keep !== undefined;
+    const id = Number(keep ? target.dataset.keep : target.dataset.probe);
+    const current = copy.records[id]?.raw ?? null;
+    const { values } = probeChoices(CATALOGUE, experiment, id, current);
+    const index = Number(target.closest(".card").querySelector("[data-probe-select]").value);
+    if (values[index] === undefined) {
+      return;
+    }
+    if (keep) {
+      startProbe("restore", id, values[index], current);
+    } else {
+      startProbe("probe", id, values[index]);
+    }
+  } else if (target.dataset.restore !== undefined) {
+    const id = Number(target.dataset.restore);
+    const original = restoreOffer(CATALOGUE, latestProbe(experiment, id));
+    if (original !== null) {
+      startProbe("restore", id, original);
+    }
+  }
+});
+$("experiment-view").addEventListener("change", (event) => {
+  const selectBox = event.target.closest("[data-probe-select]");
+  const experiment = openExperiment();
+  if (!selectBox || experiment === null) {
+    return;
+  }
+  const id = Number(selectBox.dataset.probeSelect);
+  const { values } = probeChoices(CATALOGUE, experiment, id, copy.records[id]?.raw ?? null);
+  probeSelections.set(id, values[Number(selectBox.value)]);
+});
 $("clear-data").addEventListener("click", clearData);
 $("export-json").addEventListener("click", () =>
-  download("sec_touch_sniffer.json", exportJson(CATALOGUE, copy, notes, mark, Date.now()), "application/json"));
+  download("sec_touch_sniffer.json", exportJson(CATALOGUE, copy, notes, exportOptions(), Date.now()),
+    "application/json"));
 $("export-csv").addEventListener("click", () =>
-  download("sec_touch_sniffer.csv", exportCsv(CATALOGUE, copy, notes, mark), "text/csv"));
+  download("sec_touch_sniffer.csv", exportCsv(CATALOGUE, copy, notes, exportOptions()), "text/csv"));
 
 buildStatic();
 renderTabs();

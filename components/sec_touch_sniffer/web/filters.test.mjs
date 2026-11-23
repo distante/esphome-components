@@ -2,10 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { allPass, feedIds, matchesFilter, visibleIds } from "./filters.mjs";
-import { markNow } from "./mark.mjs";
-import { applyResponse, emptyCopy } from "./records.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
-import { deviceRecord, deviceResponse } from "./fixture_records.mjs";
 
 const NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
 const MINUTE_MS = 60_000;
@@ -73,12 +70,6 @@ test("changed recently keeps IDs whose value changed within the window", () => {
   assert.equal(matchesFilter(row({ changeCount: 0, changedAtMs: NOW_MS - MINUTE_MS }), filter, NOW_MS, null), false);
 });
 
-/** A copy the device filled with these raw values, by ID; a null raw is a record that only ever failed. */
-function copyOf(raws) {
-  const records = Object.entries(raws).map(([id, raw]) => deviceRecord(Number(id), raw));
-  return applyResponse(emptyCopy(), deviceResponse(records), NOW_MS).copy;
-}
-
 test("discover shows no known ID, whatever the filter", () => {
   const [level] = FIXTURE_CATALOGUE.levelIds;
   const rows = [row({ id: 5 }), row({ id: level }), row({ id: FIXTURE_CATALOGUE.clockId }), row({ id: 200 })];
@@ -95,41 +86,36 @@ test("discover's visible IDs are the unknown rows that pass the filter", () => {
   assert.deepEqual([...visibleIds(FIXTURE_CATALOGUE, rows, filter, NOW_MS, null)], [6]);
 });
 
-test("only changed since mark keeps the IDs whose raw value differs from the mark", () => {
-  const mark = markNow(copyOf({ 5: "0100", 6: "1", 7: null }), NOW_MS);
-  const filter = { ...allPass(), onlyChangedSinceMark: true };
+test("only candidates keeps the open experiment's candidates and corroborated candidates", () => {
+  const filter = { ...allPass(), onlyCandidates: true };
+  const candidates = new Set([5, 7]);
 
-  assert.equal(matchesFilter(row({ id: 5, raw: "0200" }), filter, NOW_MS, mark), true);
-  assert.equal(matchesFilter(row({ id: 6, raw: "1" }), filter, NOW_MS, mark), false);
-  assert.equal(matchesFilter(row({ id: 7, raw: "9" }), filter, NOW_MS, mark), true);
-  assert.equal(matchesFilter(row({ id: 8, raw: null, type: null }), filter, NOW_MS, mark), false);
-  // Unticked, unchanged IDs pass.
-  assert.equal(matchesFilter(row({ id: 6, raw: "1" }), allPass(), NOW_MS, mark), true);
+  assert.equal(matchesFilter(row({ id: 5 }), filter, NOW_MS, candidates), true);
+  assert.equal(matchesFilter(row({ id: 6 }), filter, NOW_MS, candidates), false);
+  // Unticked, every row passes.
+  assert.equal(matchesFilter(row({ id: 6 }), allPass(), NOW_MS, candidates), true);
 });
 
-test("only changed since mark adds to the other filters", () => {
-  const mark = markNow(copyOf({ 5: "0100", 6: "1" }), NOW_MS);
-  const filter = { ...allPass(), onlyChangedSinceMark: true, types: new Set(["int"]) };
+test("only candidates adds to the other filters", () => {
+  const filter = { ...allPass(), onlyCandidates: true, statuses: new Set(["nak"]) };
 
-  assert.equal(matchesFilter(row({ id: 5, raw: "0200", type: "padded int" }), filter, NOW_MS, mark), false);
-  assert.equal(matchesFilter(row({ id: 6, raw: "2", type: "int" }), filter, NOW_MS, mark), true);
-  assert.equal(matchesFilter(row({ id: 6, raw: "1", type: "int" }), filter, NOW_MS, mark), false);
+  assert.equal(matchesFilter(row({ id: 5, status: "ok" }), filter, NOW_MS, new Set([5])), false);
+  assert.equal(matchesFilter(row({ id: 5, status: "nak" }), filter, NOW_MS, new Set([5])), true);
 });
 
-test("only changed since mark lets every row through while no mark is set", () => {
-  const filter = { ...allPass(), onlyChangedSinceMark: true };
+// With no experiment open the checkbox is disabled: a stale tick filters nothing.
+test("only candidates lets every row through while no experiment is open", () => {
+  const filter = { ...allPass(), onlyCandidates: true };
 
   assert.equal(matchesFilter(row(), filter, NOW_MS, null), true);
 });
 
-test("the feed keeps an ID changed and changed back since the mark, under every other filter", () => {
-  const mark = markNow(copyOf({ 5: "0100", 6: "1" }), NOW_MS);
-  // 5 was changed and reverted, so its value equals the mark again; 6 still differs.
-  const rows = [row({ id: 5, raw: "0100", status: "ok" }), row({ id: 6, raw: "2", status: "nak" })];
-  const sinceMark = { ...allPass(), onlyChangedSinceMark: true };
+test("the feed ignores only candidates but keeps every other filter", () => {
+  const rows = [row({ id: 5, status: "ok" }), row({ id: 6, status: "nak" })];
+  const candidatesOnly = { ...allPass(), onlyCandidates: true };
 
-  assert.deepEqual([...visibleIds(FIXTURE_CATALOGUE, rows, sinceMark, NOW_MS, mark)], [6]);
-  assert.deepEqual([...feedIds(FIXTURE_CATALOGUE, rows, sinceMark, NOW_MS, mark)], [5, 6]);
-  const sinceMarkNak = { ...sinceMark, statuses: new Set(["nak"]) };
-  assert.deepEqual([...feedIds(FIXTURE_CATALOGUE, rows, sinceMarkNak, NOW_MS, mark)], [6]);
+  assert.deepEqual([...visibleIds(FIXTURE_CATALOGUE, rows, candidatesOnly, NOW_MS, new Set([6]))], [6]);
+  assert.deepEqual([...feedIds(FIXTURE_CATALOGUE, rows, candidatesOnly, NOW_MS, new Set([6]))], [5, 6]);
+  const candidatesOnlyOk = { ...candidatesOnly, statuses: new Set(["ok"]) };
+  assert.deepEqual([...feedIds(FIXTURE_CATALOGUE, rows, candidatesOnlyOk, NOW_MS, new Set([6]))], [5]);
 });

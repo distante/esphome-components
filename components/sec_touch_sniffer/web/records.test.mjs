@@ -10,6 +10,7 @@ import {
   toStored,
   wallOf,
   wholeDecimal,
+  withProbe,
   withScan,
 } from "./records.mjs";
 import { deviceRecord, deviceResponse } from "./fixture_records.mjs";
@@ -240,6 +241,31 @@ test("a reply before any device answered leaves the copy as it is", () => {
   const copy = emptyCopy();
 
   assert.equal(withScan(copy, { active: false, goal: "discover" }), copy);
+  assert.equal(withProbe(copy, PROBE), copy);
+});
+
+const PROBE = { active: true, kind: "probe", id: 77, value: "03", original: null, steps: [], verdict: null, restore: null };
+
+test("the device's probe object comes with each response, null before any", () => {
+  const before = applyResponse(emptyCopy(), deviceResponse([], { probe: null }), BROWSER_NOW_MS).copy;
+  const during = applyResponse(before, deviceResponse([], { full: false, probe: PROBE }), BROWSER_NOW_MS).copy;
+
+  assert.equal(before.device.probe, null);
+  assert.deepEqual(during.device.probe, PROBE);
+});
+
+// A probe or restore replies with the probe object: the buttons decide on it before the next poll arrives.
+test("a probe or restore reply replaces the device's probe and nothing else", () => {
+  const { copy } = applyResponse(emptyCopy(), deviceResponse([deviceRecord(5, "0100")], { probe: null }), BROWSER_NOW_MS);
+
+  assert.deepEqual(withProbe(copy, PROBE), { ...copy, device: { ...copy.device, probe: PROBE } });
+  assert.equal(copy.device.probe, null, "the copy passed in is left unchanged");
+});
+
+test("a stored copy reloads without a probe state, so no stale probe shows as running", () => {
+  const { copy } = applyResponse(emptyCopy(), deviceResponse([], { probe: PROBE }), BROWSER_NOW_MS);
+
+  assert.equal(fromStored(JSON.parse(JSON.stringify(toStored(copy)))).device.probe, null);
 });
 
 test("only plain ASCII digits read as a whole decimal, leading zeros included", () => {

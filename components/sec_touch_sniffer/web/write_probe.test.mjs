@@ -1,0 +1,298 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+
+import {
+  isProbeValue,
+  latestProbe,
+  probeChoices,
+  probeNote,
+  probeReply,
+  probeRequest,
+  probeTexts,
+  reconcileProbe,
+  restoreOffer,
+} from "./write_probe.mjs";
+import { experimentWith, NAK, TIMEOUT, walkOf } from "./fixture_experiments.mjs";
+import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
+
+const CATALOGUE = FIXTURE_CATALOGUE;
+const ID = 77;
+const CAP = CATALOGUE.probeValueCap;
+const [NUL, FORBIDDEN, ...MORE_FORBIDDEN] = CATALOGUE.probeForbiddenBytes.map((byte) => String.fromCharCode(byte));
+const AT_MS = Date.UTC(2026, 10, 22, 9, 40, 0);
+
+const step = (kind, outcome, value, at) => ({ kind, outcome, value, at });
+const deviceProbe = (fields) => ({
+  active: false,
+  kind: "probe",
+  id: ID,
+  value: "03",
+  original: "01",
+  steps: [step("get", "ok", "01", 1000), step("set", "ok", "03", 1400), step("get", "ok", "03", 1500)],
+  verdict: "writable",
+  restore: "ok",
+  ...fields,
+});
+const pendingProbe = (fields) => ({
+  experimentKey: "e1",
+  kind: "probe",
+  id: ID,
+  value: "03",
+  original: null,
+  steps: [],
+  atMs: AT_MS,
+  ...fields,
+});
+
+// ───── values ─────
+
+test("a probe value is at most the cap and holds no NUL, TAB, STX or ETX", () => {
+  assert.equal(isProbeValue(CATALOGUE, "x".repeat(CAP)), true);
+  assert.equal(isProbeValue(CATALOGUE, "x".repeat(CAP + 1)), false);
+  for (const byte of [NUL, FORBIDDEN, ...MORE_FORBIDDEN]) {
+    assert.equal(isProbeValue(CATALOGUE, `0${byte}`), false, JSON.stringify(byte));
+  }
+  assert.equal(isProbeValue(CATALOGUE, "0ÿ"), true);
+});
+
+test("an observed blank value can be probed", () => {
+  assert.equal(isProbeValue(CATALOGUE, ""), true);
+  assert.equal(isProbeValue(CATALOGUE, "  "), true);
+});
+
+test("the choices are the values observed for the ID in the experiment, defaulting to one not current", () => {
+  const experiment = walkOf(ID, [["normal", "01"], ["boost", "03"], ["normal", "01"], ["eco", "02"]]);
+
+  assert.deepEqual(probeChoices(CATALOGUE, experiment, ID, "01"), { values: ["01", "03", "02"], chosen: "03" });
+  assert.deepEqual(probeChoices(CATALOGUE, experiment, ID, "03"), { values: ["01", "03", "02"], chosen: "01" });
+});
+
+test("the choices leave out naks, timeouts, other IDs and values a SET can't carry", () => {
+  const experiment = experimentWith([
+    ["A", { [ID]: "01", 90: "09" }],
+    ["B", { [ID]: NAK }],
+    ["C", { [ID]: TIMEOUT }],
+    ["D", { [ID]: "x".repeat(CAP + 1) }],
+    ["E", { [ID]: `0${FORBIDDEN}` }],
+    ["F", { [ID]: "" }],
+  ]);
+
+  assert.deepEqual(probeChoices(CATALOGUE, experiment, ID, "01"), { values: ["01", ""], chosen: "" });
+});
+
+test("with only the current value observed it is still offered", () => {
+  assert.deepEqual(probeChoices(CATALOGUE, walkOf(ID, [["A", "01"]]), ID, "01"), { values: ["01"], chosen: "01" });
+  assert.deepEqual(probeChoices(CATALOGUE, walkOf(ID, [["A", NAK]]), ID, "01"), { values: [], chosen: null });
+});
+
+// ───── requests ─────
+
+test("a probe or restore goes to its endpoint with the value's exact bytes as the body", () => {
+  const probe = probeRequest("probe", ID, "0\u0001ÿ");
+  const restore = probeRequest("restore", ID, "");
+
+  assert.equal(probe.path, `/sniffer/probe?id=${ID}`);
+  assert.deepEqual([...probe.body], [0x30, 0x01, 0xff]);
+  assert.equal(restore.path, `/sniffer/restore?id=${ID}`);
+  assert.deepEqual([...restore.body], []);
+});
+
+test("a 200 to a probe or restore gives the probe object it carries", () => {
+  const reply = deviceProbe({ active: true, original: null, steps: [], verdict: null, restore: null });
+
+  assert.deepEqual(probeReply(JSON.stringify(reply)), reply);
+});
+
+test("a reply that is no whole probe object gives none", () => {
+  const whole = deviceProbe({});
+  for (const body of ["", "{", "null", "{}", JSON.stringify({ ...whole, steps: "none" }),
+    JSON.stringify({ ...whole, id: "77" }), JSON.stringify({ ...whole, kind: "poke" }),
+    JSON.stringify({ ...whole, steps: [{ kind: "get" }] }), JSON.stringify({ ...whole, original: 1 })]) {
+    assert.equal(probeReply(body), null, body);
+  }
+});
+
+// ───── pending probe and interrupted detection ─────
+
+test("a poll from before the request was sent says nothing about the pending probe", () => {
+  assert.deepEqual(reconcileProbe(pendingProbe({}), null, false), { kind: "wait" });
+  assert.deepEqual(reconcileProbe(null, deviceProbe({}), true), { kind: "wait" });
+});
+
+test("while the device runs the probe the pending entry keeps its original and steps", () => {
+  const running = deviceProbe({ active: true, steps: [step("get", "ok", "01", 1000)], verdict: null, restore: null });
+
+  assert.deepEqual(reconcileProbe(pendingProbe({}), running, true), {
+    kind: "running",
+    pending: pendingProbe({ original: "01", steps: running.steps }),
+  });
+});
+
+// The device runs one probe at a time: a running probe of this ID and value is this request, whenever the poll left.
+test("a poll from before the request may already show it running, and keeps its original", () => {
+  const running = deviceProbe({ active: true, steps: [step("get", "ok", "01", 1000)], verdict: null, restore: null });
+
+  assert.deepEqual(reconcileProbe(pendingProbe({}), running, false), {
+    kind: "running",
+    pending: pendingProbe({ original: "01", steps: running.steps }),
+  });
+  assert.deepEqual(reconcileProbe(pendingProbe({}), deviceProbe({}), false), { kind: "wait" });
+});
+
+test("a finished probe is the result, stamped with the time it was started", () => {
+  const { active, ...result } = deviceProbe({});
+
+  assert.equal(active, false);
+  assert.deepEqual(reconcileProbe(pendingProbe({}), deviceProbe({}), true), {
+    kind: "result",
+    entry: { ...result, atMs: AT_MS },
+  });
+});
+
+test("a probe the device no longer reports was interrupted, with its original and steps as last seen", () => {
+  const seen = [step("get", "ok", "01", 1000), step("set", "ok", "03", 1400)];
+  const pending = pendingProbe({ original: "01", steps: seen });
+
+  for (const reported of [null, deviceProbe({ id: 78 }), deviceProbe({ value: "02" }), deviceProbe({ kind: "restore" })]) {
+    assert.deepEqual(reconcileProbe(pending, reported, true), {
+      kind: "interrupted",
+      entry: {
+        kind: "probe",
+        id: ID,
+        value: "03",
+        original: "01",
+        steps: seen,
+        verdict: null,
+        restore: null,
+        interrupted: true,
+        atMs: AT_MS,
+      },
+    }, JSON.stringify(reported));
+  }
+});
+
+// ───── what the card and the note say ─────
+
+test("a writable probe lists its steps, the verdict and the restore", () => {
+  const probe = deviceProbe({
+    steps: [
+      step("get", "ok", "01", 1000),
+      step("set", "timeout", "03", 3000),
+      step("set", "ok", "03", 8000),
+      step("get", "timeout", null, 10000),
+      step("get", "ok", "03", 11000),
+      step("set", "nak", "01", 11500),
+      step("set", "ok", "01", 12000),
+      step("get", "nak", null, 12500),
+      step("get", "ok", "01", 13000),
+    ],
+  });
+
+  assert.deepEqual(probeTexts(probe), {
+    title: "write probe 03",
+    steps: [
+      "GET → 01",
+      "SET 03 → timeout",
+      "SET 03 → ACK",
+      "GET → timeout",
+      "GET → 03",
+      "SET 01 → NAK",
+      "SET 01 → ACK",
+      "GET → NAK",
+      "GET → 01",
+    ],
+    verdict: "✓ writable",
+    restore: "restore ok",
+  });
+});
+
+test("each verdict reads as the spec names it", () => {
+  assert.equal(probeTexts(deviceProbe({ verdict: "not writable", restore: "skipped" })).verdict, "✗ not writable");
+  assert.equal(probeTexts(deviceProbe({ verdict: "unclear" })).verdict, "unclear");
+  assert.equal(probeTexts(deviceProbe({ verdict: "nothing written", restore: "skipped" })).verdict, "nothing written");
+  assert.equal(probeTexts(deviceProbe({ restore: "skipped" })).restore, null);
+});
+
+test("a running probe or restore says so", () => {
+  assert.equal(probeTexts(deviceProbe({ active: true, verdict: null, restore: null })).verdict, "probing…");
+  assert.equal(probeTexts(deviceProbe({ active: true, kind: "restore", verdict: null, restore: null })).verdict,
+    "restoring…");
+});
+
+test("a failed restore says what the ID is now, from the last GET, and what it was", () => {
+  const failed = deviceProbe({
+    steps: [step("get", "ok", "01", 1000), step("set", "ok", "03", 1400), step("get", "ok", "03", 1500),
+      step("set", "ok", "01", 8000), step("get", "timeout", null, 8500), step("get", "ok", "02", 9000),
+      step("set", "ok", "01", 9600)],
+    restore: "failed",
+  });
+
+  assert.equal(probeTexts(failed).restore, `restore failed: ID ${ID} is now 02, was 01`);
+});
+
+test("a failed restore whose last GET failed says the value now is unknown", () => {
+  const failed = deviceProbe({
+    steps: [step("get", "ok", "01", 1000), step("get", "ok", "02", 9000), step("get", "timeout", null, 9500)],
+    restore: "failed",
+  });
+
+  assert.equal(probeTexts(failed).restore, `restore failed: ID ${ID} is now unknown, was 01`);
+});
+
+test("a restore request's result reads as a restore", () => {
+  const restore = deviceProbe({ kind: "restore", value: "01", verdict: null, restore: "ok",
+    steps: [step("set", "ok", "01", 100), step("get", "ok", "01", 200)] });
+
+  assert.deepEqual(probeTexts(restore), {
+    title: "restore 01",
+    steps: ["SET 01 → ACK", "GET → 01"],
+    verdict: null,
+    restore: "restore ok",
+  });
+});
+
+test("an interrupted probe says what the ID may still be and its original", () => {
+  const interrupted = { ...deviceProbe({ verdict: null, restore: null }), interrupted: true };
+
+  assert.equal(probeTexts(interrupted).verdict, `probe interrupted: ID ${ID} may still be 03, original 01`);
+  assert.equal(probeTexts({ ...interrupted, original: null }).verdict,
+    `probe interrupted: ID ${ID} may still be 03, original unknown`);
+});
+
+test("the note line holds the title, verdict, steps and restore", () => {
+  assert.equal(
+    probeNote(deviceProbe({})),
+    "write probe 03: ✓ writable · GET → 01 · SET 03 → ACK · GET → 03 · restore ok",
+  );
+});
+
+test("values show trimmed with control bytes escaped", () => {
+  const probe = deviceProbe({ value: " 0\u0001 ", steps: [step("set", "ok", " 0\u0001 ", 1)] });
+
+  assert.equal(probeTexts(probe).title, "write probe 0\\x01");
+  assert.deepEqual(probeTexts(probe).steps, ["SET 0\\x01 → ACK"]);
+});
+
+// ───── restore button ─────
+
+test("a failed restore or an interrupted probe offers to restore the original", () => {
+  assert.equal(restoreOffer(CATALOGUE, deviceProbe({ restore: "failed" })), "01");
+  assert.equal(restoreOffer(CATALOGUE, { ...deviceProbe({ verdict: null, restore: null }), interrupted: true }), "01");
+});
+
+test("there is nothing to restore without a failure, without an original, or to an original a SET can't carry", () => {
+  assert.equal(restoreOffer(CATALOGUE, deviceProbe({})), null);
+  assert.equal(restoreOffer(CATALOGUE, { ...deviceProbe({ original: null, restore: null }), interrupted: true }), null);
+  assert.equal(restoreOffer(CATALOGUE, deviceProbe({ restore: "failed", original: "x".repeat(CAP + 1) })), null);
+  assert.equal(restoreOffer(CATALOGUE, null), null);
+});
+
+test("the latest probe of an ID is its last entry", () => {
+  const experiment = {
+    ...walkOf(ID, []),
+    probes: [deviceProbe({ verdict: "unclear" }), deviceProbe({ id: 78 }), deviceProbe({ verdict: "writable" })],
+  };
+
+  assert.equal(latestProbe(experiment, ID).verdict, "writable");
+  assert.equal(latestProbe(experiment, 79), null);
+});

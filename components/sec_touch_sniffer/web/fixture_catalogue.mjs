@@ -14,4 +14,7 @@ export const FIXTURE_CATALOGUE = {
   summerVentilationNames: { "0A00": "on", "0800": "off" },
   discoverRange: { from: 1, to: 255 },
   goals: { discover: "discover", check: "check" },
+  scanListCap: 3,
+  probeValueCap: 4,
+  probeForbiddenBytes: [0x00, 0x01, 0x1b],
 };

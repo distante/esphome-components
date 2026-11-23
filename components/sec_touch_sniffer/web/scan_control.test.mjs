@@ -3,9 +3,14 @@ import assert from "node:assert/strict";
 
 import {
   acceptedRange,
+  BUSY_UNKNOWN,
+  busyText,
+  captureStartPath,
+  isRunning,
   RANGE_REFUSED,
   rangeError,
-  scanButtonLabel,
+  runningText,
+  scanButton,
   scanReply,
   scanStartPath,
   switchStopsScan,
@@ -15,7 +20,28 @@ import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
 const CATALOGUE = FIXTURE_CATALOGUE;
 const { discover: DISCOVER, check: CHECK } = CATALOGUE.goals;
 
-const scan = (fields) => ({ active: false, goal: DISCOVER, from: 1, to: 255, next: null, done: false, ...fields });
+const scan = (fields) => ({
+  active: false,
+  goal: DISCOVER,
+  from: 1,
+  to: 255,
+  ids: null,
+  next: null,
+  done: false,
+  ...fields,
+});
+const PROBE_ID = 77;
+const probe = (fields) => ({
+  active: true,
+  kind: "probe",
+  id: PROBE_ID,
+  value: "03",
+  original: null,
+  steps: [],
+  verdict: null,
+  restore: null,
+  ...fields,
+});
 
 test("a discover start sends the goal and the range as typed, URL-encoded", () => {
   assert.equal(scanStartPath(CATALOGUE, DISCOVER, "3", "200"), "/sniffer/scan/start?goal=discover&from=3&to=200");
@@ -42,16 +68,75 @@ test("the goal names come from the catalogue", () => {
   assert.equal(acceptedRange(renamed, scan({ active: true, from: 3, to: 9 }), "3", "9"), null);
 });
 
+test("a capture start sends the full range, or only the candidates as an ID list", () => {
+  assert.equal(
+    captureStartPath(CATALOGUE, { full: true, from: 17, to: 200 }),
+    "/sniffer/scan/start?goal=discover&from=17&to=200",
+  );
+  assert.equal(
+    captureStartPath(CATALOGUE, { full: false, ids: [5, 12, 40] }),
+    "/sniffer/scan/start?goal=discover&ids=5,12,40",
+  );
+});
+
+const label = (scanState, goal, probeState = null) => scanButton(scanState, probeState, goal).label;
+
 test("the start button names the open tab's goal", () => {
-  assert.equal(scanButtonLabel(scan({}), DISCOVER), "▶ Start discover scan");
-  assert.equal(scanButtonLabel(scan({ goal: DISCOVER, done: true }), CHECK), "▶ Start check scan");
+  assert.equal(label(scan({}), DISCOVER), "▶ Start discover scan");
+  assert.equal(label(scan({ goal: DISCOVER, done: true }), CHECK), "▶ Start check scan");
 });
 
 test("the stop button always names the running scan's goal", () => {
-  assert.equal(scanButtonLabel(scan({ active: true }), DISCOVER), "■ Stop discover scan");
-  assert.equal(scanButtonLabel(scan({ active: true, goal: CHECK }), CHECK), "■ Stop check scan");
-  assert.equal(scanButtonLabel(scan({ active: true, goal: CHECK }), DISCOVER), "■ Stop check scan");
-  assert.equal(scanButtonLabel(scan({ active: true }), CHECK), "■ Stop discover scan");
+  assert.equal(label(scan({ active: true }), DISCOVER), "■ Stop discover scan");
+  assert.equal(label(scan({ active: true, goal: CHECK }), CHECK), "■ Stop check scan");
+  assert.equal(label(scan({ active: true, goal: CHECK }), DISCOVER), "■ Stop check scan");
+  assert.equal(label(scan({ active: true }), CHECK), "■ Stop discover scan");
+});
+
+test("the scan button stops a running scan or capture, and is disabled during a probe or restore", () => {
+  assert.deepEqual(scanButton(scan({ active: true, from: null, to: null, ids: [5, 9] }), null, DISCOVER), {
+    label: "■ Stop discover scan",
+    disabled: false,
+  });
+  assert.deepEqual(scanButton(scan({}), probe({}), DISCOVER), { label: "▶ Start discover scan", disabled: true });
+  assert.deepEqual(scanButton(scan({}), probe({ kind: "restore" }), CHECK), {
+    label: "▶ Start check scan",
+    disabled: true,
+  });
+  assert.equal(scanButton(scan({}), probe({ active: false }), DISCOVER).disabled, false);
+  assert.equal(scanButton(null, null, DISCOVER).disabled, false);
+});
+
+test("the device runs something while a scan or a probe is active", () => {
+  assert.equal(isRunning(scan({ active: true }), null), true);
+  assert.equal(isRunning(scan({}), probe({})), true);
+  assert.equal(isRunning(scan({ done: true }), probe({ active: false })), false);
+  assert.equal(isRunning(null, null), false);
+});
+
+test("what runs names a scan's goal, a list run's size, or the probed ID", () => {
+  assert.equal(runningText(CATALOGUE, scan({ active: true }), null), "discover scan");
+  assert.equal(runningText(CATALOGUE, scan({ active: true, goal: CHECK, from: null, to: null }), null), "check scan");
+  assert.equal(
+    runningText(CATALOGUE, scan({ active: true, from: null, to: null, ids: [5, 9] }), null),
+    "discover scan of 2 listed IDs",
+  );
+  assert.equal(runningText(CATALOGUE, scan({}), probe({})), `write probe of ID ${PROBE_ID}`);
+  assert.equal(runningText(CATALOGUE, scan({}), probe({ kind: "restore" })), `restore of ID ${PROBE_ID}`);
+  assert.equal(runningText(CATALOGUE, scan({}), probe({ active: false })), null);
+});
+
+test("a start refused with 409 shows what runs from the reply", () => {
+  const body = (scanState, probeState) => JSON.stringify({ error: "busy", scan: scanState, probe: probeState });
+
+  assert.equal(busyText(CATALOGUE, body(scan({ active: true, goal: CHECK }), null)), "busy: check scan");
+  assert.equal(busyText(CATALOGUE, body(scan({ done: true }), probe({}))), `busy: write probe of ID ${PROBE_ID}`);
+});
+
+test("a 409 whose reply names nothing running still says busy", () => {
+  for (const body of ["", "busy", "{}", JSON.stringify({ error: "busy", scan: scan({}), probe: null })]) {
+    assert.equal(busyText(CATALOGUE, body), `busy: ${BUSY_UNKNOWN}`, body);
+  }
 });
 
 test("switching tabs stops only a running scan of another goal", () => {
@@ -77,9 +162,11 @@ test("a refused start whose body has no error text shows the body, or says the r
 test("a start or stop reply gives the scan object it carries", () => {
   const reply = scan({ active: true, from: 3, to: 200, next: 3 });
   const idleCheck = scan({ goal: CHECK, from: null, to: null });
+  const listRun = scan({ active: true, from: null, to: null, ids: [5, 12], next: 5 });
 
   assert.deepEqual(scanReply(JSON.stringify(reply)), reply);
   assert.deepEqual(scanReply(JSON.stringify(idleCheck)), idleCheck);
+  assert.deepEqual(scanReply(JSON.stringify(listRun)), listRun);
 });
 
 // The device accepted the request; a body the page cannot read only means it learns the scan from the next poll.
@@ -94,7 +181,9 @@ test("a reply body that is no scan object gives none", () => {
 test("a reply body that is not a full scan object gives none", () => {
   const full = scan({ active: true, from: 3, to: 200, next: 3 });
   const broken = [
-    ...["from", "to", "next", "done"].map((key) => ({ ...full, [key]: undefined })),
+    ...["from", "to", "ids", "next", "done"].map((key) => ({ ...full, [key]: undefined })),
+    { ...full, ids: "5,12" },
+    { ...full, ids: [5, "12"] },
     { ...full, from: "3" },
     { ...full, to: 2.5 },
     { ...full, next: "3" },
@@ -114,7 +203,7 @@ test("an accepted discover start's reply gives the range to remember", () => {
   });
 });
 
-// A start while a scan runs is a no-op that replies with the running scan: its range is not the one sent.
+// The device decides how a sent range reads: only the range it runs is remembered.
 test("a reply that runs another range than the one sent gives none", () => {
   assert.equal(acceptedRange(CATALOGUE, scan({ active: true, from: 1, to: 255 }), "3", "200"), null);
   assert.equal(acceptedRange(CATALOGUE, scan({ active: true, from: 3, to: 255 }), "3", "200"), null);
@@ -130,11 +219,12 @@ test("a range typed with leading zeros is the same range", () => {
   });
 });
 
-// A start while a check runs is a no-op that replies with the running check: there is no range to remember.
+// A check or a list run has no range to remember.
 test("a reply without a discover range gives none", () => {
   assert.equal(acceptedRange(CATALOGUE, scan({ active: true, goal: CHECK, from: null, to: null }), "1", "255"), null);
   assert.equal(acceptedRange(CATALOGUE, scan({ active: true, goal: CHECK, from: 1, to: 255 }), "1", "255"), null);
   assert.equal(acceptedRange(CATALOGUE, scan({ active: true, from: null, to: null }), "1", "255"), null);
+  assert.equal(acceptedRange(CATALOGUE, scan({ active: true, from: null, to: null, ids: [1] }), "1", "255"), null);
   assert.equal(acceptedRange(CATALOGUE, scan({ active: true, from: "3", to: 200 }), "3", "200"), null);
   assert.equal(acceptedRange(CATALOGUE, null, "1", "255"), null);
 });

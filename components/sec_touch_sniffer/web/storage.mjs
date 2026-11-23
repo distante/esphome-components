@@ -1,10 +1,11 @@
 /**
  * What the page keeps in browser storage (see .specs/sniffer.md, "Browser storage"): per device MAC, its browser
- * copy, notes, feed mutes and last discover range, plus the MAC of the last device that answered. DOM-free: the page
- * only reads and writes the strings.
+ * copy, notes, mutes, last discover range, experiments and pending probe, plus the MAC of the last device that
+ * answered. DOM-free: the page only reads and writes the strings.
  */
 
-import { emptyCopy, fromStored, isObject, toStored, wholeDecimal } from "./records.mjs";
+import { emptyCopy, fromStored, isObject, isStringOrNull, STATUSES, toStored, wholeDecimal } from "./records.mjs";
+import { isPendingProbe, isProbeEntry } from "./write_probe.mjs";
 
 /** Every key the page stores starts with this. */
 export const STORAGE_PREFIX = "sec_touch_sniffer:";
@@ -23,6 +24,44 @@ export function deviceKey(mac) {
 /** The device decides which ranges are valid: a stored range only has to be two integers. */
 const isRange = (range) => isObject(range) && Number.isInteger(range.from) && Number.isInteger(range.to);
 
+/** A capture's entry: a query status other than unqueried, and a raw value or null. */
+const isEntry = (entry) =>
+  isObject(entry) && STATUSES.includes(entry.outcome) && entry.outcome !== "unqueried" && isStringOrNull(entry.raw);
+
+const isCapture = (capture) =>
+  isObject(capture) &&
+  typeof capture.label === "string" &&
+  Number.isFinite(capture.atMs) &&
+  (capture.uptimeMs === null || Number.isFinite(capture.uptimeMs)) &&
+  isStringOrNull(capture.boot) &&
+  typeof capture.full === "boolean" &&
+  isObject(capture.entries) &&
+  Object.entries(capture.entries).every(([id, entry]) => wholeDecimal(id) !== null && isEntry(entry));
+
+/**
+ * @param {unknown} experiment a stored experiment
+ * @returns {object | null} the experiment with its unreadable captures and probes dropped, or null when the
+ *   experiment itself is unreadable
+ */
+function readExperiment(experiment) {
+  const readable =
+    isObject(experiment) &&
+    typeof experiment.key === "string" &&
+    typeof experiment.name === "string" &&
+    Number.isFinite(experiment.createdAtMs) &&
+    (experiment.range === null || isRange(experiment.range)) &&
+    Array.isArray(experiment.captures) &&
+    Array.isArray(experiment.probes);
+  if (!readable) {
+    return null;
+  }
+  return {
+    ...experiment,
+    captures: experiment.captures.filter(isCapture),
+    probes: experiment.probes.filter(isProbeEntry),
+  };
+}
+
 function parseJson(text) {
   try {
     return JSON.parse(text);
@@ -36,13 +75,20 @@ function parseJson(text) {
  *
  * @param {string | null} text what browser storage held for a device, or null when nothing
  * @param {{from: number, to: number}} defaultRange the discover range when none is stored: the catalogue's
- * @returns {{copy: object, notes: Object<string, string>, mutes: Set<number>, range: {from: number, to: number}}} what
- *   it holds
+ * @returns {{copy: object, notes: Object<string, string>, mutes: Set<number>, range: {from: number, to: number},
+ *   experiments: object[], pendingProbe: object | null}} what it holds (see experiments.mjs and write_probe.mjs)
  */
 export function parseStored(text, defaultRange) {
   const stored = text === null ? null : parseJson(text);
   if (!isObject(stored)) {
-    return { copy: emptyCopy(), notes: {}, mutes: new Set(), range: defaultRange };
+    return {
+      copy: emptyCopy(),
+      notes: {},
+      mutes: new Set(),
+      range: defaultRange,
+      experiments: [],
+      pendingProbe: null,
+    };
   }
   const notes = isObject(stored.notes)
     ? Object.fromEntries(
@@ -52,16 +98,23 @@ export function parseStored(text, defaultRange) {
   const mutes =
     Array.isArray(stored.mutes) && stored.mutes.every(Number.isInteger) ? new Set(stored.mutes) : new Set();
   const range = isRange(stored.range) ? { from: stored.range.from, to: stored.range.to } : defaultRange;
-  return { copy: fromStored(stored.copy ?? null), notes, mutes, range };
+  const experiments = Array.isArray(stored.experiments)
+    ? stored.experiments.map(readExperiment).filter((experiment) => experiment !== null)
+    : [];
+  const pendingProbe = isPendingProbe(stored.pendingProbe) ? stored.pendingProbe : null;
+  return { copy: fromStored(stored.copy ?? null), notes, mutes, range, experiments, pendingProbe };
 }
 
 /**
- * @param {object} copy the browser copy (see records.mjs)
- * @param {Object<string, string>} notes per-ID notes
- * @param {Set<number>} mutes IDs left out of the feed
- * @param {{from: number, to: number}} range the last discover range the device accepted
+ * @param {object} device what the page keeps for the device
+ * @param {object} device.copy the browser copy (see records.mjs)
+ * @param {Object<string, string>} device.notes per-ID notes
+ * @param {Set<number>} device.mutes IDs left out of the feed and of experiments
+ * @param {{from: number, to: number}} device.range the last discover range the device accepted
+ * @param {object[]} device.experiments the experiments (see experiments.mjs)
+ * @param {object | null} device.pendingProbe the probe or restore awaiting its result (see write_probe.mjs)
  * @returns {string} what browser storage keeps for the device
  */
-export function storedText(copy, notes, mutes, range) {
-  return JSON.stringify({ copy: toStored(copy), notes, mutes: [...mutes], range });
+export function storedText({ copy, notes, mutes, range, experiments, pendingProbe }) {
+  return JSON.stringify({ copy: toStored(copy), notes, mutes: [...mutes], range, experiments, pendingProbe });
 }

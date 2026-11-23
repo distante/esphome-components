@@ -3,7 +3,8 @@
  * (see .specs/sniffer.md, "Device/page contract" and "Browser storage").
  *
  * A copy is `{boot, since, device, records}`. An `anchor` is `{browserNowMs, uptimeMs}`: the browser time a response
- * arrived and the device uptime it carried. `device` is the latest response's identity and scan, plus its `anchor`.
+ * arrived and the device uptime it carried. `device` is the latest response's identity, scan and probe, plus its
+ * `anchor`.
  * `records` maps a property ID to the record as the device served it, plus `anchor` (the response it came in, to
  * read its uptimes as wall time) and `stale` (only in the browser copy since the device rebooted).
  */
@@ -44,7 +45,7 @@ export function applyResponse(copy, response, browserNowMs) {
     }
     records[record.id] = { ...record, anchor, stale: false };
   }
-  const device = { mac: response.mac, name: response.name, scan: response.scan, anchor };
+  const device = { mac: response.mac, name: response.name, scan: response.scan, probe: response.probe ?? null, anchor };
   return { copy: { boot: response.boot, since: response.seq, device, records }, changedIds };
 }
 
@@ -61,6 +62,20 @@ export function withScan(copy, scan) {
     return copy;
   }
   return { ...copy, device: { ...copy.device, scan } };
+}
+
+/**
+ * A probe or restore start replies with the probe object: the copy takes it at once, like `withScan`.
+ *
+ * @param {object} copy the browser copy, left unchanged
+ * @param {object} probe the `probe` object of a probe or restore reply
+ * @returns {object} the copy with that probe; the same copy while no device has answered
+ */
+export function withProbe(copy, probe) {
+  if (copy.device === null) {
+    return copy;
+  }
+  return { ...copy, device: { ...copy.device, probe } };
 }
 
 /**
@@ -105,6 +120,9 @@ export function wholeDecimal(text) {
 /** @returns {boolean} whether the value is a plain JSON object (not null, not an array) */
 export const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
+/** @returns {boolean} whether the value is a string or null */
+export const isStringOrNull = (value) => value === null || typeof value === "string";
+
 const hasAnchor = (value) =>
   isObject(value) &&
   isObject(value.anchor) &&
@@ -137,7 +155,7 @@ const isReadableDevice = (device) =>
 
 /**
  * Old or corrupted storage must not break the page: unreadable records and an unreadable device are dropped.
- * The stored scan state is dropped too: it is not live, so the scan control waits for the device to answer.
+ * The stored scan and probe states are dropped too: they are not live, so the buttons wait for the device to answer.
  *
  * @param {unknown} stored what browser storage held, parsed
  * @returns {object} the copy it holds, polling from scratch (`since` unset), or an empty copy when unreadable
@@ -149,7 +167,7 @@ export function fromStored(stored) {
   const records = Object.fromEntries(
     Object.entries(stored.records).filter(([key, record]) => isReadableRecord(record, key)),
   );
-  const device = isReadableDevice(stored.device) ? { ...stored.device, scan: null } : null;
+  const device = isReadableDevice(stored.device) ? { ...stored.device, scan: null, probe: null } : null;
   return { boot: stored.boot ?? null, since: null, device, records };
 }
 

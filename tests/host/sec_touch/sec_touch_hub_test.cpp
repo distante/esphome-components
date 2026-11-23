@@ -62,9 +62,6 @@ class SECTouchHubTest : public ::testing::Test {
   std::vector<std::string> seen_;
 };
 
-/// `[STX][ACK][ETX]`: the panel's ACK of a request, and the hub's ACK of a data frame.
-std::vector<uint8_t> ack_frame() { return frame(std::string(1, static_cast<char>(ACK))); }
-
 /// A data frame for `property_id` whose CRC field has one bit flipped.
 std::vector<uint8_t> data_frame_with_bad_crc(int property_id, const std::string &value) {
   std::string covered = std::string(1, static_cast<char>(STX)) + data_head(property_id, value);

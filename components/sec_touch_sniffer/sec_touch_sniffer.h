@@ -95,7 +95,7 @@ class SecTouchSniffer : public Component
     ProbeValue probe_value;
   };
 
-  /// Guards the run slot: slot_, pending_, stop_pending_, scan_run_ and probe_.
+  /// Guards the run slot: slot_, pending_, stop_pending_, scan_run_, probe_ and probe_ran_.
   Mutex run_lock_;
   /// The run that holds the slot, from the start that claims it (queued or not) until its end frees it.
   Running slot_{Running::RUNNING_NONE};

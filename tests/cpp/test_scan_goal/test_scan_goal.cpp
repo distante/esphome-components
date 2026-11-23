@@ -8,6 +8,7 @@
 #include "sec_touch/protocol_ids.h"
 #include "sec_touch_sniffer/property_slots.h"
 #include "sec_touch_sniffer/scan_goal.h"
+#include "sec_touch_sniffer/sniffer_data.h"
 
 using esphome::sec_touch::CHECK_RUN;
 using esphome::sec_touch::DEFAULT_DISCOVER_FROM;
@@ -20,6 +21,7 @@ using esphome::sec_touch::GLOBAL_SETTING_IDS;
 using esphome::sec_touch::IdSet;
 using esphome::sec_touch::is_known_property;
 using esphome::sec_touch::last_scan_id;
+using esphome::sec_touch::list_run;
 using esphome::sec_touch::MAX_PROPERTY_ID;
 using esphome::sec_touch::MAX_SCAN_LIST_IDS;
 using esphome::sec_touch::next_scan_id;
@@ -33,6 +35,7 @@ using esphome::sec_touch::ScanGoal;
 using esphome::sec_touch::ScanRun;
 using esphome::sec_touch::ScanStart;
 using esphome::sec_touch::ScanStartError;
+using esphome::sec_touch::SNIFFER_SCAN_START_PATH;
 using esphome::sec_touch::SUMMER_VENTILATION_PROPERTY_ID;
 
 namespace {
@@ -59,14 +62,13 @@ std::vector<int> known_ids_ascending() {
   return ids;
 }
 
-/// A discover list run of `ids`.
-ScanRun listed(const std::vector<int> &ids) {
-  ScanRun run = DEFAULT_DISCOVER_RUN;
-  run.listed = true;
+/// `ids` as a set.
+IdSet id_set(const std::vector<int> &ids) {
+  IdSet set;
   for (int id : ids) {
-    run.ids.add(id);
+    set.add(id);
   }
-  return run;
+  return set;
 }
 
 /// `ids` as the start's comma-separated list.
@@ -97,14 +99,14 @@ bool same_run(const ScanRun &a, const ScanRun &b) {
 }
 
 void expect_start(const std::string &query, const ScanRun &expected) {
-  const ScanStart start = scan_start_from_uri("/sniffer/scan/start" + query);
+  const ScanStart start = scan_start_from_uri(std::string(SNIFFER_SCAN_START_PATH) + query);
   EXPECT_EQ(start.error, ScanStartError::SCAN_START_OK) << query;
   EXPECT_TRUE(same_run(start.run, expected))
       << query << ": goal " << scan_goal_name(start.run.goal) << " " << int(start.run.from) << "-" << int(start.run.to);
 }
 
 void expect_error(const std::string &query, ScanStartError expected) {
-  EXPECT_EQ(scan_start_from_uri("/sniffer/scan/start" + query).error, expected) << query;
+  EXPECT_EQ(scan_start_from_uri(std::string(SNIFFER_SCAN_START_PATH) + query).error, expected) << query;
 }
 
 void expect_bad_range(const std::string &query) { expect_error(query, ScanStartError::SCAN_START_BAD_RANGE); }
@@ -240,27 +242,45 @@ TEST(ScanGoal, FromAboveToIsBad) { expect_bad_range("?from=9&to=3"); }
 
 // --- Narrowed scans: the `ids` list ---
 
+TEST(ScanGoal, AnIdSetHoldsEachListedIdOnce) {
+  const IdSet ids{40, 12, 40};
+  EXPECT_EQ(ids.count(), 2);
+  EXPECT_TRUE(ids.contains(12));
+  EXPECT_TRUE(ids.contains(40));
+}
+
+TEST(ScanGoal, AnIdSetDropsIdsOutsideTheRecordSlots) { EXPECT_EQ((IdSet{-1, MAX_PROPERTY_ID + 1}).count(), 0); }
+
+TEST(ScanGoal, AListRunIsADiscoverOfItsIds) {
+  const IdSet ids{12, 40};
+  const ScanRun run = list_run(ids);
+  EXPECT_EQ(run.goal, ScanGoal::SCAN_GOAL_DISCOVER);
+  EXPECT_TRUE(run.listed);
+  EXPECT_TRUE(run.ids == ids);
+}
+
 TEST(ScanGoal, DiscoverTakesAnIdList) {
-  expect_start("?goal=discover&ids=12,40,77", listed({12, 40, 77}));
-  expect_start("?ids=12", listed({12}));
-  expect_start("?ids=0," + std::to_string(MAX_PROPERTY_ID), listed({0, MAX_PROPERTY_ID}));
+  expect_start("?goal=discover&ids=12,40,77", list_run(IdSet{12, 40, 77}));
+  expect_start("?ids=12", list_run(IdSet{12}));
+  expect_start("?ids=0," + std::to_string(MAX_PROPERTY_ID), list_run(IdSet{0, MAX_PROPERTY_ID}));
 }
 
 TEST(ScanGoal, AListRunQueriesItsIdsInAscendingOrderAndADuplicateOnce) {
-  const ScanStart start = scan_start_from_uri("/sniffer/scan/start?ids=77,12,40,12");
+  const ScanStart start = scan_start_from_uri(std::string(SNIFFER_SCAN_START_PATH) + "?ids=77,12,40,12");
   ASSERT_EQ(start.error, ScanStartError::SCAN_START_OK);
   EXPECT_EQ(run_ids(start.run), (std::vector<int>{12, 40, 77}));
 }
 
 TEST(ScanGoal, AListRunSkipsKnownIds) {
-  const ScanStart start = scan_start_from_uri(
-      "/sniffer/scan/start?ids=" + id_list({SUMMER_VENTILATION_PROPERTY_ID, SUMMER_VENTILATION_PROPERTY_ID + 1}));
+  const ScanStart start =
+      scan_start_from_uri(std::string(SNIFFER_SCAN_START_PATH) +
+                          "?ids=" + id_list({SUMMER_VENTILATION_PROPERTY_ID, SUMMER_VENTILATION_PROPERTY_ID + 1}));
   ASSERT_EQ(start.error, ScanStartError::SCAN_START_OK);
   EXPECT_EQ(run_ids(start.run), std::vector<int>{SUMMER_VENTILATION_PROPERTY_ID + 1});
 }
 
 TEST(ScanGoal, AListOutsideItsIdsQueriesNothingElse) {
-  const ScanRun run = listed({12});
+  const ScanRun run = list_run(IdSet{12});
   EXPECT_EQ(first_scan_id(run), 12);
   EXPECT_EQ(last_scan_id(run), 12);
   EXPECT_EQ(next_scan_id(run, 13), NO_SCAN_ID);
@@ -286,7 +306,7 @@ TEST(ScanGoal, AListIdAbove255IsBad) {
 
 TEST(ScanGoal, AListTakesUpToTheCapOfDistinctIds) {
   const std::vector<int> at_cap = unknown_ids(MAX_SCAN_LIST_IDS);
-  expect_start("?ids=" + id_list(at_cap), listed(at_cap));
+  expect_start("?ids=" + id_list(at_cap), list_run(id_set(at_cap)));
 
   const std::vector<int> over_cap = unknown_ids(MAX_SCAN_LIST_IDS + 1);
   expect_bad_ids("?ids=" + id_list(over_cap));
@@ -296,7 +316,7 @@ TEST(ScanGoal, AListTakesUpToTheCapOfDistinctIds) {
 TEST(ScanGoal, ADuplicateDoesNotCountTowardsTheCap) {
   std::vector<int> with_duplicate = unknown_ids(MAX_SCAN_LIST_IDS);
   with_duplicate.push_back(with_duplicate.front());
-  expect_start("?ids=" + id_list(with_duplicate), listed(unknown_ids(MAX_SCAN_LIST_IDS)));
+  expect_start("?ids=" + id_list(with_duplicate), list_run(id_set(unknown_ids(MAX_SCAN_LIST_IDS))));
 }
 
 TEST(ScanGoal, IdsWithARangeIsBad) {
@@ -311,7 +331,7 @@ TEST(ScanGoal, CheckIgnoresIds) {
 }
 
 TEST(ScanGoal, ARangeRunIsNotAListRun) {
-  const ScanStart start = scan_start_from_uri("/sniffer/scan/start?from=3&to=9");
+  const ScanStart start = scan_start_from_uri(std::string(SNIFFER_SCAN_START_PATH) + "?from=3&to=9");
   EXPECT_FALSE(start.run.listed);
   EXPECT_EQ(start.run.ids.count(), 0);
 }

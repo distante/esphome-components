@@ -70,19 +70,6 @@ class TestableSniffer : public SecTouchSniffer {
   }
 };
 
-/// A discover list run of `ids`.
-ScanRun listed(const std::vector<int> &ids) {
-  ScanRun run = DEFAULT_DISCOVER_RUN;
-  run.listed = true;
-  for (int id : ids) {
-    run.ids.add(id);
-  }
-  return run;
-}
-
-/// `[STX][ACK][ETX]`: the panel's answer to a SET it took.
-std::vector<uint8_t> ack_frame() { return frame(std::string(1, static_cast<char>(ACK))); }
-
 /// A hub and a set-up sniffer on a fake UART.
 struct SnifferRig {
   FakeUART uart;
@@ -515,7 +502,8 @@ TEST(SecTouchSnifferTest, AStopWhileIdleQueuesNothing) {
 
 TEST(SecTouchSnifferTest, AListRunQueriesExactlyItsUnknownIdsInAscendingOrder) {
   SnifferRig rig;
-  rig.start_scan(listed({NEXT_UNREGISTERED_ID, SUMMER_VENTILATION_PROPERTY_ID, UNREGISTERED_ID, NEXT_UNREGISTERED_ID}));
+  rig.start_scan(
+      list_run(IdSet{NEXT_UNREGISTERED_ID, SUMMER_VENTILATION_PROPERTY_ID, UNREGISTERED_ID, NEXT_UNREGISTERED_ID}));
 
   rig.answer_every_scan_query();
 

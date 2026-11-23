@@ -5,9 +5,11 @@
 #include <string>
 #include <vector>
 
+#include "../common/probe_fixture.h"
 #include "sec_touch/data_message.h"
 #include "sec_touch/protocol_ids.h"
 #include "sec_touch_sniffer/property_slots.h"
+#include "sec_touch_sniffer/sniffer_data.h"
 #include "sec_touch_sniffer/write_probe.h"
 
 using esphome::sec_touch::append_probe_step;
@@ -32,19 +34,18 @@ using esphome::sec_touch::ProbeVerdict;
 using esphome::sec_touch::SCAN_RETRY_DELAY_MS;
 using esphome::sec_touch::ScanOutcome;
 using esphome::sec_touch::SET_VALUE_CAP;
+using esphome::sec_touch::SNIFFER_PROBE_PATH;
 using esphome::sec_touch::SUMMER_VENTILATION_PROPERTY_ID;
 using esphome::sec_touch::WIRE_ETX;
 using esphome::sec_touch::WIRE_STX;
 using esphome::sec_touch::WIRE_TAB;
 using esphome::sec_touch::WriteProbe;
+using sec_touch_test::ORIGINAL;
+using sec_touch_test::PROBE_ID;
+using sec_touch_test::THIRD;
+using sec_touch_test::VALUE;
 
 namespace {
-
-/// An unknown property.
-constexpr uint8_t PROBE_ID = 77;
-const std::string ORIGINAL = "01";
-const std::string VALUE = "03";
-const std::string THIRD = "02";
 
 /// How the panel answers one GET or SET.
 struct Answer {
@@ -168,7 +169,7 @@ ProbeRequestError request_error(const std::string &uri, const std::string &body)
   return probe_request_from(uri, body).error;
 }
 
-std::string probe_uri(int id) { return "/sniffer/probe?id=" + std::to_string(id); }
+std::string probe_uri(int id) { return std::string(SNIFFER_PROBE_PATH) + "?id=" + std::to_string(id); }
 
 }  // namespace
 
@@ -183,7 +184,8 @@ TEST(WriteProbe, ARequestTakesTheIdAndTheBodyAsTheValue) {
 
 TEST(WriteProbe, AnEmptyOrPaddedValueIsKeptByteExact) {
   EXPECT_EQ(probe_request_from(probe_uri(PROBE_ID), "").value.view(), "");
-  EXPECT_EQ(probe_request_from(probe_uri(PROBE_ID), " 01 ").value.view(), " 01 ");
+  const std::string padded = " " + VALUE + " ";
+  EXPECT_EQ(probe_request_from(probe_uri(PROBE_ID), padded).value.view(), padded);
 }
 
 TEST(WriteProbe, AValueUpToTheSetCapIsAccepted) {
@@ -202,10 +204,10 @@ TEST(WriteProbe, AValueWithAFramingByteIsBad) {
 }
 
 TEST(WriteProbe, AMissingOrBadIdIsBad) {
-  EXPECT_EQ(request_error("/sniffer/probe", VALUE), ProbeRequestError::PROBE_REQUEST_BAD_ID);
-  EXPECT_EQ(request_error("/sniffer/probe?id=", VALUE), ProbeRequestError::PROBE_REQUEST_BAD_ID);
-  EXPECT_EQ(request_error("/sniffer/probe?id=x", VALUE), ProbeRequestError::PROBE_REQUEST_BAD_ID);
-  EXPECT_EQ(request_error("/sniffer/probe?id=-1", VALUE), ProbeRequestError::PROBE_REQUEST_BAD_ID);
+  EXPECT_EQ(request_error(std::string(SNIFFER_PROBE_PATH), VALUE), ProbeRequestError::PROBE_REQUEST_BAD_ID);
+  EXPECT_EQ(request_error(std::string(SNIFFER_PROBE_PATH) + "?id=", VALUE), ProbeRequestError::PROBE_REQUEST_BAD_ID);
+  EXPECT_EQ(request_error(std::string(SNIFFER_PROBE_PATH) + "?id=x", VALUE), ProbeRequestError::PROBE_REQUEST_BAD_ID);
+  EXPECT_EQ(request_error(std::string(SNIFFER_PROBE_PATH) + "?id=-1", VALUE), ProbeRequestError::PROBE_REQUEST_BAD_ID);
   EXPECT_EQ(request_error(probe_uri(MAX_PROPERTY_ID + 1), VALUE), ProbeRequestError::PROBE_REQUEST_BAD_ID);
   EXPECT_EQ(request_error(probe_uri(MAX_PROPERTY_ID), VALUE), ProbeRequestError::PROBE_REQUEST_OK);
 }

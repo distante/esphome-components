@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "../common/probe_fixture.h"
 #include "sec_touch/protocol_ids.h"
 #include "sec_touch_sniffer/history_pool.h"
 #include "sec_touch_sniffer/json_chunk_writer.h"
@@ -14,7 +15,6 @@
 using esphome::sec_touch::CHECK_RUN;
 using esphome::sec_touch::COMMANDID_SET;
 using esphome::sec_touch::DATE_PROPERTY_ID;
-using esphome::sec_touch::DEFAULT_DISCOVER_RUN;
 using esphome::sec_touch::DELTA_END;
 using esphome::sec_touch::DeviceInfo;
 using esphome::sec_touch::FAN_LABEL_IDS;
@@ -62,6 +62,11 @@ using esphome::sec_touch::write_data_json;
 using esphome::sec_touch::write_probe_json;
 using esphome::sec_touch::write_record_json;
 using esphome::sec_touch::write_scan_json;
+using esphome::sec_touch::IdSet;
+using esphome::sec_touch::list_run;
+using sec_touch_test::ORIGINAL;
+using sec_touch_test::PROBE_ID;
+using sec_touch_test::VALUE;
 
 namespace {
 
@@ -294,16 +299,6 @@ ScanFields completed(const ScanRun &run) {
   return ScanFields{.ran = true, .active = false, .completed = true, .run = run, .current = NO_SCAN_ID};
 }
 
-/// A discover list run of `ids`.
-ScanRun listed(const std::vector<int> &ids) {
-  ScanRun run = DEFAULT_DISCOVER_RUN;
-  run.listed = true;
-  for (int id : ids) {
-    run.ids.add(id);
-  }
-  return run;
-}
-
 std::string scan_json(const ScanState &scan) {
   return written([&](JsonChunkWriter &w) { write_scan_json(w, scan); });
 }
@@ -314,15 +309,16 @@ std::string check_json(bool active, const std::string &next, bool done) {
          (done ? "true" : "false") + "}";
 }
 
-std::string discover_1_208_json(bool active, const std::string &next, bool done) {
+/// The scan JSON of a discover range run.
+std::string discover_json(const ScanRun &run, bool active, const std::string &next, bool done) {
   return std::string(R"({"active":)") + (active ? "true" : "false") + R"(,"goal":"discover","from":)" +
-         std::to_string(DISCOVER_1_208.from) + R"(,"to":)" + std::to_string(DISCOVER_1_208.to) +
-         R"(,"ids":null,"next":)" + next + R"(,"done":)" + (done ? "true" : "false") + "}";
+         std::to_string(run.from) + R"(,"to":)" + std::to_string(run.to) + R"(,"ids":null,"next":)" + next +
+         R"(,"done":)" + (done ? "true" : "false") + "}";
 }
 
 /// DISCOVER_1_208 just started: running at its first ID.
 std::string discover_1_208_start_json() {
-  return discover_1_208_json(true, std::to_string(first_scan_id(DISCOVER_1_208)), false);
+  return discover_json(DISCOVER_1_208, true, std::to_string(first_scan_id(DISCOVER_1_208)), false);
 }
 
 }  // namespace
@@ -334,27 +330,27 @@ TEST(SnifferData, BeforeAnyRunTheScanIsAnIdleDiscoverWithNoRangeOrPosition) {
 
 TEST(SnifferData, ARunningDiscoverShowsItsRangeAndNextId) {
   EXPECT_EQ(scan_json(scan_state(running(DISCOVER_1_208, MID_RANGE_ID))),
-            discover_1_208_json(true, std::to_string(MID_RANGE_ID), false));
+            discover_json(DISCOVER_1_208, true, std::to_string(MID_RANGE_ID), false));
 }
 
 TEST(SnifferData, WhileTheLastIdIsQueriedTheScanShowsItAndIsNotDone) {
   EXPECT_EQ(scan_json(scan_state(running(DISCOVER_1_208, NO_SCAN_ID))),
-            discover_1_208_json(true, std::to_string(last_scan_id(DISCOVER_1_208)), false));
+            discover_json(DISCOVER_1_208, true, std::to_string(last_scan_id(DISCOVER_1_208)), false));
 }
 
 TEST(SnifferData, AStoppedScanShowsTheIdItStoppedAt) {
   EXPECT_EQ(scan_json(scan_state(stopped(DISCOVER_1_208, MID_RANGE_ID))),
-            discover_1_208_json(false, std::to_string(MID_RANGE_ID), false));
+            discover_json(DISCOVER_1_208, false, std::to_string(MID_RANGE_ID), false));
 }
 
 // Stopped with the last query in flight: its outcome was never recorded, so the run did not cover all its IDs.
 TEST(SnifferData, ARunStoppedWithTheLastQueryInFlightIsNotDone) {
   EXPECT_EQ(scan_json(scan_state(stopped(DISCOVER_1_208, NO_SCAN_ID))),
-            discover_1_208_json(false, std::to_string(last_scan_id(DISCOVER_1_208)), false));
+            discover_json(DISCOVER_1_208, false, std::to_string(last_scan_id(DISCOVER_1_208)), false));
 }
 
 TEST(SnifferData, ACompletedScanIsDoneWithNoNextId) {
-  EXPECT_EQ(scan_json(scan_state(completed(DISCOVER_1_208))), discover_1_208_json(false, "null", true));
+  EXPECT_EQ(scan_json(scan_state(completed(DISCOVER_1_208))), discover_json(DISCOVER_1_208, false, "null", true));
 }
 
 TEST(SnifferData, AScanStartedAgainAfterACompletedRunIsNotDone) {
@@ -383,12 +379,12 @@ TEST(SnifferData, AStartReplyBeginsTheRequestedRunAtItsFirstId) {
   EXPECT_EQ(scan_json(scan_start_reply(CHECK_RUN)), check_json(true, std::to_string(DATE_PROPERTY_ID), false));
   const ScanRun requested{ScanGoal::SCAN_GOAL_DISCOVER, 5, 208};
   EXPECT_EQ(scan_json(scan_start_reply(requested)),
-            R"({"active":true,"goal":"discover","from":5,"to":208,"ids":null,"next":5,"done":false})");
+            discover_json(requested, true, std::to_string(requested.from), false));
 }
 
 TEST(SnifferData, AStopReplyMidScanShowsWhereItStopped) {
   EXPECT_EQ(scan_json(scan_stop_reply(running(DISCOVER_1_208, MID_RANGE_ID))),
-            discover_1_208_json(false, std::to_string(MID_RANGE_ID), false));
+            discover_json(DISCOVER_1_208, false, std::to_string(MID_RANGE_ID), false));
 }
 
 TEST(SnifferData, AStopReplyWhileIdleIsTheIdleScan) {
@@ -399,18 +395,18 @@ TEST(SnifferData, AStopReplyWhileIdleIsTheIdleScan) {
 // --- Narrowed scans: list runs ---
 
 TEST(SnifferData, AListRunShowsItsIdsAscendingAndNoRange) {
-  EXPECT_EQ(scan_json(scan_state(running(listed({77, 12, 40}), 40))),
+  EXPECT_EQ(scan_json(scan_state(running(list_run(IdSet{77, 12, 40}), 40))),
             R"({"active":true,"goal":"discover","from":null,"to":null,"ids":[12,40,77],"next":40,"done":false})");
 }
 
 TEST(SnifferData, ACompletedListRunKeepsItsIds) {
-  EXPECT_EQ(scan_json(scan_state(completed(listed({12, 40})))),
+  EXPECT_EQ(scan_json(scan_state(completed(list_run(IdSet{12, 40})))),
             R"({"active":false,"goal":"discover","from":null,"to":null,"ids":[12,40],"next":null,"done":true})");
 }
 
 // The list as requested: a known ID in it is skipped by the run but still reported.
 TEST(SnifferData, AListRunReportsAKnownIdItSkips) {
-  const ScanRun run = listed({SUMMER_VENTILATION_PROPERTY_ID, SUMMER_VENTILATION_PROPERTY_ID + 1});
+  const ScanRun run = list_run(IdSet{SUMMER_VENTILATION_PROPERTY_ID, SUMMER_VENTILATION_PROPERTY_ID + 1});
   EXPECT_EQ(scan_json(scan_start_reply(run)), R"({"active":true,"goal":"discover","from":null,"to":null,"ids":[)" +
                                                   std::to_string(SUMMER_VENTILATION_PROPERTY_ID) + "," +
                                                   std::to_string(SUMMER_VENTILATION_PROPERTY_ID + 1) + R"(],"next":)" +
@@ -419,7 +415,7 @@ TEST(SnifferData, AListRunReportsAKnownIdItSkips) {
 }
 
 TEST(SnifferData, AStartReplyOfAListRunBeginsAtItsLowestId) {
-  EXPECT_EQ(scan_json(scan_start_reply(listed({77, 12}))),
+  EXPECT_EQ(scan_json(scan_start_reply(list_run(IdSet{77, 12}))),
             R"({"active":true,"goal":"discover","from":null,"to":null,"ids":[12,77],"next":12,"done":false})");
 }
 
@@ -432,7 +428,7 @@ TEST(SnifferData, SinceZeroIsAFullResponse) {
   EXPECT_EQ(data_json(store, 0, scan_state(running(DISCOVER_1_208, MID_RANGE_ID))),
             R"({"mac":"aabbccddeeff","name":"esp32-power-meter","boot":"9f2c41ab","uptime":812000,)"
             R"("seq":4,"full":true,"dropped":0,"scan":)" +
-                discover_1_208_json(true, std::to_string(MID_RANGE_ID), false) +
+                discover_json(DISCOVER_1_208, true, std::to_string(MID_RANGE_ID), false) +
                 R"(,"probe":null,)"
                 R"("records":[{"id":5,"cmd":32,"raw":"0100","first":1000,"last":5000,"changed":3000,"changes":1,)"
                 R"("status":"ok","status_at":4000,"reg":false,"hist":[[3000,"0100"],[1000,"0000"]]}]})");
@@ -460,20 +456,18 @@ TEST(SnifferData, ADeltaIsNotFullAndHoldsOnlyChangedRecords) {
 
 namespace {
 
-constexpr uint8_t PROBE_ID = 77;
-
 ProbeStep step(ProbeStepKind kind, const std::string &value, uint64_t at_ms) {
   return ProbeStep{kind, ScanOutcome::SCAN_OUTCOME_OK, true, ProbeValue::of(value), at_ms};
 }
 
-/// The spec's example: 77 probed with "03" over "01", writable and restored.
+/// The spec's example: PROBE_ID probed with VALUE over ORIGINAL, writable and restored.
 ProbeResult spec_example_probe() {
-  ProbeResult probe = probe_start_result(ProbeKind::PROBE_KIND_PROBE, PROBE_ID, ProbeValue::of("03"));
+  ProbeResult probe = probe_start_result(ProbeKind::PROBE_KIND_PROBE, PROBE_ID, ProbeValue::of(VALUE));
   probe.active = false;
   probe.has_original = true;
-  probe.original = ProbeValue::of("01");
-  probe.steps[0] = step(ProbeStepKind::PROBE_STEP_GET, "01", 812000);
-  probe.steps[1] = step(ProbeStepKind::PROBE_STEP_SET, "03", 812400);
+  probe.original = ProbeValue::of(ORIGINAL);
+  probe.steps[0] = step(ProbeStepKind::PROBE_STEP_GET, ORIGINAL, 812000);
+  probe.steps[1] = step(ProbeStepKind::PROBE_STEP_SET, VALUE, 812400);
   probe.step_count = 2;
   probe.verdict = ProbeVerdict::PROBE_VERDICT_WRITABLE;
   probe.restore = ProbeRestore::PROBE_RESTORE_OK;
@@ -490,31 +484,38 @@ TEST(SnifferData, BeforeAnyProbeTheProbeIsNull) { EXPECT_EQ(probe_json(nullptr),
 
 TEST(SnifferData, AProbeMatchesTheSpecExample) {
   const ProbeResult probe = spec_example_probe();
-  EXPECT_EQ(probe_json(&probe), R"({"active":false,"kind":"probe","id":)" + std::to_string(PROBE_ID) +
-                                    R"(,"value":"03","original":"01",)"
-                                    R"("steps":[{"kind":"get","outcome":"ok","value":"01","at":812000},)"
-                                    R"({"kind":"set","outcome":"ok","value":"03","at":812400}],)"
+  EXPECT_EQ(probe_json(&probe), R"({"active":false,"kind":"probe","id":)" + std::to_string(PROBE_ID) + R"(,"value":")" +
+                                    VALUE + R"(","original":")" + ORIGINAL +
+                                    R"(",)"
+                                    R"("steps":[{"kind":"get","outcome":"ok","value":")" +
+                                    ORIGINAL +
+                                    R"(","at":812000},)"
+                                    R"({"kind":"set","outcome":"ok","value":")" +
+                                    VALUE +
+                                    R"(","at":812400}],)"
                                     R"("verdict":"writable","restore":"ok"})");
 }
 
 TEST(SnifferData, AStartedProbeHasNoOriginalStepsVerdictOrRestore) {
-  const ProbeResult probe = probe_start_result(ProbeKind::PROBE_KIND_PROBE, PROBE_ID, ProbeValue::of("03"));
-  EXPECT_EQ(probe_json(&probe), R"({"active":true,"kind":"probe","id":)" + std::to_string(PROBE_ID) +
-                                    R"(,"value":"03","original":null,)"
+  const ProbeResult probe = probe_start_result(ProbeKind::PROBE_KIND_PROBE, PROBE_ID, ProbeValue::of(VALUE));
+  EXPECT_EQ(probe_json(&probe), R"({"active":true,"kind":"probe","id":)" + std::to_string(PROBE_ID) + R"(,"value":")" +
+                                    VALUE +
+                                    R"(","original":null,)"
                                     R"("steps":[],"verdict":null,"restore":null})");
 }
 
 TEST(SnifferData, ARestoreHasItsRequestedOriginalAndNoVerdict) {
-  ProbeResult restore = probe_start_result(ProbeKind::PROBE_KIND_RESTORE, PROBE_ID, ProbeValue::of("01"));
+  ProbeResult restore = probe_start_result(ProbeKind::PROBE_KIND_RESTORE, PROBE_ID, ProbeValue::of(ORIGINAL));
   restore.active = false;
   restore.restore = ProbeRestore::PROBE_RESTORE_FAILED;
   EXPECT_EQ(probe_json(&restore), R"({"active":false,"kind":"restore","id":)" + std::to_string(PROBE_ID) +
-                                      R"(,"value":"01","original":"01",)"
+                                      R"(,"value":")" + ORIGINAL + R"(","original":")" + ORIGINAL +
+                                      R"(",)"
                                       R"("steps":[],"verdict":null,"restore":"failed"})");
 }
 
 TEST(SnifferData, AFailedGetStepHasANullValue) {
-  ProbeResult probe = probe_start_result(ProbeKind::PROBE_KIND_PROBE, PROBE_ID, ProbeValue::of("03"));
+  ProbeResult probe = probe_start_result(ProbeKind::PROBE_KIND_PROBE, PROBE_ID, ProbeValue::of(VALUE));
   probe.steps[0] =
       ProbeStep{ProbeStepKind::PROBE_STEP_GET, ScanOutcome::SCAN_OUTCOME_TIMEOUT, false, ProbeValue{}, 1000};
   probe.steps[1] = ProbeStep{ProbeStepKind::PROBE_STEP_GET, ScanOutcome::SCAN_OUTCOME_NAK, false, ProbeValue{}, 2000};
@@ -574,11 +575,11 @@ TEST(SnifferData, ABusyReplyDuringAScanCarriesTheScanAndANullProbe) {
 }
 
 TEST(SnifferData, ABusyReplyDuringAProbeCarriesTheProbe) {
-  const ProbeResult probe = probe_start_result(ProbeKind::PROBE_KIND_PROBE, PROBE_ID, ProbeValue::of("03"));
+  const ProbeResult probe = probe_start_result(ProbeKind::PROBE_KIND_PROBE, PROBE_ID, ProbeValue::of(VALUE));
   EXPECT_EQ(busy_json(scan_state(completed(CHECK_RUN)), &probe),
             R"({"error":"busy","scan":)" + check_json(false, "null", true) +
-                R"(,"probe":{"active":true,"kind":"probe","id":)" + std::to_string(PROBE_ID) +
-                R"(,"value":"03","original":null,)"
+                R"(,"probe":{"active":true,"kind":"probe","id":)" + std::to_string(PROBE_ID) + R"(,"value":")" + VALUE +
+                R"(","original":null,)"
                 R"("steps":[],"verdict":null,"restore":null}})");
 }
 

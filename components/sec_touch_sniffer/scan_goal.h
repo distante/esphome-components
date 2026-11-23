@@ -8,6 +8,7 @@
 // order, and the start request that picks them ("Device/page contract", start parameters).
 
 #include <cstdint>
+#include <initializer_list>
 #include <optional>
 #include <string_view>
 
@@ -28,6 +29,13 @@ enum class ScanGoal : uint8_t {
 /// A set of property IDs, one bit per record slot. IDs outside 0..MAX_PROPERTY_ID are never in it.
 class IdSet {
  public:
+  constexpr IdSet() = default;
+  /// The set of `ids`: a duplicate counts once, an ID outside 0..MAX_PROPERTY_ID is dropped.
+  constexpr IdSet(std::initializer_list<int> ids) {
+    for (int id : ids) {
+      this->add(id);
+    }
+  }
   constexpr void add(int id) {
     if (id < 0 || id > MAX_PROPERTY_ID) {
       return;
@@ -92,6 +100,11 @@ constexpr uint8_t DEFAULT_DISCOVER_TO = MAX_PROPERTY_ID;
 constexpr ScanRun DEFAULT_DISCOVER_RUN{ScanGoal::SCAN_GOAL_DISCOVER, DEFAULT_DISCOVER_FROM, DEFAULT_DISCOVER_TO};
 /// The check run. Its range is unused; it carries the discover default.
 constexpr ScanRun CHECK_RUN{ScanGoal::SCAN_GOAL_CHECK, DEFAULT_DISCOVER_FROM, DEFAULT_DISCOVER_TO};
+
+/// A discover list run of `ids`.
+constexpr ScanRun list_run(const IdSet &ids) {
+  return ScanRun{ScanGoal::SCAN_GOAL_DISCOVER, DEFAULT_DISCOVER_FROM, DEFAULT_DISCOVER_TO, true, ids};
+}
 
 /// No ID: past a run's last ID, or a run with no IDs.
 constexpr int NO_SCAN_ID = -1;
@@ -169,8 +182,7 @@ constexpr int property_id_from(std::string_view text) {
 
 /// The discover list run of an `ids` value, or SCAN_START_BAD_IDS.
 inline ScanStart list_run_from(std::string_view ids_text) {
-  ScanRun run = DEFAULT_DISCOVER_RUN;
-  run.listed = true;
+  ScanRun run = list_run(IdSet{});
   const bool parsed = for_each_list_item(ids_text, [&run](std::string_view item) {
     const int id = property_id_from(item);
     if (id == NO_SCAN_ID) {

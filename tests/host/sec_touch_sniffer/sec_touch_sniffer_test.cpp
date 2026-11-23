@@ -2,13 +2,16 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #include "../sec_touch/common.h"
 #include "esphome/components/sec_touch_sniffer/sec_touch_sniffer.h"
 #include "esphome/components/sec_touch_sniffer/scan_goal.h"
+#include "esphome/components/sec_touch_sniffer/write_probe.h"
 #include "esphome/core/application.h"
 #include "esphome/core/hal.h"
 
@@ -50,10 +53,31 @@ class TestableSniffer : public SecTouchSniffer {
     return values;
   }
   /// The scan object the page would get now.
-  ScanState scan() const { return scan_state(this->scan_fields_()); }
+  ScanState scan() { return scan_state(this->scan_fields_()); }
   /// The scan object a stop request would get now, as the page handler builds it.
-  ScanState stop_reply() const { return scan_reply(this->scan_fields_(), /*start=*/false, DEFAULT_DISCOVER_RUN); }
+  ScanState stop_reply() { return scan_stop_reply(this->scan_fields_()); }
+  /// The probe object the page would get now; nullopt before any probe.
+  std::optional<ProbeResult> probe() {
+    ProbeResult result;
+    if (!this->probe_result_(result)) {
+      return std::nullopt;
+    }
+    return result;
+  }
 };
+
+/// A discover list run of `ids`.
+ScanRun listed(const std::vector<int> &ids) {
+  ScanRun run = DEFAULT_DISCOVER_RUN;
+  run.listed = true;
+  for (int id : ids) {
+    run.ids.add(id);
+  }
+  return run;
+}
+
+/// `[STX][ACK][ETX]`: the panel's answer to a SET it took.
+std::vector<uint8_t> ack_frame() { return frame(std::string(1, static_cast<char>(ACK))); }
 
 /// A hub and a set-up sniffer on a fake UART.
 struct SnifferRig {
@@ -86,7 +110,7 @@ struct SnifferRig {
   /// A scan left running would leave its timers in the shared scheduler, pointing at this rig after it is gone.
   ~SnifferRig() { this->sniffer.stop_scan(); }
 
-  /// Runs the sniffer's loop, as the main loop does once a request_scan() enabled it.
+  /// Runs the sniffer's loop, as the main loop does once a request enabled it.
   void loop_sniffer() { this->sniffer.loop(); }
 
   /// Starts a scan of `run`. The hub's first idle loop schedules the first query.
@@ -210,7 +234,7 @@ TEST(SecTouchSnifferTest, ATimedOutScanQueryIsRetriedOnceThenSkipped) {
   rig.time_out_scan_query();
   ASSERT_TRUE(rig.sniffer.is_scanning());
 
-  rig.send_scan_query(SecTouchSniffer::SCAN_RETRY_DELAY_MS);
+  rig.send_scan_query(SCAN_RETRY_DELAY_MS);
   rig.time_out_scan_query();
 
   EXPECT_EQ(rig.gets_sent_for(UNREGISTERED_ID), 2);
@@ -232,12 +256,12 @@ TEST(SecTouchSnifferTest, ACheckScanQueriesExactlyTheKnownIdsInAscendingOrder) {
   EXPECT_EQ(rig.gets_sent(), known_ids_ascending());
 }
 
-TEST(SecTouchSnifferTest, ADiscoverStartDuringACheckChangesNothing) {
+TEST(SecTouchSnifferTest, ADiscoverStartDuringACheckIsRefusedAndChangesNothing) {
   SnifferRig rig;
   rig.start_scan(CHECK_RUN);
   rig.answer_scan_query(known_ids_ascending().front(), "1");
 
-  rig.sniffer.request_scan(true, discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID));
+  EXPECT_FALSE(rig.sniffer.request_scan_start(discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID)));
   rig.loop_sniffer();
   rig.answer_every_scan_query();
 
@@ -315,12 +339,13 @@ TEST(SecTouchSnifferTest, AStopDuringTheGapReportsTheIdItNeverQueried) {
   EXPECT_EQ(rig.sniffer.scan().next, NEXT_UNREGISTERED_ID);
 }
 
-// --- Scan start and stop from the page: queued by request_scan(), applied by loop() ---
+// --- Scan start and stop from the page: queued by request_scan_start() and request_scan_stop(), applied by
+// loop() ---
 
 TEST(SecTouchSnifferTest, ARequestedStartWaitsForTheLoop) {
   SnifferRig rig;
 
-  rig.sniffer.request_scan(true, discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID));
+  EXPECT_TRUE(rig.sniffer.request_scan_start(discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID)));
   EXPECT_FALSE(rig.sniffer.is_scanning());
 
   rig.loop_sniffer();
@@ -329,7 +354,7 @@ TEST(SecTouchSnifferTest, ARequestedStartWaitsForTheLoop) {
 
 TEST(SecTouchSnifferTest, ARequestedStartScansTheRequestedRun) {
   SnifferRig rig;
-  rig.sniffer.request_scan(true, discover(NEXT_UNREGISTERED_ID, NEXT_UNREGISTERED_ID));
+  ASSERT_TRUE(rig.sniffer.request_scan_start(discover(NEXT_UNREGISTERED_ID, NEXT_UNREGISTERED_ID)));
   rig.loop_sniffer();
   rig.loop_hub();
 
@@ -343,18 +368,18 @@ TEST(SecTouchSnifferTest, ARequestedStopEndsTheScan) {
   rig.start_scan(discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID));
   ASSERT_TRUE(rig.sniffer.is_scanning());
 
-  rig.sniffer.request_scan(false);
+  rig.sniffer.request_scan_stop();
   rig.loop_sniffer();
 
   EXPECT_FALSE(rig.sniffer.is_scanning());
 }
 
-TEST(SecTouchSnifferTest, AStartDuringAScanChangesNothing) {
+TEST(SecTouchSnifferTest, AStartDuringAScanIsRefusedAndChangesNothing) {
   SnifferRig rig;
   rig.start_scan(discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID));
   rig.answer_scan_query(UNREGISTERED_ID, "10");
 
-  rig.sniffer.request_scan(true, discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID));
+  EXPECT_FALSE(rig.sniffer.request_scan_start(discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID)));
   rig.loop_sniffer();
 
   EXPECT_TRUE(rig.sniffer.is_scanning());
@@ -370,7 +395,7 @@ TEST(SecTouchSnifferTest, AStopWhileIdleChangesNothing) {
   rig.answer_scan_query(UNREGISTERED_ID, "10");
   ASSERT_TRUE(rig.sniffer.scan().done);
 
-  rig.sniffer.request_scan(false);
+  rig.sniffer.request_scan_stop();
   rig.loop_sniffer();
 
   EXPECT_FALSE(rig.sniffer.is_scanning());
@@ -380,13 +405,223 @@ TEST(SecTouchSnifferTest, AStopWhileIdleChangesNothing) {
 
 TEST(SecTouchSnifferTest, ARequestIsAppliedOnce) {
   SnifferRig rig;
-  rig.sniffer.request_scan(true, discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID));
+  ASSERT_TRUE(rig.sniffer.request_scan_start(discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID)));
   rig.loop_sniffer();
   rig.sniffer.stop_scan();
 
   rig.loop_sniffer();
 
   EXPECT_FALSE(rig.sniffer.is_scanning());
+}
+
+// --- One run at a time ---
+
+// Each round races two tabs' starts through the real slot: never both accepted.
+TEST(SecTouchSnifferTest, TwoSimultaneousStartsNeverBothSucceed) {
+  for (int round = 0; round < 200; round++) {
+    SnifferRig rig;
+    std::atomic<bool> go{false};
+    std::atomic<int> accepted{0};
+    auto tab = [&](auto start) {
+      while (!go) {
+      }
+      if (start()) {
+        accepted++;
+      }
+    };
+    std::thread scan_tab(tab,
+                         [&]() { return rig.sniffer.request_scan_start(discover(UNREGISTERED_ID, UNREGISTERED_ID)); });
+    std::thread probe_tab(tab, [&]() {
+      return rig.sniffer.request_probe(ProbeKind::PROBE_KIND_PROBE, UNREGISTERED_ID, ProbeValue::of("03"));
+    });
+    go = true;
+    scan_tab.join();
+    probe_tab.join();
+    ASSERT_EQ(accepted, 1) << "round " << round;
+  }
+}
+
+TEST(SecTouchSnifferTest, AStartWaitingForTheLoopHoldsTheSlot) {
+  SnifferRig rig;
+  ASSERT_TRUE(rig.sniffer.request_scan_start(discover(UNREGISTERED_ID, UNREGISTERED_ID)));
+
+  EXPECT_FALSE(rig.sniffer.request_scan_start(CHECK_RUN));
+  EXPECT_FALSE(rig.sniffer.request_probe(ProbeKind::PROBE_KIND_RESTORE, UNREGISTERED_ID, ProbeValue::of("01")));
+}
+
+TEST(SecTouchSnifferTest, ARunsEndFreesTheSlot) {
+  SnifferRig rig;
+  rig.start_scan(discover(UNREGISTERED_ID, UNREGISTERED_ID));
+  rig.answer_scan_query(UNREGISTERED_ID, "10");
+  ASSERT_FALSE(rig.sniffer.is_scanning());
+
+  EXPECT_TRUE(rig.sniffer.request_scan_start(CHECK_RUN));
+}
+
+TEST(SecTouchSnifferTest, AStopQueuedWithAStartStopsThatScanOnceItStarts) {
+  SnifferRig rig;
+  ASSERT_TRUE(rig.sniffer.request_scan_start(discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID)));
+  rig.sniffer.request_scan_stop();
+
+  rig.loop_sniffer();
+
+  EXPECT_FALSE(rig.sniffer.is_scanning());
+  EXPECT_TRUE(rig.sniffer.request_scan_start(CHECK_RUN));
+}
+
+// A stop queued while a scan runs belongs to that scan: once the scan completes, the next tab's start is untouched.
+TEST(SecTouchSnifferTest, AStopForAScanThatEndedNeverStopsTheNextRun) {
+  SnifferRig rig;
+  rig.start_scan(discover(UNREGISTERED_ID, UNREGISTERED_ID));
+  rig.sniffer.request_scan_stop();
+  rig.answer_scan_query(UNREGISTERED_ID, "10");
+  ASSERT_FALSE(rig.sniffer.is_scanning());
+
+  ASSERT_TRUE(rig.sniffer.request_scan_start(discover(NEXT_UNREGISTERED_ID, NEXT_UNREGISTERED_ID)));
+  rig.loop_sniffer();
+
+  EXPECT_TRUE(rig.sniffer.is_scanning());
+}
+
+TEST(SecTouchSnifferTest, AStopWhileIdleQueuesNothing) {
+  SnifferRig rig;
+  rig.sniffer.request_scan_stop();
+  ASSERT_TRUE(rig.sniffer.request_scan_start(discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID)));
+
+  rig.loop_sniffer();
+
+  EXPECT_TRUE(rig.sniffer.is_scanning());
+}
+
+// --- Narrowed scans ---
+
+TEST(SecTouchSnifferTest, AListRunQueriesExactlyItsUnknownIdsInAscendingOrder) {
+  SnifferRig rig;
+  rig.start_scan(listed({NEXT_UNREGISTERED_ID, SUMMER_VENTILATION_PROPERTY_ID, UNREGISTERED_ID, NEXT_UNREGISTERED_ID}));
+
+  rig.answer_every_scan_query();
+
+  EXPECT_EQ(rig.gets_sent(), (std::vector<int>{UNREGISTERED_ID, NEXT_UNREGISTERED_ID}));
+  EXPECT_TRUE(rig.sniffer.scan().done);
+  EXPECT_TRUE(rig.sniffer.scan().listed);
+}
+
+// --- Write probes ---
+
+namespace {
+
+/// A rig whose hub sends each task at once, for a probe's back-to-back steps.
+struct ProbeRig : SnifferRig {
+  ProbeRig() { this->hub.set_inter_task_delay(0); }
+
+  /// Starts a probe or restore from the page and lets the hub send its first request.
+  void start(ProbeKind kind, const std::string &value) {
+    ASSERT_TRUE(this->sniffer.request_probe(kind, UNREGISTERED_ID, ProbeValue::of(value)));
+    this->loop_sniffer();
+    this->loop_hub();
+  }
+
+  /// The panel takes the SET in flight.
+  void ack() {
+    this->uart.push_rx(ack_frame());
+    this->loop_hub();
+  }
+
+  /// What the hub sent since the last call.
+  std::vector<uint8_t> take_sent() {
+    std::vector<uint8_t> sent = this->uart.tx;
+    this->uart.tx.clear();
+    return sent;
+  }
+
+  ~ProbeRig() { this->hub.exit_scan_mode(); }
+};
+
+std::vector<uint8_t> concat(std::vector<uint8_t> a, const std::vector<uint8_t> &b) {
+  a.insert(a.end(), b.begin(), b.end());
+  return a;
+}
+
+}  // namespace
+
+// The whole sequence on the wire: GET the original, SET the value, read it back, restore, verify.
+TEST(SecTouchSnifferTest, AWritableProbeRunsOnTheWireAndRestores) {
+  ProbeRig rig;
+  rig.start(ProbeKind::PROBE_KIND_PROBE, "03");
+  EXPECT_EQ(rig.take_sent(), get_frame(UNREGISTERED_ID));
+
+  rig.receive(UNREGISTERED_ID, "01");
+  // The hub ACKs the data frame, then sends the SET.
+  EXPECT_EQ(rig.take_sent(), concat(ack_frame(), set_frame(UNREGISTERED_ID, "03")));
+
+  rig.ack();
+  EXPECT_EQ(rig.take_sent(), get_frame(UNREGISTERED_ID));
+
+  rig.receive(UNREGISTERED_ID, "03");
+  EXPECT_EQ(rig.take_sent(), concat(ack_frame(), set_frame(UNREGISTERED_ID, "01")));
+
+  rig.ack();
+  EXPECT_EQ(rig.take_sent(), get_frame(UNREGISTERED_ID));
+  rig.receive(UNREGISTERED_ID, "01");
+
+  const std::optional<ProbeResult> probe = rig.sniffer.probe();
+  ASSERT_TRUE(probe.has_value());
+  EXPECT_FALSE(probe->active);
+  EXPECT_EQ(probe->verdict, ProbeVerdict::PROBE_VERDICT_WRITABLE);
+  EXPECT_EQ(probe->restore, ProbeRestore::PROBE_RESTORE_OK);
+  EXPECT_EQ(probe->original.view(), "01");
+  EXPECT_EQ(probe->step_count, 5);
+  // The probe's GETs pass the tap like any data message.
+  EXPECT_EQ(rig.sniffer.store().raw_value(UNREGISTERED_ID), "01");
+  EXPECT_FALSE(rig.sniffer.is_probing());
+}
+
+TEST(SecTouchSnifferTest, AProbePausesPollingUntilItEnds) {
+  ProbeRig rig;
+  rig.start(ProbeKind::PROBE_KIND_PROBE, "03");
+  rig.take_sent();
+  // While the probe runs, a poll cycle sends nothing of its own.
+  rig.hub.update();
+  rig.loop_hub();
+  EXPECT_TRUE(rig.take_sent().empty());
+
+  // The original equals the value: nothing written, and the probe ends.
+  rig.receive(UNREGISTERED_ID, "03");
+
+  EXPECT_FALSE(rig.sniffer.is_probing());
+  EXPECT_EQ(rig.sniffer.probe()->verdict, ProbeVerdict::PROBE_VERDICT_NOTHING_WRITTEN);
+  EXPECT_TRUE(rig.sniffer.request_scan_start(CHECK_RUN));
+}
+
+TEST(SecTouchSnifferTest, AStartOrStopDuringAProbeChangesNothing) {
+  ProbeRig rig;
+  rig.start(ProbeKind::PROBE_KIND_PROBE, "03");
+
+  EXPECT_FALSE(rig.sniffer.request_scan_start(CHECK_RUN));
+  EXPECT_FALSE(rig.sniffer.request_probe(ProbeKind::PROBE_KIND_RESTORE, UNREGISTERED_ID, ProbeValue::of("01")));
+  rig.sniffer.request_scan_stop();
+  rig.loop_sniffer();
+
+  EXPECT_TRUE(rig.sniffer.is_probing());
+  EXPECT_TRUE(rig.sniffer.probe()->active);
+}
+
+TEST(SecTouchSnifferTest, ARestoreRequestSetsTheOriginalAndVerifiesIt) {
+  ProbeRig rig;
+  rig.start(ProbeKind::PROBE_KIND_RESTORE, "01");
+  EXPECT_EQ(rig.take_sent(), set_frame(UNREGISTERED_ID, "01"));
+
+  rig.ack();
+  rig.receive(UNREGISTERED_ID, "01");
+
+  EXPECT_EQ(rig.sniffer.probe()->kind, ProbeKind::PROBE_KIND_RESTORE);
+  EXPECT_EQ(rig.sniffer.probe()->restore, ProbeRestore::PROBE_RESTORE_OK);
+  EXPECT_FALSE(rig.sniffer.is_probing());
+}
+
+TEST(SecTouchSnifferTest, BeforeAnyProbeThereIsNoProbeResult) {
+  SnifferRig rig;
+  EXPECT_FALSE(rig.sniffer.probe().has_value());
 }
 
 }  // namespace esphome::sec_touch::testing

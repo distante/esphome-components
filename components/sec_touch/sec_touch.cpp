@@ -324,6 +324,15 @@ void SECTouchComponent::add_discovery_get_task(int property_id) {
   this->data_task_queue.push_back(GetDataTask::create_unchecked(property_id));
 }
 
+bool SECTouchComponent::add_discovery_set_task(int property_id, const char *value) {
+  if (!this->scan_mode_active_) {
+    ESP_LOGW(TAG, "Unchecked SET of property_id %d refused: only allowed in scan mode", property_id);
+    return false;
+  }
+  this->data_task_queue.push_back(SetDataTask::create_unchecked(property_id, value));
+  return true;
+}
+
 void SECTouchComponent::enter_scan_mode() {
   ESP_LOGI(TAG, "Entering scan mode — pausing regular polling");
   if (!this->data_task_queue.empty()) {

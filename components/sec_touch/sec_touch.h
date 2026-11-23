@@ -60,6 +60,10 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   void register_message_tap(MessageTap tap);
   void register_queue_empty_listener(QueueEmptyListener listener);
   void add_discovery_get_task(int property_id);
+  /// Queues a SET of any property ID, unknown ones included, for the sniffer's write probe. Only in scan mode:
+  /// outside it nothing is queued, a warning is logged and the call returns false, so nothing else can write an
+  /// unknown ID.
+  bool add_discovery_set_task(int property_id, const char *value);
 
   void enter_scan_mode();
   void exit_scan_mode();

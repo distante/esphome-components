@@ -9,6 +9,16 @@
 namespace esphome {
 namespace sec_touch {
 
+/// Wire bytes. _definitions.h names them STX, ETX, ACK, NAK and TAB for the hub.
+constexpr uint8_t WIRE_STX = 0x02;
+constexpr uint8_t WIRE_ETX = 0x0A;
+constexpr uint8_t WIRE_ACK = 0x06;
+constexpr uint8_t WIRE_NAK = 0x15;
+constexpr uint8_t WIRE_TAB = 0x09;
+
+/// Longest value a SET carries. SetDataTask holds it with its NUL, which fits a date or a clock ("13:47:00").
+constexpr const int SET_VALUE_CAP = 15;
+
 /// Shortest frame that can be a data message: `[STX]` + at least five bytes + `[ETX]`. Anything shorter is an ACK,
 /// a NAK, or corruption.
 constexpr const int DATA_MESSAGE_MIN_LEN = 7;

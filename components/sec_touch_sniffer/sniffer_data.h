@@ -16,6 +16,7 @@
 #include "property_store.h"
 #include "scan_goal.h"
 #include "uri_query.h"
+#include "write_probe.h"
 
 namespace esphome {
 namespace sec_touch {
@@ -73,12 +74,9 @@ inline void snapshot_record(const PropertyStore &store, int id, RecordSnapshot &
                                         });
 }
 
-/// The query status as the page names it.
-inline const char *query_status_name(const PropertyFields &f) {
-  if ((f.flags & PropertyStore::FLAG_QUERIED) == 0) {
-    return "unqueried";
-  }
-  switch (f.query_status) {
+/// The outcome as the page names it, in a query status or a probe step.
+inline const char *scan_outcome_name(ScanOutcome outcome) {
+  switch (outcome) {
     case ScanOutcome::SCAN_OUTCOME_OK:
       return "ok";
     case ScanOutcome::SCAN_OUTCOME_NAK:
@@ -86,7 +84,15 @@ inline const char *query_status_name(const PropertyFields &f) {
     case ScanOutcome::SCAN_OUTCOME_TIMEOUT:
       return "timeout";
   }
-  return "unqueried";
+  return "timeout";
+}
+
+/// The query status as the page names it.
+inline const char *query_status_name(const PropertyFields &f) {
+  if ((f.flags & PropertyStore::FLAG_QUERIED) == 0) {
+    return "unqueried";
+  }
+  return scan_outcome_name(f.query_status);
 }
 
 /// Writes one record object.
@@ -165,10 +171,13 @@ struct ScanFields {
 struct ScanState {
   bool active;
   ScanGoal goal;
-  /// False makes `from` and `to` null: the run is a check, or no scan ran yet.
+  /// False makes `from` and `to` null: the run is a check or a list run, or no scan ran yet.
   bool has_range;
   uint8_t from;
   uint8_t to;
+  /// True for a list run: `ids` holds its IDs. False makes `ids` null.
+  bool listed;
+  IdSet ids;
   /// The ID the scan queries next; the last ID's while its query is in flight; while idle, the ID the last run
   /// stopped at. NO_SCAN_ID (null) before any run and after a completed one.
   int next;
@@ -179,34 +188,46 @@ struct ScanState {
 /// The scan state from the sniffer's scan fields.
 inline ScanState scan_state(const ScanFields &fields) {
   if (!fields.ran) {
-    return ScanState{false, DEFAULT_DISCOVER_RUN.goal, false, 0, 0, NO_SCAN_ID, false};
+    return ScanState{.active = false,
+                     .goal = DEFAULT_DISCOVER_RUN.goal,
+                     .has_range = false,
+                     .from = 0,
+                     .to = 0,
+                     .listed = false,
+                     .ids = IdSet{},
+                     .next = NO_SCAN_ID,
+                     .done = false};
   }
   const bool done = !fields.active && fields.completed;
   int next = NO_SCAN_ID;
   if (!done) {
     next = fields.current == NO_SCAN_ID ? last_scan_id(fields.run) : fields.current;
   }
+  const bool discover = fields.run.goal == ScanGoal::SCAN_GOAL_DISCOVER;
   return ScanState{
       .active = fields.active,
       .goal = fields.run.goal,
-      .has_range = fields.run.goal == ScanGoal::SCAN_GOAL_DISCOVER,
+      .has_range = discover && !fields.run.listed,
       .from = fields.run.from,
       .to = fields.run.to,
+      .listed = discover && fields.run.listed,
+      .ids = fields.run.ids,
       .next = next,
       .done = done,
   };
 }
 
-/// The scan object a start or stop replies with: the state loop() reaches once it applies the request. A start while
-/// idle begins `requested` at its first ID; a start while scanning leaves the running scan as it is.
-inline ScanState scan_reply(ScanFields fields, bool start, const ScanRun &requested) {
-  if (start && !fields.active) {
-    return scan_state(ScanFields{
-        .ran = true, .active = true, .completed = false, .run = requested, .current = first_scan_id(requested)});
-  }
-  if (!start) {
-    fields.active = false;
-  }
+/// The scan object an accepted start replies with: the state loop() reaches once it applies the request, `requested`
+/// at its first ID. A start while a run is busy gets a 409 with the current scan instead.
+inline ScanState scan_start_reply(const ScanRun &requested) {
+  return scan_state(ScanFields{
+      .ran = true, .active = true, .completed = false, .run = requested, .current = first_scan_id(requested)});
+}
+
+/// The scan object a stop replies with: the scan in `fields`, no longer active. A stop while idle, or during a probe
+/// or restore, changes nothing.
+inline ScanState scan_stop_reply(ScanFields fields) {
+  fields.active = false;
   return scan_state(fields);
 }
 
@@ -228,6 +249,24 @@ inline void write_scan_json(JsonChunkWriter &w, const ScanState &scan) {
   } else {
     w.null();
   }
+  w.raw(",\"ids\":");
+  if (scan.listed) {
+    w.raw("[");
+    bool first = true;
+    for (int id = 0; id <= MAX_PROPERTY_ID; id++) {
+      if (!scan.ids.contains(id)) {
+        continue;
+      }
+      if (!first) {
+        w.raw(",");
+      }
+      first = false;
+      w.number(static_cast<uint64_t>(id));
+    }
+    w.raw("]");
+  } else {
+    w.null();
+  }
   w.raw(",\"next\":");
   if (scan.next != NO_SCAN_ID) {
     w.number(static_cast<uint64_t>(scan.next));
@@ -239,6 +278,91 @@ inline void write_scan_json(JsonChunkWriter &w, const ScanState &scan) {
   w.raw("}");
 }
 
+/// The verdict as the page names it, nullptr (null) while undecided.
+inline const char *probe_verdict_name(ProbeVerdict verdict) {
+  switch (verdict) {
+    case ProbeVerdict::PROBE_VERDICT_NONE:
+      return nullptr;
+    case ProbeVerdict::PROBE_VERDICT_WRITABLE:
+      return "writable";
+    case ProbeVerdict::PROBE_VERDICT_NOT_WRITABLE:
+      return "not writable";
+    case ProbeVerdict::PROBE_VERDICT_UNCLEAR:
+      return "unclear";
+    case ProbeVerdict::PROBE_VERDICT_NOTHING_WRITTEN:
+      return "nothing written";
+  }
+  return nullptr;
+}
+
+/// The restore as the page names it, nullptr (null) while undecided.
+inline const char *probe_restore_name(ProbeRestore restore) {
+  switch (restore) {
+    case ProbeRestore::PROBE_RESTORE_NONE:
+      return nullptr;
+    case ProbeRestore::PROBE_RESTORE_OK:
+      return "ok";
+    case ProbeRestore::PROBE_RESTORE_FAILED:
+      return "failed";
+    case ProbeRestore::PROBE_RESTORE_SKIPPED:
+      return "skipped";
+  }
+  return nullptr;
+}
+
+/// A name, or null for nullptr.
+inline void string_or_null(JsonChunkWriter &w, const char *name) {
+  if (name == nullptr) {
+    w.null();
+    return;
+  }
+  w.string(name);
+}
+
+/// Writes the `probe` object, `null` before any probe or restore. Raw values are encoded as in records.
+inline void write_probe_json(JsonChunkWriter &w, const ProbeResult *probe) {
+  if (probe == nullptr) {
+    w.null();
+    return;
+  }
+  w.raw("{\"active\":");
+  w.boolean(probe->active);
+  w.raw(",\"kind\":");
+  w.string(probe->kind == ProbeKind::PROBE_KIND_RESTORE ? "restore" : "probe");
+  w.raw(",\"id\":");
+  w.number(probe->id);
+  w.raw(",\"value\":");
+  w.string(probe->value.view());
+  w.raw(",\"original\":");
+  if (probe->has_original) {
+    w.string(probe->original.view());
+  } else {
+    w.null();
+  }
+  w.raw(",\"steps\":[");
+  for (uint8_t i = 0; i < probe->step_count; i++) {
+    const ProbeStep &step = probe->steps[i];
+    w.raw(i == 0 ? "{\"kind\":" : ",{\"kind\":");
+    w.string(step.kind == ProbeStepKind::PROBE_STEP_SET ? "set" : "get");
+    w.raw(",\"outcome\":");
+    w.string(scan_outcome_name(step.outcome));
+    w.raw(",\"value\":");
+    if (step.has_value) {
+      w.string(step.value.view());
+    } else {
+      w.null();
+    }
+    w.raw(",\"at\":");
+    w.number(step.at_ms);
+    w.raw("}");
+  }
+  w.raw("],\"verdict\":");
+  string_or_null(w, probe_verdict_name(probe->verdict));
+  w.raw(",\"restore\":");
+  string_or_null(w, probe_restore_name(probe->restore));
+  w.raw("}");
+}
+
 /// The parts of a data response that don't come from the store.
 struct DeviceInfo {
   std::string_view mac;
@@ -247,12 +371,14 @@ struct DeviceInfo {
   uint64_t uptime_ms;
 };
 
-/// Writes the whole /sniffer/data response for `since` and flushes it. Runs `with_lock(f)` around every store read:
-/// once for the header's `seq` and `dropped`, then once per record to copy it into `scratch`. The JSON of a record
-/// is written after its lock is released.
+/// Writes the whole /sniffer/data response for `since` and flushes it. `scan` and `probe` (nullptr before any) are
+/// read before the records, so a page that sees `done` also has the last answer. Runs `with_lock(f)` around every
+/// store read: once for the header's `seq` and `dropped`, then once per record to copy it into `scratch`. The JSON of
+/// a record is written after its lock is released.
 template<typename WithLock, typename IsRegistered>
 bool write_data_json(JsonChunkWriter &w, const PropertyStore &store, const DeviceInfo &device, const ScanState &scan,
-                     uint32_t since, RecordSnapshot &scratch, WithLock with_lock, IsRegistered is_registered) {
+                     const ProbeResult *probe, uint32_t since, RecordSnapshot &scratch, WithLock with_lock,
+                     IsRegistered is_registered) {
   uint32_t seq = 0;
   uint32_t dropped = 0;
   with_lock([&]() {
@@ -276,6 +402,8 @@ bool write_data_json(JsonChunkWriter &w, const PropertyStore &store, const Devic
   w.number(dropped);
   w.raw(",\"scan\":");
   write_scan_json(w, scan);
+  w.raw(",\"probe\":");
+  write_probe_json(w, probe);
   w.raw(",\"records\":[");
 
   bool first = true;
@@ -318,7 +446,9 @@ enum class SnifferRoute : uint8_t {
   ROUTE_DATA,
   ROUTE_SCAN_START,
   ROUTE_SCAN_STOP,
-  ROUTE_CLEAR
+  ROUTE_CLEAR,
+  ROUTE_PROBE,
+  ROUTE_RESTORE,
 };
 
 constexpr std::string_view SNIFFER_PAGE_PATH = "/sniffer";
@@ -326,6 +456,8 @@ constexpr std::string_view SNIFFER_DATA_PATH = "/sniffer/data";
 constexpr std::string_view SNIFFER_SCAN_START_PATH = "/sniffer/scan/start";
 constexpr std::string_view SNIFFER_SCAN_STOP_PATH = "/sniffer/scan/stop";
 constexpr std::string_view SNIFFER_CLEAR_PATH = "/sniffer/clear";
+constexpr std::string_view SNIFFER_PROBE_PATH = "/sniffer/probe";
+constexpr std::string_view SNIFFER_RESTORE_PATH = "/sniffer/restore";
 
 /// Which sniffer endpoint a request is for. `path` is the URL without its query string.
 inline SnifferRoute sniffer_route(SnifferMethod method, std::string_view path) {
@@ -347,6 +479,12 @@ inline SnifferRoute sniffer_route(SnifferMethod method, std::string_view path) {
     }
     if (path == SNIFFER_CLEAR_PATH) {
       return SnifferRoute::ROUTE_CLEAR;
+    }
+    if (path == SNIFFER_PROBE_PATH) {
+      return SnifferRoute::ROUTE_PROBE;
+    }
+    if (path == SNIFFER_RESTORE_PATH) {
+      return SnifferRoute::ROUTE_RESTORE;
     }
   }
   return SnifferRoute::ROUTE_NONE;

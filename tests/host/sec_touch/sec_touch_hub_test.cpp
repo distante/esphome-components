@@ -206,6 +206,33 @@ TEST_F(SECTouchHubTest, EnteringScanModeClearsStaleTimeoutOutcome) {
   EXPECT_EQ(this->hub_.get_last_scan_outcome(), ScanOutcome::SCAN_OUTCOME_OK);
 }
 
+// The write probe's SET of an unknown ID: only the sniffer's scan mode may send it.
+TEST_F(SECTouchHubTest, UncheckedSetOutsideScanModeQueuesNothing) {
+  EXPECT_FALSE(this->hub_.add_discovery_set_task(UNANSWERED_PROPERTY_ID, "03"));
+  this->hub_.loop();
+
+  EXPECT_TRUE(this->uart_.tx.empty());
+  EXPECT_EQ(this->hub_.current_running_task_type, TaskType::NONE);
+}
+
+TEST_F(SECTouchHubTest, UncheckedSetInScanModeIsSentAndItsAckRecorded) {
+  std::vector<ScanOutcome> outcomes;
+  this->hub_.register_queue_empty_listener(
+      [this, &outcomes]() { outcomes.push_back(this->hub_.get_last_scan_outcome()); });
+  this->hub_.enter_scan_mode();
+  this->hub_.loop();  // the queue-empty callback of entering scan mode
+  outcomes.clear();
+
+  EXPECT_TRUE(this->hub_.add_discovery_set_task(UNANSWERED_PROPERTY_ID, "03"));
+  this->hub_.loop();  // dispatches the SET
+  EXPECT_EQ(this->uart_.tx, set_frame(UNANSWERED_PROPERTY_ID, "03"));
+
+  this->uart_.push_rx(ack_frame());
+  this->loop_times(2);
+
+  EXPECT_EQ(outcomes, std::vector<ScanOutcome>{ScanOutcome::SCAN_OUTCOME_OK});
+}
+
 // A corrupted ACK during a GET leaves the GET open: the data frame that follows answers it (issue #50).
 TEST_F(SECTouchHubTest, CorruptedAckKeepsGetOpenUntilItsDataFrame) {
   const auto &seen = this->record_taps();

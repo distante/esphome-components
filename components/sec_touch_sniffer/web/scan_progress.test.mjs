@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { knownIds } from "./known_meaning.mjs";
 import { captureProgress, runIds, scanProgress } from "./scan_progress.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
+import { captureInFlight } from "./fixture_experiments.mjs";
 
 // The date and clock moved below the levels, so a check has known IDs before ID 10 as well as after it: the known
 // IDs are 3, 5, 10, 11, 20, 21, 30.
@@ -143,7 +144,8 @@ test("a completed list run counts its listed IDs", () => {
 
 // ───── this page's capture ─────
 
-const boost = (full) => ({ label: "boost", experimentName: "fan 1 mode", full });
+// What each capture scans: the runs `discover` and `listRun` stand for in its tests (experiments.mjs, `nextCapture`).
+const boost = (full) => captureInFlight(full ? { full, from: 1, to: 12 } : { full, ids: [12, 40] });
 
 test("a capture of the full range counts the IDs behind the scan", () => {
   assert.deepEqual(captureProgress(CATALOGUE, boost(true), discover({ active: true, from: 1, to: 12, next: 6 })), {

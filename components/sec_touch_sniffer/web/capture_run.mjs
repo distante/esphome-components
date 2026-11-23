@@ -22,6 +22,19 @@ function isRunOf(catalogue, scan, next) {
   return Array.isArray(scan.ids) && sameIds([...scan.ids].sort(ascending), next.ids);
 }
 
+/**
+ * Whether the device's scan shows this page's capture: the run `capture.next` asked for, active or done. Right after
+ * the start's 200 a poll can still show the run before it.
+ *
+ * @param {object} catalogue the CATALOGUE of catalogue.mjs
+ * @param {object} capture this page's capture in flight
+ * @param {object} scan the device's scan state
+ * @returns {boolean} whether the scan row may count the capture's progress
+ */
+export function isCaptureRun(catalogue, capture, scan) {
+  return (scan.active || scan.done) && isRunOf(catalogue, scan, capture.next);
+}
+
 /** An entry per ID the run queried: its query status and, when answered, its raw value. */
 function entriesOf(catalogue, copy, scan) {
   const entries = {};
@@ -63,7 +76,7 @@ export function captureStep(catalogue, capture, copy, fresh, browserNowMs) {
   if (!scan.done) {
     return { kind: "abandon", why: "stopped" };
   }
-  if (!isRunOf(catalogue, scan, capture.next)) {
+  if (!isCaptureRun(catalogue, capture, scan)) {
     return { kind: "abandon", why: "another run" };
   }
   return {

@@ -47,3 +47,11 @@ export function experimentWith(pairs, { name = "fan 1 mode", range = { from: 1, 
 export function walkOf(id, pairs) {
   return experimentWith(pairs.map(([label, value]) => [label, { [id]: value }]));
 }
+
+/**
+ * This page's capture in flight as capture_run.mjs documents it: scanning `next` (experiments.mjs, `nextCapture`)
+ * for the experiment "fan 1 mode", labelled " boost " as typed. `fields` overrides any of its fields.
+ */
+export function captureInFlight(next, fields = {}) {
+  return { experimentKey: "e1", experimentName: "fan 1 mode", label: " boost ", next, boot: FIXTURE_BOOT, ...fields };
+}

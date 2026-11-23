@@ -102,14 +102,15 @@ function scanRunProgress(scan, catalogue) {
  * The scan row while this page's own capture runs.
  *
  * @param {object} catalogue the CATALOGUE of catalogue.mjs
- * @param {{label: string, experimentName: string, full: boolean}} capture the capture in flight
+ * @param {{label: string, experimentName: string, next: {full: boolean}}} capture the capture in flight (see
+ *   capture_run.mjs): `next.full` tells a full range from narrowed candidates
  * @param {object} scan the device's scan state: the capture's run
  * @returns {{label: string, percent: number}} e.g. `capturing “boost” for fan 1 mode · 34/239 · full range`
  */
 export function captureProgress(catalogue, capture, scan) {
   const ids = runIds(catalogue, scan) ?? [];
   const behind = scan.next === null && !scan.done ? 0 : behindCount(scan, ids);
-  const scope = capture.full ? "full range" : `${ids.length} candidates`;
+  const scope = capture.next.full ? "full range" : `${ids.length} candidates`;
   return {
     label: `capturing “${capture.label.trim()}” for ${capture.experimentName} · ${behind}/${ids.length} · ${scope}`,
     percent: ids.length === 0 ? 0 : clampPercent((100 * behind) / ids.length),

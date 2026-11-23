@@ -1,10 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { captureStep } from "./capture_run.mjs";
+import { captureStep, isCaptureRun } from "./capture_run.mjs";
 import { applyResponse, emptyCopy } from "./records.mjs";
 import { deviceRecord, deviceResponse, FIXTURE_BOOT } from "./fixture_records.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
+import { captureInFlight } from "./fixture_experiments.mjs";
 
 const CATALOGUE = FIXTURE_CATALOGUE;
 const NOW_MS = Date.UTC(2026, 10, 22, 9, 30, 0);
@@ -25,7 +26,7 @@ const doneScan = (fields) => runningScan({ active: false, next: null, done: true
 
 const FULL = { full: true, from: 9, to: 12 };
 const NARROWED = { full: false, ids: [12] };
-const pendingCapture = (next = FULL) => ({ experimentKey: "e1", experimentName: "fan 1 mode", label: " Boost ", next, boot: FIXTURE_BOOT });
+const pendingCapture = (next = FULL) => captureInFlight(next);
 
 function copyWith(scan, records = [], fields = {}) {
   return applyResponse(emptyCopy(), deviceResponse(records, { boot: FIXTURE_BOOT, uptime: 20_000, scan, ...fields }), NOW_MS)
@@ -56,7 +57,7 @@ test("a completed run stores a capture with an entry for each queried ID", () =>
     kind: "store",
     range: { from: 9, to: 12 },
     capture: {
-      label: " Boost ",
+      label: " boost ",
       atMs: NOW_MS,
       uptimeMs: 20_000,
       boot: FIXTURE_BOOT,
@@ -123,4 +124,32 @@ test("a completed run of another range or list is not this capture", () => {
 
 test("before the device answered at all the page waits", () => {
   assert.deepEqual(captureStep(CATALOGUE, pendingCapture(), emptyCopy(), true, NOW_MS), { kind: "wait" });
+});
+
+// ───── whether the scan row shows the capture ─────
+
+test("the capture's own run shows the capture while active and once done", () => {
+  assert.equal(isCaptureRun(CATALOGUE, pendingCapture(), runningScan({})), true);
+  assert.equal(isCaptureRun(CATALOGUE, pendingCapture(), doneScan({})), true);
+});
+
+test("a narrowed capture's run shows it whatever order the device lists its IDs in", () => {
+  const narrowed = pendingCapture({ full: false, ids: [9, 12] });
+
+  assert.equal(isCaptureRun(CATALOGUE, narrowed, runningScan({ from: null, to: null, ids: [12, 9] })), true);
+});
+
+test("the run before the capture (another range or list) does not show it", () => {
+  for (const scan of [runningScan({ from: 1 }), doneScan({ from: null, to: null, ids: [9, 12] })]) {
+    assert.equal(isCaptureRun(CATALOGUE, pendingCapture(), scan), false);
+  }
+  assert.equal(isCaptureRun(CATALOGUE, pendingCapture(NARROWED), doneScan({ from: null, to: null, ids: [9] })), false);
+});
+
+test("a check does not show the capture", () => {
+  assert.equal(isCaptureRun(CATALOGUE, pendingCapture(), runningScan({ goal: CATALOGUE.goals.check })), false);
+});
+
+test("a stopped run of the capture's range does not show it", () => {
+  assert.equal(isCaptureRun(CATALOGUE, pendingCapture(), runningScan({ active: false, next: 12 })), false);
 });

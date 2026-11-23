@@ -27,7 +27,7 @@ const meaningOf = (catalogue, row) => knownMeaning(catalogue, row.id, row.raw)?.
  * @property {object | null} pendingProbe the probe or restore awaiting its result (see write_probe.mjs)
  */
 
-/** The rows to export: muted ones only when included, then each with its `muted` flag. */
+/** The rows to export: muted ones only when included. */
 function exportedRows(copy, notes, { mutes, includeMuted }) {
   return rowsOf(copy, notes).filter((row) => includeMuted || !mutes.has(row.id));
 }

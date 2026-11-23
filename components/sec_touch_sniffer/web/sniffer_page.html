@@ -225,7 +225,7 @@ import {
   withCapture,
   withoutCapture,
 } from "./experiments.mjs";
-import { captureStep } from "./capture_run.mjs";
+import { captureStep, isCaptureRun } from "./capture_run.mjs";
 import {
   latestProbe,
   probeChoices,
@@ -815,7 +815,7 @@ function renderScan() {
   if (scan === null) {
     return;
   }
-  const progress = capture !== null && (scan.active || scan.done)
+  const progress = capture !== null && isCaptureRun(CATALOGUE, capture, scan)
     ? captureProgress(CATALOGUE, capture, scan)
     : scanProgress(scan, CATALOGUE, goal);
   const probe = currentProbe();

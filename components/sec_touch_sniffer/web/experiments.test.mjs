@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   analyseExperiment,
   coachStep,
+  excludedFromExperiments,
   labelKey,
   labelsUsed,
   newExperiment,
@@ -11,10 +12,10 @@ import {
   withCapture,
   withoutCapture,
 } from "./experiments.mjs";
-import { capture, experimentWith, NAK, TIMEOUT, walkOf } from "./fixture_experiments.mjs";
+import { CANDIDATE_ID, capture, experimentWith, NAK, TIMEOUT, walkOf } from "./fixture_experiments.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
 
-const ID = 77;
+const ID = CANDIDATE_ID;
 const OTHER_ID = 90;
 const none = () => false;
 
@@ -154,6 +155,15 @@ test("an excluded (known or muted) ID is never a candidate nor disqualified", ()
   assert.deepEqual(analyse(counter, excluded).disqualified, []);
 });
 
+test("known and muted IDs are left out of experiments, others are not", () => {
+  const [knownId] = FIXTURE_CATALOGUE.levelIds;
+  const excluded = excludedFromExperiments(FIXTURE_CATALOGUE, new Set([OTHER_ID]));
+
+  assert.equal(excluded(knownId), true);
+  assert.equal(excluded(OTHER_ID), true);
+  assert.equal(excluded(ID), false);
+});
+
 test("corroborated candidates come first, then by ID", () => {
   const experiment = experimentWith([
     ["A", { 5: "1", 9: "1", 7: "1" }],
@@ -285,6 +295,10 @@ test("with a corroborated candidate the coach suggests a write probe", () => {
   const experiment = walkOf(ID, [["A", "01"], ["B", "02"], ["A", "01"], ["B", "02"]]);
 
   assert.deepEqual(coach(experiment), { step: "probe", ids: [ID] });
+});
+
+test("with every candidate disqualified the coach says the next capture is full, however few labels", () => {
+  assert.deepEqual(coach(walkOf(ID, [["A", "01"], ["A", "02"]])), { step: "full again" });
 });
 
 test("with no candidate left after a round trip the coach says the next capture is full", () => {

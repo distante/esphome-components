@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { applyResponse, emptyCopy } from "./records.mjs";
 import { deviceRecord, deviceResponse } from "./fixture_records.mjs";
-import { experimentWith, NAK, TIMEOUT, walkOf } from "./fixture_experiments.mjs";
+import { CANDIDATE_ID, experimentWith, NAK, TIMEOUT, walkOf } from "./fixture_experiments.mjs";
 import { deviceKey, LAST_MAC_KEY, parseStored, STORAGE_PREFIX, storedText } from "./storage.mjs";
 
 const BROWSER_NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
@@ -91,7 +91,7 @@ test("mutes that are not an array of integer IDs are dropped", () => {
 
 const PROBE_ENTRY = {
   kind: "probe",
-  id: 77,
+  id: CANDIDATE_ID,
   value: "03",
   original: "01",
   steps: [{ kind: "get", outcome: "ok", value: "01", at: 1000 }],
@@ -102,7 +102,7 @@ const PROBE_ENTRY = {
 const PENDING = {
   experimentKey: "e1",
   kind: "restore",
-  id: 77,
+  id: CANDIDATE_ID,
   value: "01",
   original: null,
   steps: [],
@@ -110,7 +110,7 @@ const PENDING = {
 };
 
 function storedExperiment() {
-  const experiment = walkOf(77, [["normal", "01"], ["boost", NAK], ["eco", TIMEOUT], ["off", "0\u0001ÿ"]]);
+  const experiment = walkOf(CANDIDATE_ID, [["normal", "01"], ["boost", NAK], ["eco", TIMEOUT], ["off", "0\u0001ÿ"]]);
   return { ...experiment, probes: [PROBE_ENTRY, { ...PROBE_ENTRY, verdict: null, restore: null, interrupted: true }] };
 }
 
@@ -154,7 +154,7 @@ test("an unreadable capture or probe entry is dropped from its experiment on its
 });
 
 test("an unreadable pending probe is dropped", () => {
-  for (const pendingProbe of [5, { ...PENDING, kind: "poke" }, { ...PENDING, id: "77" }, { ...PENDING, steps: null },
+  for (const pendingProbe of [5, { ...PENDING, kind: "poke" }, { ...PENDING, id: String(CANDIDATE_ID) }, { ...PENDING, steps: null },
     { ...PENDING, experimentKey: null }]) {
     assert.equal(parseStored(JSON.stringify({ pendingProbe }), DEFAULT_RANGE).pendingProbe, null,
       JSON.stringify(pendingProbe));

@@ -11,6 +11,19 @@
  * `{outcome: "ok"|"nak"|"timeout", raw}` (raw null unless ok).
  */
 
+import { knownIds } from "./known_meaning.mjs";
+import { ascending } from "./records.mjs";
+
+/**
+ * @param {object} catalogue the CATALOGUE of catalogue.mjs
+ * @param {Set<number>} mutes the muted IDs
+ * @returns {(id: number) => boolean} whether an ID is left out of experiments: a known or a muted one
+ */
+export function excludedFromExperiments(catalogue, mutes) {
+  const known = new Set(knownIds(catalogue));
+  return (id) => known.has(id) || mutes.has(id);
+}
+
 /**
  * @param {string} label a label as typed
  * @returns {string} what makes two labels the same: trimmed, ignoring case
@@ -130,7 +143,7 @@ export function analyseExperiment(experiment, excluded) {
   }
   const candidates = [];
   const disqualified = [];
-  for (const id of [...ids].sort((a, b) => a - b)) {
+  for (const id of [...ids].sort(ascending)) {
     if (excluded(id)) {
       continue;
     }
@@ -178,7 +191,7 @@ export function analyseExperiment(experiment, excluded) {
  *   else only the candidates, by ID
  */
 export function nextCapture(catalogue, experiment, analysis, currentRange, forceFull) {
-  const ids = analysis.candidates.map((candidate) => candidate.id).sort((a, b) => a - b);
+  const ids = analysis.candidates.map((candidate) => candidate.id).sort(ascending);
   if (forceFull || ids.length === 0 || ids.length > catalogue.scanListCap) {
     const range = experiment.range ?? currentRange;
     return { full: true, from: range.from, to: range.to };
@@ -193,7 +206,8 @@ export function nextCapture(catalogue, experiment, analysis, currentRange, force
  * @param {object} analysis its `analyseExperiment`
  * @returns {{step: "first"} | {step: "change"} | {step: "round trip", label: string} | {step: "corroborate",
  *   label: string} | {step: "probe", ids: number[]} | {step: "full again"}} `round trip` names the label to go back
- *   to, `corroborate` a label to capture again, `probe` the corroborated IDs
+ *   to, `corroborate` a label to capture again, `probe` the corroborated IDs; `full again` when no candidate is left
+ *   and an ID was disqualified, or after a round trip found none
  */
 export function coachStep(experiment, analysis) {
   if (experiment.captures.length === 0) {
@@ -207,6 +221,9 @@ export function coachStep(experiment, analysis) {
   if (candidates.length > 0) {
     const once = candidates[0].values.find((value) => value.count < 2) ?? candidates[0].values[0];
     return { step: "corroborate", label: once.label };
+  }
+  if (analysis.disqualified.length > 0) {
+    return { step: "full again" };
   }
   const labels = labelsUsed(experiment);
   if (labels.length < 2) {

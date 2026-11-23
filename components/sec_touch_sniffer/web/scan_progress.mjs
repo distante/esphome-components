@@ -4,6 +4,7 @@
  */
 
 import { isKnownId, knownIds } from "./known_meaning.mjs";
+import { ascending } from "./records.mjs";
 
 const clampPercent = (percent) => Math.min(100, Math.max(0, Math.round(percent)));
 
@@ -19,7 +20,7 @@ export function runIds(catalogue, scan) {
     return knownIds(catalogue);
   }
   if (Array.isArray(scan.ids)) {
-    return scan.ids.filter((id) => !isKnownId(catalogue, id)).sort((a, b) => a - b);
+    return scan.ids.filter((id) => !isKnownId(catalogue, id)).sort(ascending);
   }
   if (scan.from === null || scan.to === null) {
     return null;
@@ -51,9 +52,9 @@ function rangeProgress(scan) {
 }
 
 /** A run through a list of IDs (check's known IDs or a list run's): its progress through them. */
-function listProgress(scan, ids, what, done) {
+function listProgress(scan, ids, what, doneLabel) {
   if (scan.done) {
-    return { label: done, percent: 100 };
+    return { label: doneLabel, percent: 100 };
   }
   const behind = behindCount(scan, ids);
   const percent = clampPercent((100 * behind) / ids.length);

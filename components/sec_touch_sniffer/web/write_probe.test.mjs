@@ -12,11 +12,11 @@ import {
   reconcileProbe,
   restoreOffer,
 } from "./write_probe.mjs";
-import { experimentWith, NAK, TIMEOUT, walkOf } from "./fixture_experiments.mjs";
+import { CANDIDATE_ID, experimentWith, NAK, TIMEOUT, walkOf } from "./fixture_experiments.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
 
 const CATALOGUE = FIXTURE_CATALOGUE;
-const ID = 77;
+const ID = CANDIDATE_ID;
 const CAP = CATALOGUE.probeValueCap;
 const [NUL, FORBIDDEN, ...MORE_FORBIDDEN] = CATALOGUE.probeForbiddenBytes.map((byte) => String.fromCharCode(byte));
 const AT_MS = Date.UTC(2026, 10, 22, 9, 40, 0);
@@ -106,7 +106,7 @@ test("a 200 to a probe or restore gives the probe object it carries", () => {
 test("a reply that is no whole probe object gives none", () => {
   const whole = deviceProbe({});
   for (const body of ["", "{", "null", "{}", JSON.stringify({ ...whole, steps: "none" }),
-    JSON.stringify({ ...whole, id: "77" }), JSON.stringify({ ...whole, kind: "poke" }),
+    JSON.stringify({ ...whole, id: String(ID) }), JSON.stringify({ ...whole, kind: "poke" }),
     JSON.stringify({ ...whole, steps: [{ kind: "get" }] }), JSON.stringify({ ...whole, original: 1 })]) {
     assert.equal(probeReply(body), null, body);
   }
@@ -257,6 +257,12 @@ test("an interrupted probe says what the ID may still be and its original", () =
   assert.equal(probeTexts(interrupted).verdict, `probe interrupted: ID ${ID} may still be 03, original 01`);
   assert.equal(probeTexts({ ...interrupted, original: null }).verdict,
     `probe interrupted: ID ${ID} may still be 03, original unknown`);
+});
+
+test("an interrupted restore says what the ID may not be back at", () => {
+  const interrupted = { ...deviceProbe({ kind: "restore", value: "01", verdict: null, restore: null }), interrupted: true };
+
+  assert.equal(probeTexts(interrupted).verdict, `restore interrupted: ID ${ID} may not be back at 01`);
 });
 
 test("the note line holds the title, verdict, steps and restore", () => {

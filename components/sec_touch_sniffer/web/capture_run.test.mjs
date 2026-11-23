@@ -3,14 +3,13 @@ import assert from "node:assert/strict";
 
 import { captureStep } from "./capture_run.mjs";
 import { applyResponse, emptyCopy } from "./records.mjs";
-import { deviceRecord, deviceResponse } from "./fixture_records.mjs";
+import { deviceRecord, deviceResponse, FIXTURE_BOOT } from "./fixture_records.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
 
 const CATALOGUE = FIXTURE_CATALOGUE;
-const BOOT = "9f2c41ab";
 const NOW_MS = Date.UTC(2026, 10, 22, 9, 30, 0);
-// The fixture catalogue's level IDs are 10 and 11: a full capture of 9–12 queries 9 and 12 only.
-const KNOWN_ID = 10;
+// A full capture of 9–12 queries 9 and 12 only: the fixture catalogue's level IDs are 10 and 11.
+const [KNOWN_ID] = CATALOGUE.levelIds;
 
 const runningScan = (fields) => ({
   active: true,
@@ -26,10 +25,10 @@ const doneScan = (fields) => runningScan({ active: false, next: null, done: true
 
 const FULL = { full: true, from: 9, to: 12 };
 const NARROWED = { full: false, ids: [12] };
-const pendingCapture = (next = FULL) => ({ experimentKey: "e1", experimentName: "fan 1 mode", label: " Boost ", next, boot: BOOT });
+const pendingCapture = (next = FULL) => ({ experimentKey: "e1", experimentName: "fan 1 mode", label: " Boost ", next, boot: FIXTURE_BOOT });
 
 function copyWith(scan, records = [], fields = {}) {
-  return applyResponse(emptyCopy(), deviceResponse(records, { boot: BOOT, uptime: 20_000, scan, ...fields }), NOW_MS)
+  return applyResponse(emptyCopy(), deviceResponse(records, { boot: FIXTURE_BOOT, uptime: 20_000, scan, ...fields }), NOW_MS)
     .copy;
 }
 
@@ -60,7 +59,7 @@ test("a completed run stores a capture with an entry for each queried ID", () =>
       label: " Boost ",
       atMs: NOW_MS,
       uptimeMs: 20_000,
-      boot: BOOT,
+      boot: FIXTURE_BOOT,
       full: true,
       entries: { 9: { outcome: "ok", raw: "01" }, 12: { outcome: "nak", raw: null } },
     },

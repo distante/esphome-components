@@ -4,7 +4,7 @@
  * answered. DOM-free: the page only reads and writes the strings.
  */
 
-import { emptyCopy, fromStored, isObject, isStringOrNull, STATUSES, toStored, wholeDecimal } from "./records.mjs";
+import { emptyCopy, fromStored, isObject, isStringOrNull, OUTCOMES, toStored, wholeDecimal } from "./records.mjs";
 import { isPendingProbe, isProbeEntry } from "./write_probe.mjs";
 
 /** Every key the page stores starts with this. */
@@ -24,9 +24,9 @@ export function deviceKey(mac) {
 /** The device decides which ranges are valid: a stored range only has to be two integers. */
 const isRange = (range) => isObject(range) && Number.isInteger(range.from) && Number.isInteger(range.to);
 
-/** A capture's entry: a query status other than unqueried, and a raw value or null. */
+/** A capture's entry: a query outcome, and a raw value or null. */
 const isEntry = (entry) =>
-  isObject(entry) && STATUSES.includes(entry.outcome) && entry.outcome !== "unqueried" && isStringOrNull(entry.raw);
+  isObject(entry) && OUTCOMES.includes(entry.outcome) && isStringOrNull(entry.raw);
 
 const isCapture = (capture) =>
   isObject(capture) &&

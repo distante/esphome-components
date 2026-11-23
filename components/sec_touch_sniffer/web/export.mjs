@@ -5,7 +5,7 @@
  * export recovers the exact bytes.
  */
 
-import { analyseExperiment } from "./experiments.mjs";
+import { analyseExperiment, excludedFromExperiments } from "./experiments.mjs";
 import { isKnownId, knownMeaning } from "./known_meaning.mjs";
 import { deviceUptimeMs, rowsOf } from "./records.mjs";
 import { runningProbe } from "./write_probe.mjs";
@@ -49,7 +49,7 @@ function exportedEntries(entries, { mutes, includeMuted }) {
 const exportedProbe = ({ atMs, ...probe }) => ({ ...probe, at: isoOf(atMs) });
 
 function exportedExperiment(catalogue, experiment, deviceProbe, options) {
-  const excluded = (id) => isKnownId(catalogue, id) || options.mutes.has(id);
+  const excluded = excludedFromExperiments(catalogue, options.mutes);
   const { candidates, disqualified } = analyseExperiment(experiment, excluded);
   const probes = experiment.probes.map(exportedProbe);
   const pending = options.pendingProbe;

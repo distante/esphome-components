@@ -5,7 +5,7 @@ import { exportCsv, exportJson } from "./export.mjs";
 import { applyResponse, emptyCopy, fromStored, toStored, withProbe } from "./records.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
 import { experimentWith, NAK } from "./fixture_experiments.mjs";
-import { deviceRecord, deviceResponse } from "./fixture_records.mjs";
+import { deviceRecord, deviceResponse, FIXTURE_BOOT } from "./fixture_records.mjs";
 
 const BROWSER_NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
 const SCAN = { active: false, goal: "discover", from: 1, to: 208, ids: null, next: 1, done: true };
@@ -46,7 +46,7 @@ test("the JSON export holds the device, its uptime and scan at export time, and 
     exportJson(FIXTURE_CATALOGUE, copyFromDevice(), { 5: "Fan level?" }, NO_EXPERIMENTS, BROWSER_NOW_MS + 2000),
   );
 
-  assert.deepEqual(exported.device, { mac: "aabbccddeeff", name: "ventilation", boot: "9f2c41ab" });
+  assert.deepEqual(exported.device, { mac: "aabbccddeeff", name: "ventilation", boot: FIXTURE_BOOT });
   assert.equal(exported.uptime_ms, 12_000);
   assert.deepEqual(exported.scan, SCAN);
   assert.deepEqual(exported.records[0], {
@@ -75,7 +75,7 @@ test("a stored copy the device has not confirmed this page load exports no uptim
 
   const exported = JSON.parse(exportJson(FIXTURE_CATALOGUE, reloaded, {}, NO_EXPERIMENTS, BROWSER_NOW_MS + 2000));
 
-  assert.deepEqual(exported.device, { mac: "aabbccddeeff", name: "ventilation", boot: "9f2c41ab" });
+  assert.deepEqual(exported.device, { mac: "aabbccddeeff", name: "ventilation", boot: FIXTURE_BOOT });
   assert.equal(exported.uptime_ms, null);
 });
 

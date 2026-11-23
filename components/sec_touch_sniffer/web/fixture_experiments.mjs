@@ -3,6 +3,11 @@
  * (.specs/sniffer.md, "Experiments").
  */
 
+import { FIXTURE_BOOT } from "./fixture_records.mjs";
+
+/** An unknown property ID the fixture experiments walk and probe. */
+export const CANDIDATE_ID = 77;
+
 /** An entry of a capture whose query got NAK. */
 export const NAK = { outcome: "nak", raw: null };
 
@@ -17,7 +22,7 @@ const MINUTE_MS = 60_000;
  * A capture labelled `label` with one entry per key of `values`: a string is an ok answer with that raw value,
  * NAK and TIMEOUT are those outcomes.
  */
-export function capture(label, values, { index = 0, full = true, boot = "9f2c41ab" } = {}) {
+export function capture(label, values, { index = 0, full = true, boot = FIXTURE_BOOT } = {}) {
   const entries = Object.fromEntries(
     Object.entries(values).map(([id, value]) => [id, typeof value === "string" ? { outcome: "ok", raw: value } : value]),
   );

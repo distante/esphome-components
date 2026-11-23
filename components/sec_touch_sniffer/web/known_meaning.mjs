@@ -5,7 +5,7 @@
  * the rules match known_property_meaning() in components/sec_touch/known_property_meaning.h.
  */
 
-import { wholeDecimal } from "./records.mjs";
+import { ascending, wholeDecimal } from "./records.mjs";
 import { escapeControlBytes, shown } from "./control_bytes.mjs";
 
 /**
@@ -15,7 +15,7 @@ import { escapeControlBytes, shown } from "./control_bytes.mjs";
 export function knownIds(catalogue) {
   const ids = [...catalogue.levelIds, ...catalogue.labelIds, catalogue.summerVentilationId, catalogue.dateId,
     catalogue.clockId];
-  return [...new Set(ids)].sort((a, b) => a - b);
+  return [...new Set(ids)].sort(ascending);
 }
 
 /**

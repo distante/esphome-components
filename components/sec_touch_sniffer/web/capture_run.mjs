@@ -6,7 +6,7 @@
  * lives in page memory only: a reload abandons it.
  */
 
-import { deviceUptimeMs } from "./records.mjs";
+import { ascending, deviceUptimeMs } from "./records.mjs";
 import { runIds } from "./scan_progress.mjs";
 
 const sameIds = (a, b) => a.length === b.length && a.every((id, i) => id === b[i]);
@@ -19,7 +19,7 @@ function isRunOf(catalogue, scan, next) {
   if (next.full) {
     return scan.ids === null && scan.from === next.from && scan.to === next.to;
   }
-  return Array.isArray(scan.ids) && sameIds([...scan.ids].sort((a, b) => a - b), next.ids);
+  return Array.isArray(scan.ids) && sameIds([...scan.ids].sort(ascending), next.ids);
 }
 
 /** An entry per ID the run queried: its query status and, when answered, its raw value. */

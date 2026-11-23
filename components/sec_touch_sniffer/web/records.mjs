@@ -12,8 +12,15 @@
 import { guessIdType } from "./type_guess.mjs";
 import { uptimeAtMs, wallTimeMs } from "./wall_time.mjs";
 
+/** The outcomes of a query the device sent, as the device names them: a record's status once queried, a capture
+ * entry's and a probe step's outcome. */
+export const OUTCOMES = ["ok", "nak", "timeout"];
+
 /** The query statuses, as the device names them. */
-export const STATUSES = ["unqueried", "ok", "nak", "timeout"];
+export const STATUSES = ["unqueried", ...OUTCOMES];
+
+/** Sort comparator: numbers ascending. */
+export const ascending = (a, b) => a - b;
 
 /** @returns {object} a copy that has seen no response yet */
 export function emptyCopy() {

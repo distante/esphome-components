@@ -10,11 +10,10 @@
  */
 
 import { shown } from "./control_bytes.mjs";
-import { isObject, isStringOrNull } from "./records.mjs";
+import { isObject, isStringOrNull, OUTCOMES } from "./records.mjs";
 
 const PROBE_KINDS = ["probe", "restore"];
 const STEP_KINDS = ["get", "set"];
-const STEP_OUTCOMES = ["ok", "nak", "timeout"];
 const VERDICTS = ["writable", "not writable", "unclear", "nothing written"];
 const RESTORES = ["ok", "failed", "skipped"];
 
@@ -26,8 +25,8 @@ const VERDICT_TEXT = {
   "nothing written": "nothing written",
 };
 
-/** How a SET's answer reads. */
-const SET_ANSWER_TEXT = { ok: "ACK", nak: "NAK", timeout: "timeout" };
+/** How a step's outcome reads. */
+const OUTCOME_TEXT = { ok: "ACK", nak: "NAK", timeout: "timeout" };
 
 /**
  * The device checks only a value's format; which values may be probed is the page's rule.
@@ -82,7 +81,7 @@ const isOneOfOrNull = (values) => (value) => value === null || values.includes(v
 const isStep = (step) =>
   isObject(step) &&
   STEP_KINDS.includes(step.kind) &&
-  STEP_OUTCOMES.includes(step.outcome) &&
+  OUTCOMES.includes(step.outcome) &&
   isStringOrNull(step.value) &&
   Number.isFinite(step.at);
 
@@ -198,9 +197,9 @@ export function runningProbe(pending, probe) {
 
 function stepText(step) {
   if (step.kind === "set") {
-    return `SET ${shown(step.value)} → ${SET_ANSWER_TEXT[step.outcome]}`;
+    return `SET ${shown(step.value)} → ${OUTCOME_TEXT[step.outcome]}`;
   }
-  return `GET → ${step.outcome === "ok" ? shown(step.value) : SET_ANSWER_TEXT[step.outcome]}`;
+  return `GET → ${step.outcome === "ok" ? shown(step.value) : OUTCOME_TEXT[step.outcome]}`;
 }
 
 const orUnknown = (raw) => (raw === null ? "unknown" : shown(raw));
@@ -214,13 +213,15 @@ function lastGetValue(probe) {
 /**
  * @param {object} probe a probe entry, or the device's `probe` object while it runs
  * @returns {{title: string, steps: string[], verdict: string | null, restore: string | null}} what the card shows:
- *   `verdict` also says a probe runs or was interrupted, `restore` is null when none was needed or decided
+ *   `verdict` also says a probe or restore runs or was interrupted, `restore` is null when none was needed or decided
  */
 export function probeTexts(probe) {
   const isRestore = probe.kind === "restore";
   const title = `${isRestore ? "restore" : "write probe"} ${shown(probe.value)}`;
   let verdict = probe.verdict === null ? null : VERDICT_TEXT[probe.verdict];
-  if (probe.interrupted) {
+  if (probe.interrupted && isRestore) {
+    verdict = `restore interrupted: ID ${probe.id} may not be back at ${shown(probe.value)}`;
+  } else if (probe.interrupted) {
     verdict = `probe interrupted: ID ${probe.id} may still be ${shown(probe.value)}, original ${orUnknown(probe.original)}`;
   } else if (probe.active) {
     verdict = isRestore ? "restoring…" : "probing…";

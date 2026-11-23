@@ -207,7 +207,9 @@ import {
   busyText,
   captureStartPath,
   isRunning,
+  probeError,
   rangeError,
+  runningText,
   scanButton,
   scanReply,
   scanStartPath,
@@ -216,6 +218,7 @@ import {
 import {
   analyseExperiment,
   coachStep,
+  excludedFromExperiments,
   labelsUsed,
   newExperiment,
   nextCapture,
@@ -415,10 +418,7 @@ function save() {
 // ───── experiments ─────
 const openExperiment = () => experiments.find((experiment) => experiment.key === openKey) ?? null;
 
-/** Known and muted IDs are left out of experiments. */
-const excludedFromExperiments = (id) => KNOWN_ID_SET.has(id) || mutes.has(id);
-
-const analyse = (experiment) => analyseExperiment(experiment, excludedFromExperiments);
+const analyse = (experiment) => analyseExperiment(experiment, excludedFromExperiments(CATALOGUE, mutes));
 
 function updateExperiment(key, update) {
   experiments = experiments.map((experiment) => (experiment.key === key ? update(experiment) : experiment));
@@ -672,8 +672,10 @@ async function startCapture() {
   const next = nextCapture(CATALOGUE, experiment, analyse(experiment), { from, to }, forceFull);
   captureNote = null;
   const bootAtStart = copy.boot;
+  const requestMac = mac;
   const scan = await sendStart(captureStartPath(CATALOGUE, next));
-  if (scan === null) {
+  if (scan === null || mac !== requestMac) {
+    // Refused, unanswered, or another device answered meanwhile: its capture is not this one.
     return;
   }
   // A 200 means the next finished run is this page's own.
@@ -729,7 +731,7 @@ async function startProbe(kind, id, value) {
       pendingProbe = null;
       probeAfterPoll = 0;
       if (response.status === 400) {
-        probeErrors.set(id, rangeError(text));
+        probeErrors.set(id, probeError(text));
       } else {
         busy = busyText(CATALOGUE, text);
       }
@@ -816,10 +818,12 @@ function renderScan() {
   const progress = capture !== null && (scan.active || scan.done)
     ? captureProgress(CATALOGUE, capture, scan)
     : scanProgress(scan, CATALOGUE, goal);
-  const toggle = scanButton(scan, currentProbe(), goal);
+  const probe = currentProbe();
+  const toggle = scanButton(scan, probe, goal);
   $("scan-toggle").textContent = toggle.label;
   $("scan-toggle").disabled = toggle.disabled;
-  $("busy").textContent = busy ?? "";
+  // A probe or restore can't be stopped: while one runs the device shows as busy, even without a refused start.
+  $("busy").textContent = busy ?? (probe?.active ? `busy: ${runningText(CATALOGUE, scan, probe)}` : "");
   $("scan-bar").style.width = `${progress.percent}%`;
   $("scan-label").textContent = progress.label;
   $("range").hidden = goal !== GOALS.discover;

@@ -2,31 +2,32 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { createPoller, OFFLINE_RETRY_MS, POLL_INTERVAL_MS, resyncReason, sinceFor } from "./poll.mjs";
+import { FIXTURE_BOOT } from "./fixture_records.mjs";
 
 test("a page that has not polled yet asks for everything", () => {
-  assert.equal(sinceFor({ boot: "9f2c41ab", since: null, records: {} }), 0);
-  assert.equal(sinceFor({ boot: "9f2c41ab", since: 12, records: {} }), 12);
+  assert.equal(sinceFor({ boot: FIXTURE_BOOT, since: null, records: {} }), 0);
+  assert.equal(sinceFor({ boot: FIXTURE_BOOT, since: 12, records: {} }), 12);
 });
 
 test("a delta to a page that has not polled yet needs a resync", () => {
-  const copy = { boot: "9f2c41ab", since: null, records: {} };
-  assert.equal(resyncReason(copy, { boot: "9f2c41ab", seq: 12, full: false }), "first load");
-  assert.equal(resyncReason(copy, { boot: "9f2c41ab", seq: 12, full: true }), null);
+  const copy = { boot: FIXTURE_BOOT, since: null, records: {} };
+  assert.equal(resyncReason(copy, { boot: FIXTURE_BOOT, seq: 12, full: false }), "first load");
+  assert.equal(resyncReason(copy, { boot: FIXTURE_BOOT, seq: 12, full: true }), null);
 });
 
 test("a delta from another boot needs a resync", () => {
-  const copy = { boot: "9f2c41ab", since: 12, records: {} };
+  const copy = { boot: FIXTURE_BOOT, since: 12, records: {} };
   assert.equal(resyncReason(copy, { boot: "00000001", seq: 30, full: false }), "boot changed");
 });
 
 test("a delta whose seq is below the page's since needs a resync", () => {
-  const copy = { boot: "9f2c41ab", since: 12, records: {} };
-  assert.equal(resyncReason(copy, { boot: "9f2c41ab", seq: 11, full: false }), "seq went down");
+  const copy = { boot: FIXTURE_BOOT, since: 12, records: {} };
+  assert.equal(resyncReason(copy, { boot: FIXTURE_BOOT, seq: 11, full: false }), "seq went down");
 });
 
 test("a delta from the same boot at or past since, or any full response, is applied as is", () => {
-  const copy = { boot: "9f2c41ab", since: 12, records: {} };
-  assert.equal(resyncReason(copy, { boot: "9f2c41ab", seq: 12, full: false }), null);
+  const copy = { boot: FIXTURE_BOOT, since: 12, records: {} };
+  assert.equal(resyncReason(copy, { boot: FIXTURE_BOOT, seq: 12, full: false }), null);
   assert.equal(resyncReason(copy, { boot: "00000001", seq: 1, full: true }), null);
 });
 

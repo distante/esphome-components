@@ -8,6 +8,9 @@ import { isObject, wholeDecimal } from "./records.mjs";
 /** Shown for a refused start whose body carries no text. */
 export const RANGE_REFUSED = "the device refused the range";
 
+/** Shown for a refused probe or restore whose body carries no text. */
+export const PROBE_REFUSED = "the device refused the value";
+
 /** What runs, for a start refused with 409 whose reply names nothing running. */
 export const BUSY_UNKNOWN = "another run";
 
@@ -115,10 +118,11 @@ export function switchStopsScan(scan, targetGoal) {
 }
 
 /**
- * @param {string} bodyText the body of a start the device answered with 400
- * @returns {string} the text to show next to the range: the device's `error`, else the body, else a fallback
+ * @param {string} bodyText the body of a request the device answered with 400
+ * @param {string} fallback the text for a body with no text
+ * @returns {string} the device's `error`, else the body, else the fallback
  */
-export function rangeError(bodyText) {
+function refusalText(bodyText, fallback) {
   try {
     const body = JSON.parse(bodyText);
     if (typeof body?.error === "string") {
@@ -127,7 +131,23 @@ export function rangeError(bodyText) {
   } catch {
     // Not JSON: the body itself is the best text there is.
   }
-  return bodyText.trim() || RANGE_REFUSED;
+  return bodyText.trim() || fallback;
+}
+
+/**
+ * @param {string} bodyText the body of a start the device answered with 400
+ * @returns {string} the text to show next to the range: the device's `error`, else the body, else RANGE_REFUSED
+ */
+export function rangeError(bodyText) {
+  return refusalText(bodyText, RANGE_REFUSED);
+}
+
+/**
+ * @param {string} bodyText the body of a probe or restore the device answered with 400
+ * @returns {string} the text to show on the card: the device's `error`, else the body, else PROBE_REFUSED
+ */
+export function probeError(bodyText) {
+  return refusalText(bodyText, PROBE_REFUSED);
 }
 
 const isIdOrNull = (value) => value === null || Number.isInteger(value);

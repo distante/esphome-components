@@ -7,6 +7,8 @@ import {
   busyText,
   captureStartPath,
   isRunning,
+  PROBE_REFUSED,
+  probeError,
   RANGE_REFUSED,
   rangeError,
   runningText,
@@ -16,6 +18,7 @@ import {
   switchStopsScan,
 } from "./scan_control.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
+import { CANDIDATE_ID } from "./fixture_experiments.mjs";
 
 const CATALOGUE = FIXTURE_CATALOGUE;
 const { discover: DISCOVER, check: CHECK } = CATALOGUE.goals;
@@ -30,11 +33,10 @@ const scan = (fields) => ({
   done: false,
   ...fields,
 });
-const PROBE_ID = 77;
 const probe = (fields) => ({
   active: true,
   kind: "probe",
-  id: PROBE_ID,
+  id: CANDIDATE_ID,
   value: "03",
   original: null,
   steps: [],
@@ -121,8 +123,8 @@ test("what runs names a scan's goal, a list run's size, or the probed ID", () =>
     runningText(CATALOGUE, scan({ active: true, from: null, to: null, ids: [5, 9] }), null),
     "discover scan of 2 listed IDs",
   );
-  assert.equal(runningText(CATALOGUE, scan({}), probe({})), `write probe of ID ${PROBE_ID}`);
-  assert.equal(runningText(CATALOGUE, scan({}), probe({ kind: "restore" })), `restore of ID ${PROBE_ID}`);
+  assert.equal(runningText(CATALOGUE, scan({}), probe({})), `write probe of ID ${CANDIDATE_ID}`);
+  assert.equal(runningText(CATALOGUE, scan({}), probe({ kind: "restore" })), `restore of ID ${CANDIDATE_ID}`);
   assert.equal(runningText(CATALOGUE, scan({}), probe({ active: false })), null);
 });
 
@@ -130,7 +132,7 @@ test("a start refused with 409 shows what runs from the reply", () => {
   const body = (scanState, probeState) => JSON.stringify({ error: "busy", scan: scanState, probe: probeState });
 
   assert.equal(busyText(CATALOGUE, body(scan({ active: true, goal: CHECK }), null)), "busy: check scan");
-  assert.equal(busyText(CATALOGUE, body(scan({ done: true }), probe({}))), `busy: write probe of ID ${PROBE_ID}`);
+  assert.equal(busyText(CATALOGUE, body(scan({ done: true }), probe({}))), `busy: write probe of ID ${CANDIDATE_ID}`);
 });
 
 test("a 409 whose reply names nothing running still says busy", () => {
@@ -157,6 +159,14 @@ test("a refused start whose body has no error text shows the body, or says the r
   assert.equal(rangeError(JSON.stringify({ error: 5 })), JSON.stringify({ error: 5 }));
   assert.equal(rangeError("  "), RANGE_REFUSED);
   assert.equal(rangeError(""), RANGE_REFUSED);
+});
+
+test("a refused probe or restore shows the device's error text, else the body, else says the value was refused", () => {
+  const error = "value too long";
+  assert.equal(probeError(JSON.stringify({ error })), error);
+  assert.equal(probeError("Bad Request"), "Bad Request");
+  assert.equal(probeError("  "), PROBE_REFUSED);
+  assert.equal(probeError(""), PROBE_REFUSED);
 });
 
 test("a start or stop reply gives the scan object it carries", () => {

@@ -13,14 +13,15 @@ import {
   withProbe,
   withScan,
 } from "./records.mjs";
-import { deviceRecord, deviceResponse } from "./fixture_records.mjs";
+import { deviceRecord, deviceResponse, FIXTURE_BOOT } from "./fixture_records.mjs";
+import { CANDIDATE_ID } from "./fixture_experiments.mjs";
 
 const BROWSER_NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
 
 test("a full response fills an empty copy and remembers boot and seq", () => {
   const { copy } = applyResponse(emptyCopy(), deviceResponse([deviceRecord(5, "0100")]), BROWSER_NOW_MS);
 
-  assert.equal(copy.boot, "9f2c41ab");
+  assert.equal(copy.boot, FIXTURE_BOOT);
   assert.equal(copy.since, 7);
   assert.equal(copy.records[5].raw, "0100");
   assert.equal(copy.records[5].stale, false);
@@ -110,7 +111,7 @@ test("a stored copy reloads with its records and boot but polls from scratch", (
 
   const reloaded = fromStored(JSON.parse(JSON.stringify(toStored(copy))));
 
-  assert.equal(reloaded.boot, "9f2c41ab");
+  assert.equal(reloaded.boot, FIXTURE_BOOT);
   assert.equal(reloaded.records[5].raw, "0100");
   assert.equal(reloaded.since, null);
 });
@@ -213,7 +214,7 @@ test("a stored copy reloads without a scan state, so no stale scan shows as live
 });
 
 test("a stored device without a readable anchor is dropped", () => {
-  const stored = { boot: "9f2c41ab", device: { mac: "aabbccddeeff", uptimeMs: 1, browserNowMs: 2 }, records: {} };
+  const stored = { boot: FIXTURE_BOOT, device: { mac: "aabbccddeeff", uptimeMs: 1, browserNowMs: 2 }, records: {} };
 
   assert.equal(fromStored(stored).device, null);
 });
@@ -244,7 +245,7 @@ test("a reply before any device answered leaves the copy as it is", () => {
   assert.equal(withProbe(copy, PROBE), copy);
 });
 
-const PROBE = { active: true, kind: "probe", id: 77, value: "03", original: null, steps: [], verdict: null, restore: null };
+const PROBE = { active: true, kind: "probe", id: CANDIDATE_ID, value: "03", original: null, steps: [], verdict: null, restore: null };
 
 test("the device's probe object comes with each response, null before any", () => {
   const before = applyResponse(emptyCopy(), deviceResponse([], { probe: null }), BROWSER_NOW_MS).copy;

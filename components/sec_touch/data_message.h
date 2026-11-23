@@ -9,8 +9,9 @@
 namespace esphome {
 namespace sec_touch {
 
-/// Wire bytes. _definitions.h names them STX, ETX, ACK, NAK and TAB for the hub.
+/// Wire bytes (readme.md, "UART Messages"). _definitions.h names them STX, ETX, ACK, NAK and TAB for the hub.
 constexpr uint8_t WIRE_STX = 0x02;
+/// The panel ends a frame with a line feed ('\n'), not with ASCII ETX (0x03).
 constexpr uint8_t WIRE_ETX = 0x0A;
 constexpr uint8_t WIRE_ACK = 0x06;
 constexpr uint8_t WIRE_NAK = 0x15;

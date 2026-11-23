@@ -765,6 +765,17 @@ Each Fan Pair can have a level from `0` to `11`. There, just `0` to `6` are _"re
 
 
 # UART Messages
+
+The messages below write their control bytes in brackets:
+
+| Name | Byte | Note |
+|------|------|------|
+| `[STX]` | `0x02` | Start of a frame (ASCII STX). |
+| `[ETX]` | `0x0A` | End of a frame. This is a **line feed** (`\n`), not ASCII ETX (`0x03`): the panel ends every frame with a new line. |
+| `[ACK]` | `0x06` | The answer that accepts a request (ASCII ACK). |
+| `[NAK]` | `0x15` | The answer that refuses a request (ASCII NAK). |
+| `[TAB]` | `0x09` | Field separator (ASCII horizontal tab). |
+
 ### GET Request Message
 The structure of the GET Message is as follows  (special chars added manually):
 ```

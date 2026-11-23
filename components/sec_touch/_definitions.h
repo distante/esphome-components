@@ -13,7 +13,7 @@ namespace esphome {
 namespace sec_touch {
 
 #define STX WIRE_STX  // Start of Text
-#define ETX WIRE_ETX  // End of Text
+#define ETX WIRE_ETX  // End of a frame: a line feed, see WIRE_ETX
 #define ACK WIRE_ACK  // Acknowledge
 #define NAK WIRE_NAK  // Not Acknowledge
 #define TAB WIRE_TAB  // Tab

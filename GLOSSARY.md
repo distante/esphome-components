@@ -45,15 +45,15 @@ An investigation of what one panel setting (e.g. "fan 1 mode") does to the unkno
 _Avoid_: Mark, baseline, snapshot, session
 
 **Capture**:
-A scan stored in an experiment, together with the label of the value the setting was at. A scan that is stopped before it ends is not a capture. A capture is **full** (the experiment's whole range) or **narrowed** (only its current candidates).
-_Avoid_: Snapshot, sample, run
+A scan stored in an experiment, together with the label of the value the setting was at. A capture is **full** (the experiment's whole range) or **narrowed** (only its current candidates).
+_Avoid_: Snapshot, sample
 
 **Label**:
 The name a user gives the setting's value for a capture ("boost"). Two labels are the same after trimming outer whitespace, ignoring case.
 _Avoid_: Tag, value name
 
 **Candidate**:
-An unknown, unmuted property whose captures in an experiment show a round trip (one raw value, a different one under another label, then the first again) and give the same raw value for every capture with the same label.
+An unknown, unmuted property whose captures in an experiment show a round trip (one raw value, a different one under another label, then the first value under the first label again) and give the same raw value for every capture with the same label.
 _Avoid_: Match, hit, suspect
 
 **Corroborated candidate**:
@@ -61,7 +61,7 @@ A candidate for which two labels have each been captured at least twice with agr
 _Avoid_: Confirmed, verified
 
 **Disqualified property**:
-A property whose captures with the same label disagree in an experiment, so it can't be a candidate there. Deleting the disagreeing capture brings it back.
+A property whose captures with the same label disagree in an experiment, so it can't be a candidate there.
 _Avoid_: Noise, rejected
 
 **Write probe**:
@@ -73,5 +73,5 @@ A write probe's result: **writable** (a read-back shows the written value), **no
 _Avoid_: Pass/fail, result
 
 **Restore**:
-Writing a property's original raw value back after a write probe and reading it back to check. It fails when the original still doesn't read back after one retry.
+Writing a property's original raw value back after a write probe and reading it back to check.
 _Avoid_: Undo, rollback

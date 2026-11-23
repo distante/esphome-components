@@ -228,6 +228,7 @@ import {
 import { captureStep, isCaptureRun } from "./capture_run.mjs";
 import {
   latestProbe,
+  newPendingProbe,
   probeChoices,
   probeNote,
   probeReply,
@@ -327,6 +328,8 @@ let captureNote = null;
 let forceFull = false;
 // Polls are numbered: what became of a capture or probe is judged only from polls numbered above its `…AfterPoll`.
 let pollSerial = 0;
+// The number of the poll whose response `copy` last took in: the poll the page renders.
+let appliedPoll = 0;
 let captureAfterPoll = 0;
 // 0 after a page load: any poll can tell what became of a stored pending probe.
 let probeAfterPoll = 0;
@@ -510,6 +513,7 @@ async function pollOnce() {
   }
   // The device answered, so a failed request no longer describes it.
   requestFailed = false;
+  appliedPoll = pollNo;
   followRuns(pollNo);
   save();
   renderLogged();
@@ -700,15 +704,7 @@ async function startProbe(kind, id, value) {
   const requestMac = mac;
   probeErrors.delete(id);
   // Stored before the request: if the device reboots mid-probe, the page can still tell it was interrupted.
-  pendingProbe = {
-    experimentKey: experiment.key,
-    kind,
-    id,
-    value,
-    original: kind === "restore" ? value : null,
-    steps: [],
-    atMs: Date.now(),
-  };
+  pendingProbe = newPendingProbe(experiment.key, kind, id, value, Date.now());
   // No poll judges it while the request is out: the device may not have it yet.
   probeAfterPoll = Infinity;
   save();
@@ -815,7 +811,7 @@ function renderScan() {
   if (scan === null) {
     return;
   }
-  const progress = capture !== null && isCaptureRun(CATALOGUE, capture, scan)
+  const progress = capture !== null && isCaptureRun(CATALOGUE, capture, scan, appliedPoll > captureAfterPoll)
     ? captureProgress(CATALOGUE, capture, scan)
     : scanProgress(scan, CATALOGUE, goal);
   const probe = currentProbe();

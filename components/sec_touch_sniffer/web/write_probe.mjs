@@ -76,6 +76,19 @@ export function probeRequest(kind, id, value) {
   };
 }
 
+/**
+ * @param {string} experimentKey the experiment whose card started it
+ * @param {"probe" | "restore"} kind a write probe, or a restore to `value`
+ * @param {number} id the property ID
+ * @param {string} value the value, one code point per byte
+ * @param {number} atMs browser time it was started (epoch ms)
+ * @returns {object} the pending probe before the device reports it: no steps yet, and an original known only for a
+ *   restore, where it is the value restored to (.specs/sniffer.md, "JSON shape")
+ */
+export function newPendingProbe(experimentKey, kind, id, value, atMs) {
+  return { experimentKey, kind, id, value, original: kind === "restore" ? value : null, steps: [], atMs };
+}
+
 const isOneOfOrNull = (values) => (value) => value === null || values.includes(value);
 
 const isStep = (step) =>

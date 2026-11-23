@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 
 import {
   isProbeValue,
+  isPendingProbe,
   latestProbe,
+  newPendingProbe,
   probeChoices,
   probeNote,
   probeReply,
@@ -12,39 +14,35 @@ import {
   reconcileProbe,
   restoreOffer,
 } from "./write_probe.mjs";
-import { CANDIDATE_ID, experimentWith, NAK, TIMEOUT, walkOf } from "./fixture_experiments.mjs";
+import {
+  CANDIDATE_ID,
+  deviceProbe,
+  experimentWith,
+  NAK,
+  pendingProbe,
+  PROBE_AT_MS,
+  PROBE_ORIGINAL,
+  PROBE_VALUE,
+  probeStep,
+  TIMEOUT,
+  walkOf,
+} from "./fixture_experiments.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
 
 const CATALOGUE = FIXTURE_CATALOGUE;
 const ID = CANDIDATE_ID;
 const CAP = CATALOGUE.probeValueCap;
 const [NUL, FORBIDDEN, ...MORE_FORBIDDEN] = CATALOGUE.probeForbiddenBytes.map((byte) => String.fromCharCode(byte));
-const AT_MS = Date.UTC(2026, 10, 22, 9, 40, 0);
-// deviceProbe's default: the value it writes, and the value the ID held before.
-const PROBE_VALUE = "03";
-const ORIGINAL = "01";
+// ───── pending probes ─────
 
-const step = (kind, outcome, value, at) => ({ kind, outcome, value, at });
-const deviceProbe = (fields) => ({
-  active: false,
-  kind: "probe",
-  id: ID,
-  value: PROBE_VALUE,
-  original: ORIGINAL,
-  steps: [step("get", "ok", ORIGINAL, 1000), step("set", "ok", PROBE_VALUE, 1400), step("get", "ok", PROBE_VALUE, 1500)],
-  verdict: "writable",
-  restore: "ok",
-  ...fields,
-});
-const pendingProbe = (fields) => ({
-  experimentKey: "e1",
-  kind: "probe",
-  id: ID,
-  value: PROBE_VALUE,
-  original: null,
-  steps: [],
-  atMs: AT_MS,
-  ...fields,
+test("a pending probe starts with no steps; only a restore knows its original: the value it restores to", () => {
+  const probe = newPendingProbe("e1", "probe", ID, PROBE_VALUE, PROBE_AT_MS);
+  const restore = newPendingProbe("e1", "restore", ID, PROBE_ORIGINAL, PROBE_AT_MS);
+
+  const request = { experimentKey: "e1", id: ID, steps: [], atMs: PROBE_AT_MS };
+  assert.deepEqual(probe, { ...request, kind: "probe", value: PROBE_VALUE, original: null });
+  assert.deepEqual(restore, { ...request, kind: "restore", value: PROBE_ORIGINAL, original: PROBE_ORIGINAL });
+  assert.equal(isPendingProbe(probe) && isPendingProbe(restore), true);
 });
 
 // ───── values ─────
@@ -123,7 +121,12 @@ test("a poll from before the request was sent says nothing about the pending pro
 });
 
 test("while the device runs the probe the pending entry keeps its original and steps", () => {
-  const running = deviceProbe({ active: true, steps: [step("get", "ok", "01", 1000)], verdict: null, restore: null });
+  const running = deviceProbe({
+    active: true,
+    steps: [probeStep("get", "ok", "01", 1000)],
+    verdict: null,
+    restore: null,
+  });
 
   assert.deepEqual(reconcileProbe(pendingProbe({}), running, true), {
     kind: "running",
@@ -133,7 +136,12 @@ test("while the device runs the probe the pending entry keeps its original and s
 
 // The device runs one probe at a time: a running probe of this ID and value is this request, whenever the poll left.
 test("a poll from before the request may already show it running, and keeps its original", () => {
-  const running = deviceProbe({ active: true, steps: [step("get", "ok", "01", 1000)], verdict: null, restore: null });
+  const running = deviceProbe({
+    active: true,
+    steps: [probeStep("get", "ok", "01", 1000)],
+    verdict: null,
+    restore: null,
+  });
 
   assert.deepEqual(reconcileProbe(pendingProbe({}), running, false), {
     kind: "running",
@@ -148,13 +156,13 @@ test("a finished probe is the result, stamped with the time it was started", () 
   assert.equal(active, false);
   assert.deepEqual(reconcileProbe(pendingProbe({}), deviceProbe({}), true), {
     kind: "result",
-    entry: { ...result, atMs: AT_MS },
+    entry: { ...result, atMs: PROBE_AT_MS },
   });
 });
 
 test("a probe the device no longer reports was interrupted, with its original and steps as last seen", () => {
-  const seen = [step("get", "ok", ORIGINAL, 1000), step("set", "ok", PROBE_VALUE, 1400)];
-  const pending = pendingProbe({ original: ORIGINAL, steps: seen });
+  const seen = [probeStep("get", "ok", PROBE_ORIGINAL, 1000), probeStep("set", "ok", PROBE_VALUE, 1400)];
+  const pending = pendingProbe({ original: PROBE_ORIGINAL, steps: seen });
 
   for (const reported of [null, deviceProbe({ id: 78 }), deviceProbe({ value: "02" }), deviceProbe({ kind: "restore" })]) {
     assert.deepEqual(reconcileProbe(pending, reported, true), {
@@ -163,12 +171,12 @@ test("a probe the device no longer reports was interrupted, with its original an
         kind: "probe",
         id: ID,
         value: PROBE_VALUE,
-        original: ORIGINAL,
+        original: PROBE_ORIGINAL,
         steps: seen,
         verdict: null,
         restore: null,
         interrupted: true,
-        atMs: AT_MS,
+        atMs: PROBE_AT_MS,
       },
     }, JSON.stringify(reported));
   }
@@ -179,15 +187,15 @@ test("a probe the device no longer reports was interrupted, with its original an
 test("a writable probe lists its steps, the verdict and the restore", () => {
   const probe = deviceProbe({
     steps: [
-      step("get", "ok", "01", 1000),
-      step("set", "timeout", "03", 3000),
-      step("set", "ok", "03", 8000),
-      step("get", "timeout", null, 10000),
-      step("get", "ok", "03", 11000),
-      step("set", "nak", "01", 11500),
-      step("set", "ok", "01", 12000),
-      step("get", "nak", null, 12500),
-      step("get", "ok", "01", 13000),
+      probeStep("get", "ok", "01", 1000),
+      probeStep("set", "timeout", "03", 3000),
+      probeStep("set", "ok", "03", 8000),
+      probeStep("get", "timeout", null, 10000),
+      probeStep("get", "ok", "03", 11000),
+      probeStep("set", "nak", "01", 11500),
+      probeStep("set", "ok", "01", 12000),
+      probeStep("get", "nak", null, 12500),
+      probeStep("get", "ok", "01", 13000),
     ],
   });
 
@@ -224,9 +232,9 @@ test("a running probe or restore says so", () => {
 
 test("a failed restore says what the ID is now, from the last GET, and what it was", () => {
   const failed = deviceProbe({
-    steps: [step("get", "ok", "01", 1000), step("set", "ok", "03", 1400), step("get", "ok", "03", 1500),
-      step("set", "ok", "01", 8000), step("get", "timeout", null, 8500), step("get", "ok", "02", 9000),
-      step("set", "ok", "01", 9600)],
+    steps: [probeStep("get", "ok", "01", 1000), probeStep("set", "ok", "03", 1400), probeStep("get", "ok", "03", 1500),
+      probeStep("set", "ok", "01", 8000), probeStep("get", "timeout", null, 8500), probeStep("get", "ok", "02", 9000),
+      probeStep("set", "ok", "01", 9600)],
     restore: "failed",
   });
 
@@ -235,7 +243,11 @@ test("a failed restore says what the ID is now, from the last GET, and what it w
 
 test("a failed restore whose last GET failed says the value now is unknown", () => {
   const failed = deviceProbe({
-    steps: [step("get", "ok", "01", 1000), step("get", "ok", "02", 9000), step("get", "timeout", null, 9500)],
+    steps: [
+      probeStep("get", "ok", "01", 1000),
+      probeStep("get", "ok", "02", 9000),
+      probeStep("get", "timeout", null, 9500),
+    ],
     restore: "failed",
   });
 
@@ -244,7 +256,7 @@ test("a failed restore whose last GET failed says the value now is unknown", () 
 
 test("a restore request's result reads as a restore", () => {
   const restore = deviceProbe({ kind: "restore", value: "01", verdict: null, restore: "ok",
-    steps: [step("set", "ok", "01", 100), step("get", "ok", "01", 200)] });
+    steps: [probeStep("set", "ok", "01", 100), probeStep("get", "ok", "01", 200)] });
 
   assert.deepEqual(probeTexts(restore), {
     title: "restore 01",
@@ -257,15 +269,19 @@ test("a restore request's result reads as a restore", () => {
 test("an interrupted probe says what the ID may still be and its original", () => {
   const interrupted = { ...deviceProbe({ verdict: null, restore: null }), interrupted: true };
 
-  assert.equal(probeTexts(interrupted).verdict, `probe interrupted: ID ${ID} may still be ${PROBE_VALUE}, original ${ORIGINAL}`);
+  assert.equal(
+    probeTexts(interrupted).verdict,
+    `probe interrupted: ID ${ID} may still be ${PROBE_VALUE}, original ${PROBE_ORIGINAL}`,
+  );
   assert.equal(probeTexts({ ...interrupted, original: null }).verdict,
     `probe interrupted: ID ${ID} may still be ${PROBE_VALUE}, original unknown`);
 });
 
 test("an interrupted restore says what the ID may not be back at", () => {
-  const interrupted = { ...deviceProbe({ kind: "restore", value: ORIGINAL, verdict: null, restore: null }), interrupted: true };
+  const restore = deviceProbe({ kind: "restore", value: PROBE_ORIGINAL, verdict: null, restore: null });
+  const interrupted = { ...restore, interrupted: true };
 
-  assert.equal(probeTexts(interrupted).verdict, `restore interrupted: ID ${ID} may not be back at ${ORIGINAL}`);
+  assert.equal(probeTexts(interrupted).verdict, `restore interrupted: ID ${ID} may not be back at ${PROBE_ORIGINAL}`);
 });
 
 test("the note line holds the title, verdict, steps and restore", () => {
@@ -276,7 +292,7 @@ test("the note line holds the title, verdict, steps and restore", () => {
 });
 
 test("values show trimmed with control bytes escaped", () => {
-  const probe = deviceProbe({ value: " 0\u0001 ", steps: [step("set", "ok", " 0\u0001 ", 1)] });
+  const probe = deviceProbe({ value: " 0\u0001 ", steps: [probeStep("set", "ok", " 0\u0001 ", 1)] });
 
   assert.equal(probeTexts(probe).title, "write probe 0\\x01");
   assert.deepEqual(probeTexts(probe).steps, ["SET 0\\x01 → ACK"]);
@@ -285,8 +301,9 @@ test("values show trimmed with control bytes escaped", () => {
 // ───── restore button ─────
 
 test("a failed restore or an interrupted probe offers to restore the original", () => {
-  assert.equal(restoreOffer(CATALOGUE, deviceProbe({ restore: "failed" })), ORIGINAL);
-  assert.equal(restoreOffer(CATALOGUE, { ...deviceProbe({ verdict: null, restore: null }), interrupted: true }), ORIGINAL);
+  assert.equal(restoreOffer(CATALOGUE, deviceProbe({ restore: "failed" })), PROBE_ORIGINAL);
+  const interrupted = { ...deviceProbe({ verdict: null, restore: null }), interrupted: true };
+  assert.equal(restoreOffer(CATALOGUE, interrupted), PROBE_ORIGINAL);
 });
 
 test("there is nothing to restore without a failure, without an original, or to an original a SET can't carry", () => {

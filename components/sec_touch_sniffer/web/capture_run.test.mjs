@@ -128,28 +128,39 @@ test("before the device answered at all the page waits", () => {
 
 // ───── whether the scan row shows the capture ─────
 
-test("the capture's own run shows the capture while active and once done", () => {
-  assert.equal(isCaptureRun(CATALOGUE, pendingCapture(), runningScan({})), true);
-  assert.equal(isCaptureRun(CATALOGUE, pendingCapture(), doneScan({})), true);
+test("a fresh poll of the capture's own run shows the capture while active and once done", () => {
+  assert.equal(isCaptureRun(CATALOGUE, pendingCapture(), runningScan({}), true), true);
+  assert.equal(isCaptureRun(CATALOGUE, pendingCapture(), doneScan({}), true), true);
 });
 
 test("a narrowed capture's run shows it whatever order the device lists its IDs in", () => {
   const narrowed = pendingCapture({ full: false, ids: [9, 12] });
 
-  assert.equal(isCaptureRun(CATALOGUE, narrowed, runningScan({ from: null, to: null, ids: [12, 9] })), true);
+  assert.equal(isCaptureRun(CATALOGUE, narrowed, runningScan({ from: null, to: null, ids: [12, 9] }), true), true);
 });
 
 test("the run before the capture (another range or list) does not show it", () => {
   for (const scan of [runningScan({ from: 1 }), doneScan({ from: null, to: null, ids: [9, 12] })]) {
-    assert.equal(isCaptureRun(CATALOGUE, pendingCapture(), scan), false);
+    assert.equal(isCaptureRun(CATALOGUE, pendingCapture(), scan, true), false);
   }
-  assert.equal(isCaptureRun(CATALOGUE, pendingCapture(NARROWED), doneScan({ from: null, to: null, ids: [9] })), false);
+  const otherList = doneScan({ from: null, to: null, ids: [9] });
+  assert.equal(isCaptureRun(CATALOGUE, pendingCapture(NARROWED), otherList, true), false);
 });
 
 test("a check does not show the capture", () => {
-  assert.equal(isCaptureRun(CATALOGUE, pendingCapture(), runningScan({ goal: CATALOGUE.goals.check })), false);
+  assert.equal(isCaptureRun(CATALOGUE, pendingCapture(), runningScan({ goal: CATALOGUE.goals.check }), true), false);
 });
 
 test("a stopped run of the capture's range does not show it", () => {
-  assert.equal(isCaptureRun(CATALOGUE, pendingCapture(), runningScan({ active: false, next: 12 })), false);
+  assert.equal(isCaptureRun(CATALOGUE, pendingCapture(), runningScan({ active: false, next: 12 }), true), false);
+});
+
+test("a poll too early to show the capture does not show its run as done: it is the same list's run before", () => {
+  const sameListAgain = doneScan({ from: null, to: null, ids: [12] });
+
+  assert.equal(isCaptureRun(CATALOGUE, pendingCapture(NARROWED), sameListAgain, false), false);
+});
+
+test("an active run of the capture shows it from any poll: the device runs one at a time", () => {
+  assert.equal(isCaptureRun(CATALOGUE, pendingCapture(), runningScan({}), false), true);
 });

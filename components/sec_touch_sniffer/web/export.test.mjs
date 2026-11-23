@@ -4,7 +4,17 @@ import assert from "node:assert/strict";
 import { exportCsv, exportJson } from "./export.mjs";
 import { applyResponse, emptyCopy, fromStored, toStored, withProbe } from "./records.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
-import { experimentWith, NAK } from "./fixture_experiments.mjs";
+import {
+  CANDIDATE_ID,
+  deviceProbe,
+  experimentWith,
+  NAK,
+  pendingProbe,
+  PROBE_AT_MS,
+  PROBE_ORIGINAL,
+  probeEntry,
+  probeStep,
+} from "./fixture_experiments.mjs";
 import { deviceRecord, deviceResponse, FIXTURE_BOOT } from "./fixture_records.mjs";
 
 const BROWSER_NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
@@ -155,19 +165,6 @@ test("the CSV leaves muted IDs out, or includes them with a muted column", () =>
 // ───── experiments ─────
 
 const ESCAPED_RAW = "\u0001xÿ";
-const PROBE_STEPS = [{ kind: "get", outcome: "ok", value: "01", at: 1000 }];
-const PROBE_AT_MS = Date.UTC(2026, 10, 22, 9, 40, 0);
-const probeEntry = (fields) => ({
-  kind: "probe",
-  id: 5,
-  value: "02",
-  original: "01",
-  steps: PROBE_STEPS,
-  verdict: "writable",
-  restore: "failed",
-  atMs: PROBE_AT_MS,
-  ...fields,
-});
 /** A probe entry as the export writes it: `at` as wall ISO time instead of `atMs`. */
 const probeJson = ({ atMs, ...probe }) => ({ ...probe, at: new Date(atMs).toISOString() });
 
@@ -180,7 +177,7 @@ function fanExperiment() {
   ];
   return {
     ...experimentWith(captures, { range: { from: 1, to: 50 } }),
-    probes: [probeEntry({}), probeEntry({ verdict: null, restore: null, interrupted: true })],
+    probes: [probeEntry({ restore: "failed" }), probeEntry({ verdict: null, restore: null, interrupted: true })],
   };
 }
 
@@ -268,28 +265,13 @@ test("only the open experiment narrows the experiments, not the records", () => 
   assert.equal(exported(true).records.length, exported(false).records.length);
 });
 
-const pendingProbe = (fields) => ({
-  experimentKey: "e1",
-  kind: "probe",
-  id: 5,
-  value: "02",
-  original: null,
-  steps: [],
-  atMs: PROBE_AT_MS,
-  ...fields,
-});
-
 test("a probe still running at export time is exported last, as the device reports it, with active", () => {
-  const running = {
+  const running = deviceProbe({
     active: true,
-    kind: "probe",
-    id: 5,
-    value: "02",
-    original: "01",
-    steps: PROBE_STEPS,
+    steps: [probeStep("get", "ok", PROBE_ORIGINAL, 1000)],
     verdict: null,
     restore: null,
-  };
+  });
   const copy = withProbe(copyFromDevice(), running);
   const options = { ...NO_EXPERIMENTS, experiments: [fanExperiment()], pendingProbe: pendingProbe({}) };
 
@@ -300,16 +282,16 @@ test("a probe still running at export time is exported last, as the device repor
 });
 
 test("a pending probe the device has not reported yet is exported as running with its request", () => {
-  const restore = pendingProbe({ kind: "restore", value: "01", original: "01" });
+  const restore = pendingProbe({ kind: "restore", value: PROBE_ORIGINAL });
 
   const [exported] = exportedExperiments({ experiments: [fanExperiment()], pendingProbe: restore });
 
   assert.deepEqual(exported.probes.at(-1), {
     active: true,
     kind: "restore",
-    id: 5,
-    value: "01",
-    original: "01",
+    id: CANDIDATE_ID,
+    value: PROBE_ORIGINAL,
+    original: PROBE_ORIGINAL,
     steps: [],
     verdict: null,
     restore: null,

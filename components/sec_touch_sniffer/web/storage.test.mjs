@@ -3,7 +3,16 @@ import assert from "node:assert/strict";
 
 import { applyResponse, emptyCopy } from "./records.mjs";
 import { deviceRecord, deviceResponse } from "./fixture_records.mjs";
-import { CANDIDATE_ID, experimentWith, NAK, TIMEOUT, walkOf } from "./fixture_experiments.mjs";
+import {
+  CANDIDATE_ID,
+  experimentWith,
+  NAK,
+  pendingProbe,
+  PROBE_ORIGINAL,
+  probeEntry,
+  TIMEOUT,
+  walkOf,
+} from "./fixture_experiments.mjs";
 import { deviceKey, LAST_MAC_KEY, parseStored, STORAGE_PREFIX, storedText } from "./storage.mjs";
 
 const BROWSER_NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
@@ -89,25 +98,9 @@ test("mutes that are not an array of integer IDs are dropped", () => {
 
 // ───── experiments and the pending probe ─────
 
-const PROBE_ENTRY = {
-  kind: "probe",
-  id: CANDIDATE_ID,
-  value: "03",
-  original: "01",
-  steps: [{ kind: "get", outcome: "ok", value: "01", at: 1000 }],
-  verdict: "writable",
-  restore: "ok",
-  atMs: Date.UTC(2026, 10, 22, 9, 40, 0),
-};
-const PENDING = {
-  experimentKey: "e1",
-  kind: "restore",
-  id: CANDIDATE_ID,
-  value: "01",
-  original: null,
-  steps: [],
-  atMs: Date.UTC(2026, 10, 22, 9, 41, 0),
-};
+const PROBE_ENTRY = probeEntry({});
+// A restore to the original, as the page stores it before the device reports it.
+const PENDING = pendingProbe({ kind: "restore", value: PROBE_ORIGINAL });
 
 function storedExperiment() {
   const experiment = walkOf(CANDIDATE_ID, [["normal", "01"], ["boost", NAK], ["eco", TIMEOUT], ["off", "0\u0001ÿ"]]);

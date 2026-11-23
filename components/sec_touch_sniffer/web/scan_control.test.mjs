@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   acceptedRange,
   BUSY_UNKNOWN,
+  busyLine,
   busyText,
   captureStartPath,
   isRunning,
@@ -139,6 +140,21 @@ test("a 409 whose reply names nothing running still says busy", () => {
   for (const body of ["", "busy", "{}", JSON.stringify({ error: "busy", scan: scan({}), probe: null })]) {
     assert.equal(busyText(CATALOGUE, body), `busy: ${BUSY_UNKNOWN}`, body);
   }
+});
+
+test("the busy line shows a refused start's text, else what runs while a probe or restore runs", () => {
+  const refused = busyText(CATALOGUE, JSON.stringify({ error: "busy", scan: scan({ active: true }), probe: null }));
+
+  assert.equal(busyLine(CATALOGUE, refused, scan({ active: true }), null), refused);
+  assert.equal(busyLine(CATALOGUE, refused, scan({}), probe({})), refused);
+  assert.equal(busyLine(CATALOGUE, null, scan({}), probe({})), `busy: write probe of ID ${CANDIDATE_ID}`);
+  assert.equal(busyLine(CATALOGUE, null, scan({}), probe({ kind: "restore" })), `busy: restore of ID ${CANDIDATE_ID}`);
+});
+
+test("the busy line is empty while no probe or restore runs and no start was refused", () => {
+  assert.equal(busyLine(CATALOGUE, null, scan({ active: true }), null), "");
+  assert.equal(busyLine(CATALOGUE, null, scan({}), probe({ active: false })), "");
+  assert.equal(busyLine(CATALOGUE, null, null, null), "");
 });
 
 test("switching tabs stops only a running scan of another goal", () => {

@@ -204,12 +204,12 @@ import { allPass, feedIds, visibleIds } from "./filters.mjs";
 import { captureProgress, scanProgress } from "./scan_progress.mjs";
 import {
   acceptedRange,
+  busyLine,
   busyText,
   captureStartPath,
   isRunning,
   probeError,
   rangeError,
-  runningText,
   scanButton,
   scanReply,
   scanStartPath,
@@ -822,8 +822,7 @@ function renderScan() {
   const toggle = scanButton(scan, probe, goal);
   $("scan-toggle").textContent = toggle.label;
   $("scan-toggle").disabled = toggle.disabled;
-  // A probe or restore can't be stopped: while one runs the device shows as busy, even without a refused start.
-  $("busy").textContent = busy ?? (probe?.active ? `busy: ${runningText(CATALOGUE, scan, probe)}` : "");
+  $("busy").textContent = busyLine(CATALOGUE, busy, scan, probe);
   $("scan-bar").style.width = `${progress.percent}%`;
   $("scan-label").textContent = progress.label;
   $("range").hidden = goal !== GOALS.discover;

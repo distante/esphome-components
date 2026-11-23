@@ -20,15 +20,18 @@ const ID = CANDIDATE_ID;
 const CAP = CATALOGUE.probeValueCap;
 const [NUL, FORBIDDEN, ...MORE_FORBIDDEN] = CATALOGUE.probeForbiddenBytes.map((byte) => String.fromCharCode(byte));
 const AT_MS = Date.UTC(2026, 10, 22, 9, 40, 0);
+// deviceProbe's default: the value it writes, and the value the ID held before.
+const PROBE_VALUE = "03";
+const ORIGINAL = "01";
 
 const step = (kind, outcome, value, at) => ({ kind, outcome, value, at });
 const deviceProbe = (fields) => ({
   active: false,
   kind: "probe",
   id: ID,
-  value: "03",
-  original: "01",
-  steps: [step("get", "ok", "01", 1000), step("set", "ok", "03", 1400), step("get", "ok", "03", 1500)],
+  value: PROBE_VALUE,
+  original: ORIGINAL,
+  steps: [step("get", "ok", ORIGINAL, 1000), step("set", "ok", PROBE_VALUE, 1400), step("get", "ok", PROBE_VALUE, 1500)],
   verdict: "writable",
   restore: "ok",
   ...fields,
@@ -37,7 +40,7 @@ const pendingProbe = (fields) => ({
   experimentKey: "e1",
   kind: "probe",
   id: ID,
-  value: "03",
+  value: PROBE_VALUE,
   original: null,
   steps: [],
   atMs: AT_MS,
@@ -150,8 +153,8 @@ test("a finished probe is the result, stamped with the time it was started", () 
 });
 
 test("a probe the device no longer reports was interrupted, with its original and steps as last seen", () => {
-  const seen = [step("get", "ok", "01", 1000), step("set", "ok", "03", 1400)];
-  const pending = pendingProbe({ original: "01", steps: seen });
+  const seen = [step("get", "ok", ORIGINAL, 1000), step("set", "ok", PROBE_VALUE, 1400)];
+  const pending = pendingProbe({ original: ORIGINAL, steps: seen });
 
   for (const reported of [null, deviceProbe({ id: 78 }), deviceProbe({ value: "02" }), deviceProbe({ kind: "restore" })]) {
     assert.deepEqual(reconcileProbe(pending, reported, true), {
@@ -159,8 +162,8 @@ test("a probe the device no longer reports was interrupted, with its original an
       entry: {
         kind: "probe",
         id: ID,
-        value: "03",
-        original: "01",
+        value: PROBE_VALUE,
+        original: ORIGINAL,
         steps: seen,
         verdict: null,
         restore: null,
@@ -254,15 +257,15 @@ test("a restore request's result reads as a restore", () => {
 test("an interrupted probe says what the ID may still be and its original", () => {
   const interrupted = { ...deviceProbe({ verdict: null, restore: null }), interrupted: true };
 
-  assert.equal(probeTexts(interrupted).verdict, `probe interrupted: ID ${ID} may still be 03, original 01`);
+  assert.equal(probeTexts(interrupted).verdict, `probe interrupted: ID ${ID} may still be ${PROBE_VALUE}, original ${ORIGINAL}`);
   assert.equal(probeTexts({ ...interrupted, original: null }).verdict,
-    `probe interrupted: ID ${ID} may still be 03, original unknown`);
+    `probe interrupted: ID ${ID} may still be ${PROBE_VALUE}, original unknown`);
 });
 
 test("an interrupted restore says what the ID may not be back at", () => {
-  const interrupted = { ...deviceProbe({ kind: "restore", value: "01", verdict: null, restore: null }), interrupted: true };
+  const interrupted = { ...deviceProbe({ kind: "restore", value: ORIGINAL, verdict: null, restore: null }), interrupted: true };
 
-  assert.equal(probeTexts(interrupted).verdict, `restore interrupted: ID ${ID} may not be back at 01`);
+  assert.equal(probeTexts(interrupted).verdict, `restore interrupted: ID ${ID} may not be back at ${ORIGINAL}`);
 });
 
 test("the note line holds the title, verdict, steps and restore", () => {
@@ -282,8 +285,8 @@ test("values show trimmed with control bytes escaped", () => {
 // ───── restore button ─────
 
 test("a failed restore or an interrupted probe offers to restore the original", () => {
-  assert.equal(restoreOffer(CATALOGUE, deviceProbe({ restore: "failed" })), "01");
-  assert.equal(restoreOffer(CATALOGUE, { ...deviceProbe({ verdict: null, restore: null }), interrupted: true }), "01");
+  assert.equal(restoreOffer(CATALOGUE, deviceProbe({ restore: "failed" })), ORIGINAL);
+  assert.equal(restoreOffer(CATALOGUE, { ...deviceProbe({ verdict: null, restore: null }), interrupted: true }), ORIGINAL);
 });
 
 test("there is nothing to restore without a failure, without an original, or to an original a SET can't carry", () => {

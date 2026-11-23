@@ -11,7 +11,7 @@
  * `{outcome: "ok"|"nak"|"timeout", raw}` (raw null unless ok).
  */
 
-import { knownIds } from "./known_meaning.mjs";
+import { isKnownId } from "./known_meaning.mjs";
 import { ascending } from "./records.mjs";
 
 /**
@@ -20,8 +20,7 @@ import { ascending } from "./records.mjs";
  * @returns {(id: number) => boolean} whether an ID is left out of experiments: a known or a muted one
  */
 export function excludedFromExperiments(catalogue, mutes) {
-  const known = new Set(knownIds(catalogue));
-  return (id) => known.has(id) || mutes.has(id);
+  return (id) => isKnownId(catalogue, id) || mutes.has(id);
 }
 
 /**

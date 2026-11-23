@@ -88,6 +88,12 @@ export function runningText(catalogue, scan, probe) {
 }
 
 /**
+ * @param {string} running what the device runs
+ * @returns {string} "busy: <what runs>"
+ */
+const busyLabel = (running) => `busy: ${running}`;
+
+/**
  * @param {object} catalogue the CATALOGUE of catalogue.mjs
  * @param {string} bodyText the body of a start the device refused with 409: `{error, scan, probe}`
  * @returns {string} "busy: <what runs>", from the reply's scan and probe
@@ -102,7 +108,22 @@ export function busyText(catalogue, bodyText) {
   } catch {
     // Not JSON: the device still said busy.
   }
-  return `busy: ${running ?? BUSY_UNKNOWN}`;
+  return busyLabel(running ?? BUSY_UNKNOWN);
+}
+
+/**
+ * @param {object} catalogue the CATALOGUE of catalogue.mjs
+ * @param {string | null} refusedBusy the busyText of a start refused with 409, null when none is shown
+ * @param {object | null} scan the device's scan object
+ * @param {object | null} probe the device's probe object
+ * @returns {string} the scan row's busy line: the refused start's text, else "busy: <what runs>" while a probe or
+ *   restore runs (it can't be stopped, so the device shows as busy without a refused start), else empty
+ */
+export function busyLine(catalogue, refusedBusy, scan, probe) {
+  if (refusedBusy !== null) {
+    return refusedBusy;
+  }
+  return probe?.active ? busyLabel(runningText(catalogue, scan, probe)) : "";
 }
 
 /**

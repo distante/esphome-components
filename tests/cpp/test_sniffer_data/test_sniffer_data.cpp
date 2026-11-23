@@ -314,10 +314,15 @@ std::string check_json(bool active, const std::string &next, bool done) {
          (done ? "true" : "false") + "}";
 }
 
+std::string discover_1_208_json(bool active, const std::string &next, bool done) {
+  return std::string(R"({"active":)") + (active ? "true" : "false") + R"(,"goal":"discover","from":)" +
+         std::to_string(DISCOVER_1_208.from) + R"(,"to":)" + std::to_string(DISCOVER_1_208.to) +
+         R"(,"ids":null,"next":)" + next + R"(,"done":)" + (done ? "true" : "false") + "}";
+}
+
 /// DISCOVER_1_208 just started: running at its first ID.
 std::string discover_1_208_start_json() {
-  return R"({"active":true,"goal":"discover","from":1,"to":208,"ids":null,"next":)" +
-         std::to_string(first_scan_id(DISCOVER_1_208)) + R"(,"done":false})";
+  return discover_1_208_json(true, std::to_string(first_scan_id(DISCOVER_1_208)), false);
 }
 
 }  // namespace
@@ -329,28 +334,27 @@ TEST(SnifferData, BeforeAnyRunTheScanIsAnIdleDiscoverWithNoRangeOrPosition) {
 
 TEST(SnifferData, ARunningDiscoverShowsItsRangeAndNextId) {
   EXPECT_EQ(scan_json(scan_state(running(DISCOVER_1_208, MID_RANGE_ID))),
-            R"({"active":true,"goal":"discover","from":1,"to":208,"ids":null,"next":42,"done":false})");
+            discover_1_208_json(true, std::to_string(MID_RANGE_ID), false));
 }
 
 TEST(SnifferData, WhileTheLastIdIsQueriedTheScanShowsItAndIsNotDone) {
   EXPECT_EQ(scan_json(scan_state(running(DISCOVER_1_208, NO_SCAN_ID))),
-            R"({"active":true,"goal":"discover","from":1,"to":208,"ids":null,"next":208,"done":false})");
+            discover_1_208_json(true, std::to_string(last_scan_id(DISCOVER_1_208)), false));
 }
 
 TEST(SnifferData, AStoppedScanShowsTheIdItStoppedAt) {
   EXPECT_EQ(scan_json(scan_state(stopped(DISCOVER_1_208, MID_RANGE_ID))),
-            R"({"active":false,"goal":"discover","from":1,"to":208,"ids":null,"next":42,"done":false})");
+            discover_1_208_json(false, std::to_string(MID_RANGE_ID), false));
 }
 
 // Stopped with the last query in flight: its outcome was never recorded, so the run did not cover all its IDs.
 TEST(SnifferData, ARunStoppedWithTheLastQueryInFlightIsNotDone) {
   EXPECT_EQ(scan_json(scan_state(stopped(DISCOVER_1_208, NO_SCAN_ID))),
-            R"({"active":false,"goal":"discover","from":1,"to":208,"ids":null,"next":208,"done":false})");
+            discover_1_208_json(false, std::to_string(last_scan_id(DISCOVER_1_208)), false));
 }
 
 TEST(SnifferData, ACompletedScanIsDoneWithNoNextId) {
-  EXPECT_EQ(scan_json(scan_state(completed(DISCOVER_1_208))),
-            R"({"active":false,"goal":"discover","from":1,"to":208,"ids":null,"next":null,"done":true})");
+  EXPECT_EQ(scan_json(scan_state(completed(DISCOVER_1_208))), discover_1_208_json(false, "null", true));
 }
 
 TEST(SnifferData, AScanStartedAgainAfterACompletedRunIsNotDone) {
@@ -384,7 +388,7 @@ TEST(SnifferData, AStartReplyBeginsTheRequestedRunAtItsFirstId) {
 
 TEST(SnifferData, AStopReplyMidScanShowsWhereItStopped) {
   EXPECT_EQ(scan_json(scan_stop_reply(running(DISCOVER_1_208, MID_RANGE_ID))),
-            R"({"active":false,"goal":"discover","from":1,"to":208,"ids":null,"next":42,"done":false})");
+            discover_1_208_json(false, std::to_string(MID_RANGE_ID), false));
 }
 
 TEST(SnifferData, AStopReplyWhileIdleIsTheIdleScan) {
@@ -425,12 +429,13 @@ TEST(SnifferData, SinceZeroIsAFullResponse) {
   PropertyStore store = allocated_store();
   record_spec_example(store);
 
-  EXPECT_EQ(
-      data_json(store, 0, scan_state(running(DISCOVER_1_208, MID_RANGE_ID))),
-      R"({"mac":"aabbccddeeff","name":"esp32-power-meter","boot":"9f2c41ab","uptime":812000,)"
-      R"("seq":4,"full":true,"dropped":0,"scan":{"active":true,"goal":"discover","from":1,"to":208,"ids":null,"next":42,"done":false},"probe":null,)"
-      R"("records":[{"id":5,"cmd":32,"raw":"0100","first":1000,"last":5000,"changed":3000,"changes":1,)"
-      R"("status":"ok","status_at":4000,"reg":false,"hist":[[3000,"0100"],[1000,"0000"]]}]})");
+  EXPECT_EQ(data_json(store, 0, scan_state(running(DISCOVER_1_208, MID_RANGE_ID))),
+            R"({"mac":"aabbccddeeff","name":"esp32-power-meter","boot":"9f2c41ab","uptime":812000,)"
+            R"("seq":4,"full":true,"dropped":0,"scan":)" +
+                discover_1_208_json(true, std::to_string(MID_RANGE_ID), false) +
+                R"(,"probe":null,)"
+                R"("records":[{"id":5,"cmd":32,"raw":"0100","first":1000,"last":5000,"changed":3000,"changes":1,)"
+                R"("status":"ok","status_at":4000,"reg":false,"hist":[[3000,"0100"],[1000,"0000"]]}]})");
 }
 
 TEST(SnifferData, ADeltaIsNotFullAndHoldsOnlyChangedRecords) {
@@ -485,24 +490,27 @@ TEST(SnifferData, BeforeAnyProbeTheProbeIsNull) { EXPECT_EQ(probe_json(nullptr),
 
 TEST(SnifferData, AProbeMatchesTheSpecExample) {
   const ProbeResult probe = spec_example_probe();
-  EXPECT_EQ(probe_json(&probe), R"({"active":false,"kind":"probe","id":77,"value":"03","original":"01",)"
-                                R"("steps":[{"kind":"get","outcome":"ok","value":"01","at":812000},)"
-                                R"({"kind":"set","outcome":"ok","value":"03","at":812400}],)"
-                                R"("verdict":"writable","restore":"ok"})");
+  EXPECT_EQ(probe_json(&probe), R"({"active":false,"kind":"probe","id":)" + std::to_string(PROBE_ID) +
+                                    R"(,"value":"03","original":"01",)"
+                                    R"("steps":[{"kind":"get","outcome":"ok","value":"01","at":812000},)"
+                                    R"({"kind":"set","outcome":"ok","value":"03","at":812400}],)"
+                                    R"("verdict":"writable","restore":"ok"})");
 }
 
 TEST(SnifferData, AStartedProbeHasNoOriginalStepsVerdictOrRestore) {
   const ProbeResult probe = probe_start_result(ProbeKind::PROBE_KIND_PROBE, PROBE_ID, ProbeValue::of("03"));
-  EXPECT_EQ(probe_json(&probe), R"({"active":true,"kind":"probe","id":77,"value":"03","original":null,)"
-                                R"("steps":[],"verdict":null,"restore":null})");
+  EXPECT_EQ(probe_json(&probe), R"({"active":true,"kind":"probe","id":)" + std::to_string(PROBE_ID) +
+                                    R"(,"value":"03","original":null,)"
+                                    R"("steps":[],"verdict":null,"restore":null})");
 }
 
 TEST(SnifferData, ARestoreHasItsRequestedOriginalAndNoVerdict) {
   ProbeResult restore = probe_start_result(ProbeKind::PROBE_KIND_RESTORE, PROBE_ID, ProbeValue::of("01"));
   restore.active = false;
   restore.restore = ProbeRestore::PROBE_RESTORE_FAILED;
-  EXPECT_EQ(probe_json(&restore), R"({"active":false,"kind":"restore","id":77,"value":"01","original":"01",)"
-                                  R"("steps":[],"verdict":null,"restore":"failed"})");
+  EXPECT_EQ(probe_json(&restore), R"({"active":false,"kind":"restore","id":)" + std::to_string(PROBE_ID) +
+                                      R"(,"value":"01","original":"01",)"
+                                      R"("steps":[],"verdict":null,"restore":"failed"})");
 }
 
 TEST(SnifferData, AFailedGetStepHasANullValue) {
@@ -543,7 +551,9 @@ TEST(SnifferData, TheDataResponseCarriesTheProbeAfterTheScan) {
   PropertyStore store = allocated_store();
   const ProbeResult probe = spec_example_probe();
   const std::string json = data_json(store, 0, NO_RUN, &probe);
-  EXPECT_NE(json.find(R"("done":false},"probe":{"active":false,"kind":"probe","id":77,)"), std::string::npos) << json;
+  EXPECT_NE(json.find(R"("done":false},"probe":{"active":false,"kind":"probe","id":)" + std::to_string(PROBE_ID) + ","),
+            std::string::npos)
+      << json;
   EXPECT_NE(json.find(R"("restore":"ok"},"records":[)"), std::string::npos) << json;
 }
 
@@ -567,7 +577,8 @@ TEST(SnifferData, ABusyReplyDuringAProbeCarriesTheProbe) {
   const ProbeResult probe = probe_start_result(ProbeKind::PROBE_KIND_PROBE, PROBE_ID, ProbeValue::of("03"));
   EXPECT_EQ(busy_json(scan_state(completed(CHECK_RUN)), &probe),
             R"({"error":"busy","scan":)" + check_json(false, "null", true) +
-                R"(,"probe":{"active":true,"kind":"probe","id":77,"value":"03","original":null,)"
+                R"(,"probe":{"active":true,"kind":"probe","id":)" + std::to_string(PROBE_ID) +
+                R"(,"value":"03","original":null,)"
                 R"("steps":[],"verdict":null,"restore":null}})");
 }
 

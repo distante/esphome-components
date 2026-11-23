@@ -105,8 +105,8 @@ class SecTouchSniffer : public Component
   /// The running or last scan run. The main loop writes it under run_lock_ at each start and reads it without the
   /// lock, as its only writer.
   ScanRun scan_run_{DEFAULT_DISCOVER_RUN};
-  /// The running or last probe or restore; probe_ran_ false before any since boot. Every call into it takes
-  /// run_lock_, since the httpd task copies its result.
+  /// The running or last probe or restore; probe_ran_ false before any since boot. The main loop writes it under
+  /// run_lock_ and reads it without the lock, as its only writer; the httpd task copies its result under the lock.
   WriteProbe probe_;
   bool probe_ran_{false};
 

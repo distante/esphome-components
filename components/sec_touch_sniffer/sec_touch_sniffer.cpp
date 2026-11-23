@@ -11,6 +11,11 @@
 #include "esphome/core/application.h"
 #endif
 
+// The page's requests run on the httpd task, whose stack web_server_idf sets to 4512 bytes, with no overflow check:
+// a large frame there silently corrupts the memory beside the stack. A ProbeResult (about 2.4 KB) built as a
+// temporary in serve_probe_() crashed every probe request. The config compile test fails on this warning.
+#pragma GCC diagnostic warning "-Wframe-larger-than=1024"
+
 namespace esphome {
 namespace sec_touch {
 
@@ -620,7 +625,7 @@ void SecTouchSniffer::serve_probe_(httpd_req_t *req, ProbeKind kind) {
     this->send_busy_(req);
     return;
   }
-  this->probe_scratch_ = probe_start_result(kind, parsed.id, parsed.value);
+  reset_probe_result(this->probe_scratch_, kind, parsed.id, parsed.value);
   this->begin_json_response_(req);
   write_probe_json(this->json_, &this->probe_scratch_);
   this->end_json_response_(req);

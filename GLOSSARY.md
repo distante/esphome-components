@@ -41,7 +41,7 @@ What a sniffing session is for. It picks both which properties a scan queries an
 _Avoid_: Mode (passive and scan are modes), preset, filter
 
 **Experiment**:
-An investigation of what one panel setting (e.g. "fan 1 mode") does to the unknown properties: a series of captures, each taken with the setting at a named value. Browser only; the device knows nothing of it.
+An investigation of what one panel setting (e.g. "fan 1 mode") does to the unknown properties: a series of captures, each taken with the setting at a named value.
 _Avoid_: Mark, baseline, snapshot, session
 
 **Capture**:
@@ -69,7 +69,7 @@ Writing a raw value already observed for a corroborated candidate, reading the p
 _Avoid_: Write test, set test
 
 **Verdict**:
-A write probe's result: **writable** (a read-back shows the written value), **not writable** (the panel answered and every read-back shows the original), **unclear** (anything else), or **nothing written** (the original couldn't be read, or already equals the value). "Writable" means only this verdict.
+A write probe's result: **writable** (reading the property back shows the written value), **not writable** (the panel acknowledged or refused the write, and reading the property back shows only the original), **unclear** (anything else), or **nothing written** (the original couldn't be read, or already equals the value). "Writable" means only this verdict.
 _Avoid_: Pass/fail, result
 
 **Restore**:

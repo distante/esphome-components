@@ -56,29 +56,29 @@ Decided in [How do the sniffer goal and the catalogue reach the device–page co
 
 **One run at a time.** The device has one exclusive slot for a scan (plain or capture), a write probe and a restore. A start of any of them while another runs is refused with 409 ([contract](#devicepage-contract)). Decided in [How do capture scans and write probes reach the device–page contract?](https://github.com/distante/esphome-components/issues/99).
 
+**No resume.** Every start begins at the goal's first ID; stop means abort. A full pass is the reverse-engineering loop (change the setting on the panel, capture again, see which [candidates](#experiments) track it), and a resumed scan would not give one. A discover run takes ~1–2 min (160 ms + round trip per answered ID); an unnarrowed 1–255 pass can take ~7 min longer when 208–255 never answer (~9 s per timed-out ID).
+
 ### Write probe
 
 Decided in [How does a write probe run, and how does it fail safely?](https://github.com/distante/esphome-components/issues/98), with the contract and the SET retry from [How do capture scans and write probes reach the device–page contract?](https://github.com/distante/esphome-components/issues/99). The device runs a write probe as **one request** ("probe ID X with value V") on its main loop, restore included, so closing the tab or losing WiFi mid-probe still restores. It knows nothing about experiments: which values may be probed is the page's rule ([Experiments](#experiments)).
 
 - **Exclusive, polling paused.** A probe takes the run slot and runs in scan mode, so regular polling is paused until it ends.
-- **No confirmation, no stop.** Once started, a probe always runs to its end (roughly 15–25 s at worst). A stop request during a probe or restore is a 200 no-op.
+- **No confirmation, no stop.** Once started, a probe always runs to its end (under a minute, about 50 s with every retry). A stop request during a probe or restore is a 200 no-op.
 
 **Steps**
 1. **Original**: GET the ID, with the scan's one retry. That value is the original and the restore target. If the GET times out or NAKs, or the original already equals the value, the probe ends with verdict **nothing written**.
-2. **SET** the value. The panel's answer (ACK = `ok`, NAK, timeout) is recorded. A timed-out SET is **retried once**; both attempts are recorded.
+2. **SET** the value. The panel's answer (ACK = `ok`, NAK, timeout) is recorded. A timed-out SET is **retried once**, after the same 5 s wait as a scan GET ([Scan timeout and retry](#scan-timeout-and-retry)); both attempts are recorded.
 3. **Read-back**: GET right after the answer, then about every 1 s until it equals the value or 5 s pass. A timed-out GET is one failed attempt and polling goes on. Every read-back is a step.
 4. **Verdict**:
    - **writable**: a read-back equals the value.
    - **not writable**: the SET got ACK or NAK and every read-back shows the original.
    - **unclear**: anything else (the retried SET timed out too, every read-back timed out, or a read-back shows a third value).
-5. **Restore** unless the last read-back equals the original (writable and unclear always restore, not writable skips it): SET the original (retried once on timeout), then verify with the same ~5 s polling.
+5. **Restore**: writable and unclear restore unless the last read-back equals the original; not writable never needs it. Without a restore, `restore` is `skipped`, as it is for nothing written. To restore: SET the original (retried once on timeout), then verify with the same ~5 s polling.
 6. **Restore failed**: when the verification doesn't show the original, send the restoring SET once more and verify again. If that fails too, `restore` is `failed` ("ID X is now Y, was Z") and the sniffer logs an ERROR.
 
 **Restore request.** A separate request runs only steps 5–6 for a given ID and original: a SET of the original, the ~5 s verify, one more SET and verify. The page sends it from the "restore" button after a failed restore or an interrupted probe; it supplies the original, because after a reboot the device no longer knows it.
 
 **Result.** The device keeps the last probe's or restore's result, with every step, in the `probe` object of `/sniffer/data` until the next one starts. It lives outside the record store, so Clear data keeps it and a probe goes on through a clear; a reboot loses it. The probe's GETs pass the message tap like any data message, so they update the ID's record too.
-
-**No resume.** Every start begins at the goal's first ID; stop means abort. A full pass is the reverse-engineering loop (change the setting on the panel, capture again, see which [candidates](#experiments) track it), and a resumed scan would not give one. A discover run takes ~1–2 min (160 ms + round trip per answered ID); an unnarrowed 1–255 pass can take ~7 min longer when 208–255 never answer (~9 s per timed-out ID).
 
 ---
 
@@ -146,6 +146,7 @@ Decided in [What are the sniffer's memory caps?](https://github.com/distante/esp
 | History | 2 KB pool, depth 8 per ID (current value included) | 2 KB |
 | Serving scratch | binary record copy ≤ ~540 B + 256 B JSON chunk | ~800 B, static |
 | Write probe result | ID, value and original (≤ 15 B each), verdict, restore, 32 steps × {kind, outcome, value ≤ 15 B, at} | ~900 B, static |
+| Pending request | ID set as a 256-bit set (32 B) plus a value ≤ 15 B | ~50 B, static |
 
 - **Probe steps:** 32 slots, sized in [How do the decisions become the updated sniffer spec, and how is it sliced?](https://github.com/distante/esphome-components/issues/101). Steps past the 32nd are not recorded. The sequence still runs to its end, and the verdict and restore are worked out as usual.
 - **IDs above 255** are dropped, counted (`dropped` in the data JSON) and logged once. A discover range above 255 is a 400 ([contract](#devicepage-contract)).
@@ -227,12 +228,13 @@ Today's page minus known properties, plus [experiments](#experiments).
 - **Change feed**: recent changes across unknown IDs (`time ID old → new`), newest first. Clicking an entry selects its ID.
 - **Per-ID mute**: a drawer button removes the ID from the feed and from experiments (a muted ID is never a candidate); its cell still updates.
 - **Filters**: search (ID, value, note), **type chips** and **status chips** on one line (type │ status), changed recently, and **"only candidates"** (the open experiment's candidates and corroborated candidates). They fade and stripe non-matching cells and apply to the feed except "only candidates"; the chip group "colour by" is not using shows faded swatches but still filters. "Hide registered" is gone: registered properties are known, so discover never shows them.
+- **No experiment open:** there are no rings, and "only candidates" is disabled.
 - **Plain scan stays.** "Start scan" scans the discover range with no label, for browsing the grid and feed. It never becomes a capture: only Capture adds to an experiment.
 - There is **no "changed vs previous capture"** ring, flash or filter: the candidate rules and the label → raw tables explain what changed, and the feed keeps raw changes.
 
 ### Experiments
 
-Decided in [What makes an ID a candidate in an experiment, and when is it corroborated?](https://github.com/distante/esphome-components/issues/96) (the rules) and [What does the experiment panel look like in discover?](https://github.com/distante/esphome-components/issues/97) (the panel). Experiments replace the mark. They live in the browser only ([Browser storage](#browser-storage)); the device sees a capture as a plain discover scan.
+Decided in [What makes an ID a candidate in an experiment, and when is it corroborated?](https://github.com/distante/esphome-components/issues/96) (the rules) and [What does the experiment panel look like in discover?](https://github.com/distante/esphome-components/issues/97) (the panel). Experiments replace the mark. They live in the browser only ([Browser storage](#browser-storage)); the device sees a capture as an ordinary discover scan, with an ID list when narrowed.
 
 **Switching experiments.** A row of **sub-tabs** under the goal tabs, in discover only: one tab per experiment with its candidate count, and a last tab **"+ new experiment"**, where starting one means naming the setting (e.g. "fan 1 mode"). The open sub-tab is the open experiment.
 
@@ -295,7 +297,7 @@ Decided in [What do sniffer exports record with two goals?](https://github.com/d
 
 **The same in both goals:** a dump of every record in the browser copy, known properties included, **except muted IDs**. The page filters what you see; the export keeps the data. Everything is built by the page from browser storage.
 
-- **"include muted IDs"** checkbox beside the export buttons, **off by default**, applying to the whole export. Off: muted IDs are left out of records (JSON and CSV), capture entries, candidates and disqualified. On: everything is included, with a `muted` flag per JSON record and a `muted` CSV column.
+- **"include muted IDs"** checkbox beside the export buttons, **off by default**, applying to the whole export. Off: muted IDs are left out of records (JSON and CSV) and capture entries. On: they are included there, with a `muted` flag per JSON record and a `muted` CSV column. Candidates and disqualified are derived with mutes applied either way, so a muted ID is never in them.
 - **JSON**: the full record per ID (raw value, guessed type, registered flag, **`known`**, **`meaning`**, query status, change count, first seen and last changed as uptime ms and wall time, history with wall times, stale flag, note), plus device uptime, the `scan` object at export time (so `goal`, `from`, `to`, `ids`) and a top-level **`experiments`** array.
 - **CSV**: one row per ID: `id, raw, guessed_type, registered, known, meaning, status, change_count, first_seen, last_changed, note` (plus `muted` when included). A header row plus one row per ID. Goal, range, experiments and write probes are JSON only; probe results reach the CSV through `note`.
 - **`known`**: true/false, from the catalogue module.
@@ -306,7 +308,7 @@ Decided in [What do sniffer exports record with two goals?](https://github.com/d
 - **Experiment** `{name, from, to, created_at, captures, candidates, disqualified, probes}`: `from`/`to` are the full range fixed at the first capture, `null` before any capture; `created_at` is a wall ISO time. Deleted captures are gone.
 - **Capture** `{label, at, uptime_ms, boot, full, entries}`: `label` as typed; `at` wall ISO; `uptime_ms` and `boot` from the device at capture time, so a capture lines up with record history across a reboot; `full` is `true` for a full capture and `false` for a narrowed one; `entries` is `{"<id>": {"outcome": "ok"|"nak"|"timeout", "raw": "…"|null}}` for exactly the IDs the capture queried. An absent ID was not queried, which stays distinct from a timeout. Raw values use the records' `\u00XX` encoding.
 - **Derived at export time** (there is no import, so nothing conflicts with a recompute): `candidates` `[{id, status: "candidate"|"corroborated", values: [{label, raw, count}]}]` with labels in their first spelling, and `disqualified` `[{id, conflicts: [{label, raws: [...]}]}]`.
-- **`probes`**, oldest first: every probe and restore run from that experiment's cards, in the device's `probe` object shape (`kind, id, value, original, steps, verdict, restore`) plus a wall `at`. A failed restore is `restore: "failed"`. A pending probe the device no longer knew gets **`interrupted: true`**, `verdict: null` and its steps as last seen. A probe still running at export time is exported as is, with `active: true`.
+- **`probes`**, oldest first: every probe and restore run from that experiment's cards, in the device's `probe` object shape (`kind, id, value, original, steps, verdict, restore`) plus a wall `at`. A failed restore is `restore: "failed"`, with the last `get` step's value and `original` giving "now Y, was Z". A pending probe the device no longer knew gets **`interrupted: true`**, `verdict: null` and its steps as last seen. A probe still running at export time is exported as is, with `active: true`.
 
 ---
 
@@ -328,7 +330,7 @@ Decided in [What is the contract between the device and the page?](https://githu
 
 **Start parameters**, parsed in place like `since`:
 - `goal` is `discover` or `check`. Missing or unknown means discover.
-- `from`/`to` set the discover range. Both missing means 1–255. The device checks `0 ≤ from ≤ to ≤ 255` and replies **400** to a bad, partial or non-numeric range, without starting anything. Check ignores `from`/`to`.
+- `from`/`to` set the discover range. Both missing, with no `ids`, means 1–255. The device checks `0 ≤ from ≤ to ≤ 255` and replies **400** to a bad, partial or non-numeric range, without starting anything. Check ignores `from`/`to`.
 - `ids` (discover only) is a comma-separated decimal list of IDs, for a narrowed capture: `ids=12,40,77`. A request carries either `ids` or `from`/`to`. The device holds the list as a set of IDs: it queries them in ascending order, and a duplicate counts once. The list is capped at **100 IDs**, so the URI stays under ESP-IDF's 512-byte `CONFIG_HTTPD_MAX_URI_LEN`. Known IDs in it are skipped, as in a range. A malformed list, an ID over 255, a list over the cap, or `ids` with `from`/`to` gets **400**. Check ignores `ids`. The set, ascending order and the 400 for `ids` with `from`/`to` were decided in [How do the decisions become the updated sniffer spec, and how is it sliced?](https://github.com/distante/esphome-components/issues/101).
 - **Busy: 409.** Any start (scan, probe or restore) while one of them runs gets **409**, with the current `scan` and `probe` objects in the reply. The handler claims the run slot **atomically** when it accepts the request, so two tabs can't both get 200, and a 200 means the next finished run is the requester's own. This replaces the old idempotent 200 no-op. A stop during a scan works from any tab; a stop during a probe or restore, or while idle, is a 200 no-op.
 - The handler only **queues** the action; the main loop applies it. The reply reflects the request, not the completion: its `active` is the requested state. The 4-byte lock-free `scan_request_` can't carry an ID list or a probe value, so these requests go through a mutex-guarded pending request that also holds the busy claim.
@@ -344,7 +346,7 @@ Decided in [What is the contract between the device and the page?](https://githu
 
 **Concurrency and RAM.** Handlers run on the httpd task while the main loop writes records.
 - A mutex (ESPHome's `Mutex`, a FreeRTOS mutex on ESP32) guards the record store. The main loop and the httpd task's clear both write the records, so every read or write of them takes it, the main loop's reads included. The scan fields the handler reads (scanning flag, goal, range and position) are separate atomics, so a poll that races a scan step can show them out of step; the next poll corrects it.
-- A mutex guards the `probe` object and the pending request. The handler copies `probe` under it, releases it, then formats the copy.
+- A mutex guards the `probe` object and the pending request. The handler copies `probe` under it, releases it, then formats the copy. The scan's ID list is read under the same mutex.
 - Per record, the handler copies the record **in binary** (fields, raw value and its history entries, ≤ ~540 B) into static scratch under the lock, releases the lock, then formats JSON into a ~256 B chunk buffer and sends it with `httpd_resp_send_chunk` on the raw request. It sets status, content type and `Access-Control-Allow-Origin` itself and ends with the empty chunk.
 - Peak RAM ~800 B, no heap growth per request, independent of escaping. The query string is parsed in place, not through the server's heap-allocated parameters.
 - A response is not an atomic snapshot. A record changed mid-response is caught by the next poll through `seq`.
@@ -391,10 +393,10 @@ Decided in [What is the contract between the device and the page?](https://githu
   ```
 
   - `kind`: `probe` or `restore`. A restore has `verdict: null` and only `restore`.
-  - `original`: `null` until the original GET answers; for a restore, the requested original.
+  - `value` and `original`: for a probe, the value to write and the original, `null` until the original GET answers; for a restore, both are the requested original.
   - `steps[].kind`: `get` or `set`; `outcome`: `ok`, `nak` or `timeout`; `value`: the GET's answer or the SET's value (`null` for a failed GET); `at` uptime ms.
   - `verdict`: `writable`, `not writable`, `unclear` or `nothing written`; `null` while the probe runs.
-  - `restore`: `ok`, `failed` or `skipped`; `null` until decided.
+  - `restore`: `ok`, `failed` or `skipped` (no restore was needed, nothing written included); `null` until decided.
   - Raw values are encoded as in records.
 - `serve_data_` reads `scan` and `probe` before the records, so a page that sees `done` also has the last answer.
 - `since` missing or not a valid u32 counts as `0`, a full response.
@@ -437,6 +439,8 @@ The task stays in `GET_DATA` after the ACK so the queue-empty callback (which dr
 
 With no response within `TASK_TIMEOUT_MS` (2 s), the watchdog fires and the sniffer waits **5 s** before retrying that ID once. If the retry also times out, the query status becomes `timeout` and the scan advances immediately.
 
+A write probe's timed-out SET (the probe's or the restore's) waits the same 5 s before its one retry.
+
 The watchdog check runs regardless of whether the task queue is empty: tasks are popped when dispatched, so the queue is empty while waiting. The check must be unconditional in `loop()`.
 
 Stopping the scan during the 5 s wait cancels the retry and resumes normal polling immediately.
@@ -449,7 +453,7 @@ Captured data lives in RAM and is lost on restart or flash. The page keeps a cop
 
 ## Docs and migration
 
-Ships as **v1.5.0** (minor: the hub, fans and HA entities are untouched).
+Ships as **v1.5.0** (minor: fans and HA entities are untouched; the hub gains the sniffer's tap and an unchecked SET).
 
 **Changelog (v1.5.0):**
 - **Breaking, YAML:** the `text_sensor` platform is gone and is a hard config error with a migration message. Use the top-level `sec_touch_sniffer:` block. `scan_switch`, `scan_start`/`scan_end` and `web_page` are removed; `web_server_base:` (or `web_server:`) is required.
@@ -491,19 +495,19 @@ Ships as **v1.5.0** (minor: the hub, fans and HA entities are untouched).
 ## Acceptance criteria
 
 1. In passive mode every data message is recorded, known and registered IDs included; existing controls are unaffected.
-2. A discover start with `from`/`to` stops polling and listener updates and queries that range minus every known ID, from `from`; each queried record gets `ok`, `nak` or `timeout`. Without `from`/`to` the range is 1–255.
+2. A discover start with `from`/`to` stops polling and listener updates and queries that range minus every known ID, from `from`; each queried record gets `ok`, `nak` or `timeout`. Without `from`/`to` or `ids` the range is 1–255.
 3. A check start queries exactly the known IDs (1, 2, 48, 78–83, 173–178) in ascending order, registered ones included, and ignores `from`/`to`.
 4. Stopping mid-scan resumes polling immediately; the next start begins at the goal's first ID. A completed scan resumes polling automatically and sets `done`.
-5. A scan, probe or restore start while any of them runs is a 409 that starts nothing; two simultaneous starts never both get 200. A stop while idle, or during a probe or restore, is a 200 no-op. A bad, partial or non-numeric range, one above 255, or a malformed, over-cap or over-255 `ids` list is a 400 that starts nothing. `scan` is always present with `goal`, `from`, `to`, `ids`, `next` and `done` as specified.
+5. A scan, probe or restore start while any of them runs is a 409 that starts nothing; two simultaneous starts never both get 200. A stop while idle, or during a probe or restore, is a 200 no-op. A bad, partial or non-numeric range, one above 255, a malformed, over-cap or over-255 `ids` list, or `ids` together with `from`/`to` is a 400 that starts nothing. `scan` is always present with `goal`, `from`, `to`, `ids`, `next` and `done` as specified.
 6. A raw value change bumps `change_count`, `last_changed` and `seq`, and the previous value enters the history; a repeated identical message only updates `last_seen`.
 7. An ID above 255 is dropped and counted. A bare `sec_touch_sniffer:` with `web_server_base:` is valid; without an HTTP server, on a non-ESP32 target, or as a second instance it is a config error. Any `text_sensor: - platform: sec_touch_sniffer` entry fails with the migration message.
 8. The catalogue header is the only definition of the known IDs, level names, label names and `0A00`/`0800`; the component builds against it and the page's catalogue module is generated from it at build time.
 9. Check shows one card per fan and a Global card with meaning and raw value; a non-matching value shows as `unexpected value x` in red; registered fans carry the badge.
 10. Discover shows no known ID in the map (unless "show known" is ticked, then greyed and outside the filters), feed, filters or experiments. The mark is gone: no `mark.mjs`, no mark box, no "changed since mark" list, ring or filter, and no `mark`/`mark_raw` in the export.
-11. JSON and CSV exports carry `known` and `meaning` per record and are identical in both goals; the JSON carries `scan.goal`, `scan.ids` and `experiments` with captures, candidates, disqualified and probes as specified. Muted IDs are absent everywhere unless "include muted IDs" is ticked, then present and flagged `muted`. "only the open experiment" narrows `experiments` only.
+11. JSON and CSV exports carry `known` and `meaning` per record and are identical in both goals; the JSON carries `scan.goal`, `scan.ids` and `experiments` with captures, candidates, disqualified and probes as specified. Muted IDs are absent from records and capture entries unless "include muted IDs" is ticked, then present and flagged `muted`; they are never candidates or disqualified. "only the open experiment" narrows `experiments` only.
 12. A value with control or non-ASCII bytes round-trips byte-exact through JSON `\u00XX` escaping into the export, in records, capture entries and probe steps.
 13. **Heap check**, on the maintainer's controller in a single boot: record heap free, largest block and min free before and after a discover scan that finds new IDs, a check scan, a narrowed capture and a write probe, with the page open plus a second web client, and through an OTA update. If min free drops under ~20 KB, shrink the history pool first.
-14. A discover start with `ids` queries exactly the listed unknown IDs in ascending order and reports them in `scan.ids`. A capture is stored only when its run completes, with an entry per queried ID; a stopped run stores nothing.
-15. Candidacy follows the walk, round-trip, consistency and corroboration rules and is recomputed from the stored captures, so deleting a capture can bring a disqualified ID back. A capture is full while the experiment has no candidates, when "full rescan" is pressed or with over 100 candidates, and otherwise queries only the current candidates.
+14. A discover start with `ids` queries exactly the listed unknown IDs in ascending order, a duplicate once, and reports them in `scan.ids`. A capture is stored only when its run completes, with an entry per queried ID; a stopped run stores nothing, and a capture abandoned on a `boot` change stores nothing. Experiments survive Clear data.
+15. Candidacy follows the walk, round-trip, consistency and corroboration rules and is recomputed from the stored captures, so deleting a capture can bring a disqualified ID back. A muted ID is never a candidate. A capture is full while the experiment has no candidates, when "full rescan" is pressed or with over 100 candidates, and otherwise queries only the current candidates.
 16. A write probe of an unknown ID GETs the original, SETs the value (retrying a timed-out SET once), reads back for up to ~5 s and reports `writable`, `not writable`, `unclear` or `nothing written` with every step in `probe`. It restores unless the last read-back is the original, retries a failed restore once, and reports `restore: failed` with an ERROR log when that fails too. Regular polling is paused for the whole probe and resumes after it. Outside scan mode the hub's unchecked SET queues nothing.
-17. `/sniffer/probe` and `/sniffer/restore` reject with 400 a value over 15 bytes or one that holds NUL, TAB, STX or ETX, and an ID outside 0–255 or known. The page offers a write probe only on a corroborated candidate and only with values observed for it in the experiment's captures; the result is appended to the ID's note, and a probe the device no longer reports after a reboot shows as interrupted with a restore button.
+17. `/sniffer/probe` and `/sniffer/restore` reject with 400 a value over 15 bytes or one that holds NUL, TAB, STX or ETX, and an ID outside 0–255 or known; a blank observed value is accepted. The page offers a write probe only on a corroborated candidate and only with values observed for it in the experiment's captures; the result is appended to the ID's note, and a probe the device no longer reports after a reboot shows as interrupted with a restore button. A 409 shows "busy: <what runs>"; while the device reports a run, the scan button is Stop during a scan or capture and disabled during a probe or restore, and Capture and every Write probe and restore button are disabled.

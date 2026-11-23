@@ -146,7 +146,7 @@ Decided in [What are the sniffer's memory caps?](https://github.com/distante/esp
 | History | 2 KB pool, depth 8 per ID (current value included) | 2 KB |
 | Serving scratch | binary record copy ≤ ~540 B + 256 B JSON chunk | ~800 B, static |
 | Write probe result | ID, value and original (≤ 15 B each), verdict, restore, 32 steps × {kind, outcome, value ≤ 15 B, at} | ~900 B, static |
-| Pending request | ID set as a 256-bit set (32 B) plus a value ≤ 15 B | ~50 B, static |
+| Pending request and running scan | the pending ID set and the running scan's ID set, 256-bit sets (32 B each), plus a value ≤ 15 B | ~80 B, static |
 
 - **Probe steps:** 32 slots, sized in [How do the decisions become the updated sniffer spec, and how is it sliced?](https://github.com/distante/esphome-components/issues/101). Steps past the 32nd are not recorded. The sequence still runs to its end, and the verdict and restore are worked out as usual.
 - **IDs above 255** are dropped, counted (`dropped` in the data JSON) and logged once. A discover range above 255 is a 400 ([contract](#devicepage-contract)).
@@ -204,7 +204,7 @@ Decided in [What should the sniffer HTML page look like and do?](https://github.
 - **Big page tabs** under the header, full width: "Discover — find unknown properties" and "Check — confirm known properties".
 - The page **always opens in discover**. The goal is not stored in the browser.
 - The scan button names the goal ("▶ Start discover scan"), and its label says what the scan queries.
-- **Switching while a scan runs** asks for confirmation ("Switching stops the running scan"), then stops it. The user starts the new goal's scan by hand. The page never changes a running scan's goal.
+- **Switching while a scan runs** asks for confirmation ("Switching stops the running scan"), then stops it. The user starts the new goal's scan by hand. The page never changes a running scan's goal. A probe or restore can't be stopped: switching goals while one runs just shows it as busy.
 - A scan the page did not start (another tab) is labelled with its own goal from `scan.goal`.
 
 ### Scan control
@@ -274,7 +274,7 @@ Decided in [What makes an ID a candidate in an experiment, and when is it corrob
 - Only a **corroborated** candidate's card offers it: a select of the raw values **already observed for that ID in this experiment's captures**, at most 15 bytes and without NUL, TAB, STX or ETX, defaulting to one other than the current value, and a **Write probe** button that starts it straight away. A plain candidate's card says "write probe once corroborated". This "only observed values" rule is enforced by the page alone.
 - The steps (SET → ACK/NAK/timeout, GET → value, restore) and the verdict (✓ writable, ✗ not writable, and unclear or nothing written as words) stay on the card and are **appended to the ID's note**.
 - **Restore failed** shows "restore failed: ID X is now Y, was Z" on the card and in the note, with a **restore Z** button (the restore request).
-- **Interrupted**: before the request, the page stores "probe pending: ID X, writing V" in browser storage per MAC, and the original once the device reports it. If the device then reports no such probe (a reboot lost it), the card shows "probe interrupted: ID X may still be V, original Z" with the restore button. The pending entry is cleared when a result arrives. The page judges this from the `probe` object, not from `boot`, since Clear data draws a new `boot` but keeps the probe.
+- **Interrupted**: before the request, the page stores "probe pending: ID X, writing V" in browser storage per MAC, and the original once the device reports it. If the device then reports no such probe (a reboot lost it), the card shows "probe interrupted: ID X may still be V, original Z" with the restore button. The pending entry is cleared when a result arrives, or when the start is refused with 400 or 409. The page judges this from the `probe` object, not from `boot`, since Clear data draws a new `boot` but keeps the probe.
 - Promoting a writable property into the known-property catalogue stays a manual code change.
 
 ### Type guessing
@@ -333,7 +333,7 @@ Decided in [What is the contract between the device and the page?](https://githu
 - `from`/`to` set the discover range. Both missing, with no `ids`, means 1–255. The device checks `0 ≤ from ≤ to ≤ 255` and replies **400** to a bad, partial or non-numeric range, without starting anything. Check ignores `from`/`to`.
 - `ids` (discover only) is a comma-separated decimal list of IDs, for a narrowed capture: `ids=12,40,77`. A request carries either `ids` or `from`/`to`. The device holds the list as a set of IDs: it queries them in ascending order, and a duplicate counts once. The list is capped at **100 IDs**, so the URI stays under ESP-IDF's 512-byte `CONFIG_HTTPD_MAX_URI_LEN`. Known IDs in it are skipped, as in a range. A malformed list, an ID over 255, a list over the cap, or `ids` with `from`/`to` gets **400**. Check ignores `ids`. The set, ascending order and the 400 for `ids` with `from`/`to` were decided in [How do the decisions become the updated sniffer spec, and how is it sliced?](https://github.com/distante/esphome-components/issues/101).
 - **Busy: 409.** Any start (scan, probe or restore) while one of them runs gets **409**, with the current `scan` and `probe` objects in the reply. The handler claims the run slot **atomically** when it accepts the request, so two tabs can't both get 200, and a 200 means the next finished run is the requester's own. This replaces the old idempotent 200 no-op. A stop during a scan works from any tab; a stop during a probe or restore, or while idle, is a 200 no-op.
-- The handler only **queues** the action; the main loop applies it. The reply reflects the request, not the completion: its `active` is the requested state. The 4-byte lock-free `scan_request_` can't carry an ID list or a probe value, so these requests go through a mutex-guarded pending request that also holds the busy claim.
+- The handler only **queues** the action; the main loop applies it. The reply reflects the request, not the completion: its `active` is the requested state. The 4-byte lock-free `scan_request_` can't carry an ID list or a probe value, so **every start** (range scans included) goes through a mutex-guarded pending request that claims the run slot; it replaces `scan_request_` for starts.
 
 **Probe and restore parameters.** `id` is the property ID; the body is the value's **exact bytes**, with `Content-Length` set. **400** when the value is over 15 bytes (`SetDataTask` holds 15 characters), holds NUL, TAB, STX or ETX (`send_set_message` frames the value with `%s`), or the ID is outside 0–255 or is a known property. The device checks only format and length. An empty value is allowed: an observed blank is a legitimate probe value.
 
@@ -393,7 +393,8 @@ Decided in [What is the contract between the device and the page?](https://githu
   ```
 
   - `kind`: `probe` or `restore`. A restore has `verdict: null` and only `restore`.
-  - `value` and `original`: for a probe, the value to write and the original, `null` until the original GET answers; for a restore, both are the requested original.
+  - `value`: the value to write (a probe) or the requested original (a restore).
+  - `original`: the original GET's answer, `null` until it answers; for a restore, the requested original.
   - `steps[].kind`: `get` or `set`; `outcome`: `ok`, `nak` or `timeout`; `value`: the GET's answer or the SET's value (`null` for a failed GET); `at` uptime ms.
   - `verdict`: `writable`, `not writable`, `unclear` or `nothing written`; `null` while the probe runs.
   - `restore`: `ok`, `failed` or `skipped` (no restore was needed, nothing written included); `null` until decided.

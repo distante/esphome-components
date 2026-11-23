@@ -27,6 +27,11 @@ constexpr int REGISTERED_ID = FAN_LEVEL_IDS[0];
 /// Another ID no entity registers, scanned right after UNREGISTERED_ID.
 constexpr int NEXT_UNREGISTERED_ID = UNREGISTERED_ID + 1;
 
+/// What the panel holds before a probe (probe_fixture.h's ORIGINAL).
+const std::string PROBE_ORIGINAL = "01";
+/// What a probe writes (probe_fixture.h's VALUE).
+const std::string PROBE_VALUE = "03";
+
 ScanRun discover(int from, int to) {
   return ScanRun{ScanGoal::SCAN_GOAL_DISCOVER, static_cast<uint8_t>(from), static_cast<uint8_t>(to)};
 }
@@ -423,7 +428,7 @@ TEST(SecTouchSnifferTest, TwoSimultaneousStartsNeverBothSucceed) {
     std::thread scan_tab(tab,
                          [&]() { return rig.sniffer.request_scan_start(discover(UNREGISTERED_ID, UNREGISTERED_ID)); });
     std::thread probe_tab(tab, [&]() {
-      return rig.sniffer.request_probe(ProbeKind::PROBE_KIND_PROBE, UNREGISTERED_ID, ProbeValue::of("03"));
+      return rig.sniffer.request_probe(ProbeKind::PROBE_KIND_PROBE, UNREGISTERED_ID, ProbeValue::of(PROBE_VALUE));
     });
     go = true;
     scan_tab.join();
@@ -437,7 +442,8 @@ TEST(SecTouchSnifferTest, AStartWaitingForTheLoopHoldsTheSlot) {
   ASSERT_TRUE(rig.sniffer.request_scan_start(discover(UNREGISTERED_ID, UNREGISTERED_ID)));
 
   EXPECT_FALSE(rig.sniffer.request_scan_start(CHECK_RUN));
-  EXPECT_FALSE(rig.sniffer.request_probe(ProbeKind::PROBE_KIND_RESTORE, UNREGISTERED_ID, ProbeValue::of("01")));
+  EXPECT_FALSE(
+      rig.sniffer.request_probe(ProbeKind::PROBE_KIND_RESTORE, UNREGISTERED_ID, ProbeValue::of(PROBE_ORIGINAL)));
 }
 
 TEST(SecTouchSnifferTest, ARunsEndFreesTheSlot) {
@@ -553,38 +559,38 @@ std::vector<uint8_t> concat(std::vector<uint8_t> a, const std::vector<uint8_t> &
 // The whole sequence on the wire: GET the original, SET the value, read it back, restore, verify.
 TEST(SecTouchSnifferTest, AWritableProbeRunsOnTheWireAndRestores) {
   ProbeRig rig;
-  rig.start(ProbeKind::PROBE_KIND_PROBE, "03");
+  rig.start(ProbeKind::PROBE_KIND_PROBE, PROBE_VALUE);
   EXPECT_EQ(rig.take_sent(), get_frame(UNREGISTERED_ID));
 
-  rig.receive(UNREGISTERED_ID, "01");
+  rig.receive(UNREGISTERED_ID, PROBE_ORIGINAL);
   // The hub ACKs the data frame, then sends the SET.
-  EXPECT_EQ(rig.take_sent(), concat(ack_frame(), set_frame(UNREGISTERED_ID, "03")));
+  EXPECT_EQ(rig.take_sent(), concat(ack_frame(), set_frame(UNREGISTERED_ID, PROBE_VALUE)));
 
   rig.ack();
   EXPECT_EQ(rig.take_sent(), get_frame(UNREGISTERED_ID));
 
-  rig.receive(UNREGISTERED_ID, "03");
-  EXPECT_EQ(rig.take_sent(), concat(ack_frame(), set_frame(UNREGISTERED_ID, "01")));
+  rig.receive(UNREGISTERED_ID, PROBE_VALUE);
+  EXPECT_EQ(rig.take_sent(), concat(ack_frame(), set_frame(UNREGISTERED_ID, PROBE_ORIGINAL)));
 
   rig.ack();
   EXPECT_EQ(rig.take_sent(), get_frame(UNREGISTERED_ID));
-  rig.receive(UNREGISTERED_ID, "01");
+  rig.receive(UNREGISTERED_ID, PROBE_ORIGINAL);
 
   const std::optional<ProbeResult> probe = rig.sniffer.probe();
   ASSERT_TRUE(probe.has_value());
   EXPECT_FALSE(probe->active);
   EXPECT_EQ(probe->verdict, ProbeVerdict::PROBE_VERDICT_WRITABLE);
   EXPECT_EQ(probe->restore, ProbeRestore::PROBE_RESTORE_OK);
-  EXPECT_EQ(probe->original.view(), "01");
+  EXPECT_EQ(probe->original.view(), PROBE_ORIGINAL);
   EXPECT_EQ(probe->step_count, 5);
   // The probe's GETs pass the tap like any data message.
-  EXPECT_EQ(rig.sniffer.store().raw_value(UNREGISTERED_ID), "01");
+  EXPECT_EQ(rig.sniffer.store().raw_value(UNREGISTERED_ID), PROBE_ORIGINAL);
   EXPECT_FALSE(rig.sniffer.is_probing());
 }
 
 TEST(SecTouchSnifferTest, AProbePausesPollingUntilItEnds) {
   ProbeRig rig;
-  rig.start(ProbeKind::PROBE_KIND_PROBE, "03");
+  rig.start(ProbeKind::PROBE_KIND_PROBE, PROBE_VALUE);
   rig.take_sent();
   // While the probe runs, a poll cycle sends nothing of its own.
   rig.hub.update();
@@ -592,7 +598,7 @@ TEST(SecTouchSnifferTest, AProbePausesPollingUntilItEnds) {
   EXPECT_TRUE(rig.take_sent().empty());
 
   // The original equals the value: nothing written, and the probe ends.
-  rig.receive(UNREGISTERED_ID, "03");
+  rig.receive(UNREGISTERED_ID, PROBE_VALUE);
 
   EXPECT_FALSE(rig.sniffer.is_probing());
   EXPECT_EQ(rig.sniffer.probe()->verdict, ProbeVerdict::PROBE_VERDICT_NOTHING_WRITTEN);
@@ -601,10 +607,11 @@ TEST(SecTouchSnifferTest, AProbePausesPollingUntilItEnds) {
 
 TEST(SecTouchSnifferTest, AStartOrStopDuringAProbeChangesNothing) {
   ProbeRig rig;
-  rig.start(ProbeKind::PROBE_KIND_PROBE, "03");
+  rig.start(ProbeKind::PROBE_KIND_PROBE, PROBE_VALUE);
 
   EXPECT_FALSE(rig.sniffer.request_scan_start(CHECK_RUN));
-  EXPECT_FALSE(rig.sniffer.request_probe(ProbeKind::PROBE_KIND_RESTORE, UNREGISTERED_ID, ProbeValue::of("01")));
+  EXPECT_FALSE(
+      rig.sniffer.request_probe(ProbeKind::PROBE_KIND_RESTORE, UNREGISTERED_ID, ProbeValue::of(PROBE_ORIGINAL)));
   rig.sniffer.request_scan_stop();
   rig.loop_sniffer();
 
@@ -614,11 +621,11 @@ TEST(SecTouchSnifferTest, AStartOrStopDuringAProbeChangesNothing) {
 
 TEST(SecTouchSnifferTest, ARestoreRequestSetsTheOriginalAndVerifiesIt) {
   ProbeRig rig;
-  rig.start(ProbeKind::PROBE_KIND_RESTORE, "01");
-  EXPECT_EQ(rig.take_sent(), set_frame(UNREGISTERED_ID, "01"));
+  rig.start(ProbeKind::PROBE_KIND_RESTORE, PROBE_ORIGINAL);
+  EXPECT_EQ(rig.take_sent(), set_frame(UNREGISTERED_ID, PROBE_ORIGINAL));
 
   rig.ack();
-  rig.receive(UNREGISTERED_ID, "01");
+  rig.receive(UNREGISTERED_ID, PROBE_ORIGINAL);
 
   EXPECT_EQ(rig.sniffer.probe()->kind, ProbeKind::PROBE_KIND_RESTORE);
   EXPECT_EQ(rig.sniffer.probe()->restore, ProbeRestore::PROBE_RESTORE_OK);

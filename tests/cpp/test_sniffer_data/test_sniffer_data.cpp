@@ -379,7 +379,7 @@ TEST(SnifferData, AStartReplyBeginsTheRequestedRunAtItsFirstId) {
   EXPECT_EQ(scan_json(scan_start_reply(CHECK_RUN)), check_json(true, std::to_string(DATE_PROPERTY_ID), false));
   const ScanRun requested{ScanGoal::SCAN_GOAL_DISCOVER, 5, 208};
   EXPECT_EQ(scan_json(scan_start_reply(requested)),
-            discover_json(requested, true, std::to_string(requested.from), false));
+            discover_json(requested, true, std::to_string(first_scan_id(requested)), false));
 }
 
 TEST(SnifferData, AStopReplyMidScanShowsWhereItStopped) {

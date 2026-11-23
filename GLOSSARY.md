@@ -40,6 +40,38 @@ _Avoid_: New ID, unmapped ID
 What a sniffing session is for. It picks both which properties a scan queries and which ones the page shows. **Discover** (the default) targets unknown properties, to find new controls. **Check** targets known properties, so a user can confirm their panel sends what the component expects.
 _Avoid_: Mode (passive and scan are modes), preset, filter
 
-**Mark**:
-A snapshot of every raw value the page takes on request, so that after a setting is changed on the panel and the scan runs again, the page can show only the properties whose value differs from the snapshot. Browser only; the device knows nothing of it.
-_Avoid_: Baseline, checkpoint, bookmark
+**Experiment**:
+An investigation of what one panel setting (e.g. "fan 1 mode") does to the unknown properties: a series of captures, each taken with the setting at a named value.
+_Avoid_: Mark, baseline, snapshot, session
+
+**Capture**:
+A scan stored in an experiment, together with the label of the value the setting was at. A capture is **full** (the experiment's whole range) or **narrowed** (only its current candidates).
+_Avoid_: Snapshot, sample
+
+**Label**:
+The name a user gives the setting's value for a capture ("boost"). Two labels are the same after trimming outer whitespace, ignoring case.
+_Avoid_: Tag, value name
+
+**Candidate**:
+An unknown, unmuted property whose captures in an experiment show a round trip (one raw value, a different one under another label, then the first value under the first label again) and give the same raw value for every capture with the same label.
+_Avoid_: Match, hit, suspect
+
+**Corroborated candidate**:
+A candidate for which two labels have each been captured at least twice with agreeing raw values. Only a corroborated candidate can get a write probe.
+_Avoid_: Confirmed, verified
+
+**Disqualified property**:
+A property whose captures with the same label disagree in an experiment, so it can't be a candidate there.
+_Avoid_: Noise, rejected
+
+**Write probe**:
+Writing a raw value already observed for a corroborated candidate, reading the property back to see whether the write took, then restoring the original.
+_Avoid_: Write test, set test
+
+**Verdict**:
+A write probe's result: **writable** (reading the property back shows the written value), **not writable** (the panel acknowledged or refused the write, and reading the property back shows only the original), **unclear** (anything else), or **nothing written** (the original couldn't be read, or already equals the value). "Writable" means only this verdict.
+_Avoid_: Pass/fail, result
+
+**Restore**:
+Writing a property's original raw value back after a write probe and reading it back to check.
+_Avoid_: Undo, rollback

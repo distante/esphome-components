@@ -384,9 +384,10 @@ For a known property, the Check tab shows what its value means. Known properties
 
 - **HTTP server:** the page needs `web_server_base:`, or `web_server:`, which loads it. Without either the config fails. The port is the server's; the sniffer has no port or auth options of its own.
 - **Sockets:** the page raises the HTTP server's client limit by 2, one for the page's polling and one spare for a reload.
-- **Open on the LAN without auth:** without `web_server: auth:`, anyone on your network can open the page, start or stop a scan, which pauses normal polling, and clear the captured records. When set, `web_server: auth:` and `allowed_origins` also apply to `/sniffer`, `/sniffer/data`, `/sniffer/scan/*` and `/sniffer/clear`.
+- **Open on the LAN without auth:** without `web_server: auth:`, anyone on your network can open the page, start or stop a scan, which pauses normal polling, clear the captured records, and **write values to the panel's unknown properties** with a write probe. Set `web_server: auth:` while the sniffer is enabled. When set, `web_server: auth:` and `allowed_origins` also apply to `/sniffer`, `/sniffer/data`, `/sniffer/scan/*`, `/sniffer/clear`, `/sniffer/probe` and `/sniffer/restore`.
 - **Captive portal:** while the device runs its captive-portal access point (the Wi-Fi fallback), the portal answers every GET request, so the page may be unreachable until the device is back on your network.
-- **Scripting a scan:** `curl -X POST -H 'Content-Length: 0' 'http://<device>/sniffer/scan/start?goal=discover&from=1&to=208'` (or `?goal=check`, or `/stop`). Without the explicit empty body the server answers `411`. A missing or unknown `goal` means discover; without `from` and `to` discover covers 1–255. Discover with only one of them, a non-numeric one, one above 255 or `from` above `to` gets a `400` and starts nothing; check ignores them. Both are idempotent (a start while a scan runs leaves it running, whatever its goal). The data endpoint and its JSON are described in the [spec](../../.specs/sniffer.md#devicepage-contract).
+- **Scripting a scan:** `curl -X POST -H 'Content-Length: 0' 'http://<device>/sniffer/scan/start?goal=discover&from=1&to=208'` (or `?goal=check`, or `/stop`). Without the explicit empty body the server answers `411`. A missing or unknown `goal` means discover; without `from` and `to` discover covers 1–255. Discover with only one of them, a non-numeric one, one above 255 or `from` above `to` gets a `400` and starts nothing; check ignores them. Instead of a range, discover takes `ids=12,40,77` (at most 100 distinct IDs) and queries only those, in ascending order. One run at a time: a scan, write probe or restore start while another runs gets `409` and starts nothing; a stop works during a scan only.
+- **Scripting a write probe:** `curl -X POST -H 'Content-Type: text/plain' --data-binary '03' 'http://<device>/sniffer/probe?id=77'` writes `03` to unknown property 77, reads it back, and restores the original; `/sniffer/restore?id=77` with the original as the body only restores. The value is the exact body, at most 15 bytes; send it as `text/plain` (a form body never reaches the sniffer). The data endpoint, its `probe` result and its JSON are described in the [spec](../../.specs/sniffer.md#devicepage-contract).
 
 See [RAW_VALUES.md](RAW_VALUES.md#how-to-reproduce) for a capture walkthrough.
 
@@ -764,6 +765,17 @@ Each Fan Pair can have a level from `0` to `11`. There, just `0` to `6` are _"re
 
 
 # UART Messages
+
+The messages below write their control bytes in brackets:
+
+| Name | Byte | Note |
+|------|------|------|
+| `[STX]` | `0x02` | Start of a frame (ASCII STX). |
+| `[ETX]` | `0x0A` | End of a frame. This is a **line feed** (`\n`), not ASCII ETX (`0x03`): the panel ends every frame with a new line. |
+| `[ACK]` | `0x06` | The answer that accepts a request (ASCII ACK). |
+| `[NAK]` | `0x15` | The answer that refuses a request (ASCII NAK). |
+| `[TAB]` | `0x09` | Field separator (ASCII horizontal tab). |
+
 ### GET Request Message
 The structure of the GET Message is as follows  (special chars added manually):
 ```

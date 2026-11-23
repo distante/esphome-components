@@ -31,6 +31,21 @@ inline std::optional<std::string_view> query_value(std::string_view uri, std::st
   return std::nullopt;
 }
 
+/// Calls `item(part)` for each comma-separated part of `text`, empty parts included (`a,,b` has three, `` has one),
+/// until `item` returns false. Returns whether every call returned true.
+template<typename Item> bool for_each_list_item(std::string_view text, Item item) {
+  while (true) {
+    const size_t comma = text.find(',');
+    if (!item(text.substr(0, comma))) {
+      return false;
+    }
+    if (comma == std::string_view::npos) {
+      return true;
+    }
+    text = text.substr(comma + 1);
+  }
+}
+
 /// `text` read as a decimal number of 1+ ASCII digits (no sign, no spaces; leading zeros allowed) that is at most
 /// `max`; nullopt otherwise.
 constexpr std::optional<uint64_t> parse_bounded_uint(std::string_view text, uint64_t max) {

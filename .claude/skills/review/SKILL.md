@@ -14,12 +14,13 @@ How to run a review, and the checks a reviewer runs on a diff. Each check enforc
 
 Done when every reported finding is fixed, or named to the user with a reason.
 
-## No duplicated code, rules or IDs in component code
+## No duplicated code, rules or IDs in component and test code
 
-Enforces [Reuse existing definitions](../coding-standards/SKILL.md#reuse-existing-definitions) in `components/`.
+Enforces [Reuse existing definitions](../coding-standards/SKILL.md#reuse-existing-definitions) in `components/` and `tests/`.
 
-1. Run [Checklist: before coding](../coding-standards/SKILL.md#checklist-before-coding) step 3 over every literal, list, bound and helper the diff adds under `components/`. Example: a hard-coded `0-255` while `MAX_PROPERTY_ID` exists.
-2. Also look for a second statement of a rule or composition, and for two hand-rolled implementations of one thing. Examples: a `static_assert` summing the known-ID arrays that `is_known_property()` already names; two bounded digit parsers.
+1. Run [Checklist: before coding](../coding-standards/SKILL.md#checklist-before-coding) step 3 over every literal, list, bound and helper the diff adds under `components/` and `tests/`. Example: a hard-coded `0-255` while `MAX_PROPERTY_ID` exists.
+2. Also look for a second statement of a rule or composition, and for two hand-rolled implementations of one thing, test helpers included. Examples: a `static_assert` summing the known-ID arrays that `is_known_property()` already names; two bounded digit parsers; the same frame builder in two test files.
+3. Apply the tests clause of [Reuse existing definitions](../coding-standards/SKILL.md#reuse-existing-definitions) to every expected value the diff adds in tests, the test's own constants included. Example: an expected `"id":77` in a test that feeds in `PROBE_ID`, defined as 77.
 
 Done when each hit is reported with its `file:line` and the existing definition it duplicates.
 

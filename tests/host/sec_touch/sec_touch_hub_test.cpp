@@ -62,9 +62,6 @@ class SECTouchHubTest : public ::testing::Test {
   std::vector<std::string> seen_;
 };
 
-/// `[STX][ACK][ETX]`: the panel's ACK of a request, and the hub's ACK of a data frame.
-std::vector<uint8_t> ack_frame() { return frame(std::string(1, static_cast<char>(ACK))); }
-
 /// A data frame for `property_id` whose CRC field has one bit flipped.
 std::vector<uint8_t> data_frame_with_bad_crc(int property_id, const std::string &value) {
   std::string covered = std::string(1, static_cast<char>(STX)) + data_head(property_id, value);
@@ -204,6 +201,33 @@ TEST_F(SECTouchHubTest, EnteringScanModeClearsStaleTimeoutOutcome) {
   this->hub_.enter_scan_mode();
 
   EXPECT_EQ(this->hub_.get_last_scan_outcome(), ScanOutcome::SCAN_OUTCOME_OK);
+}
+
+// The write probe's SET of an unknown ID: only the sniffer's scan mode may send it.
+TEST_F(SECTouchHubTest, UncheckedSetOutsideScanModeQueuesNothing) {
+  EXPECT_FALSE(this->hub_.add_discovery_set_task(UNANSWERED_PROPERTY_ID, "03"));
+  this->hub_.loop();
+
+  EXPECT_TRUE(this->uart_.tx.empty());
+  EXPECT_EQ(this->hub_.current_running_task_type, TaskType::NONE);
+}
+
+TEST_F(SECTouchHubTest, UncheckedSetInScanModeIsSentAndItsAckRecorded) {
+  std::vector<ScanOutcome> outcomes;
+  this->hub_.register_queue_empty_listener(
+      [this, &outcomes]() { outcomes.push_back(this->hub_.get_last_scan_outcome()); });
+  this->hub_.enter_scan_mode();
+  this->hub_.loop();  // the queue-empty callback of entering scan mode
+  outcomes.clear();
+
+  EXPECT_TRUE(this->hub_.add_discovery_set_task(UNANSWERED_PROPERTY_ID, "03"));
+  this->hub_.loop();  // dispatches the SET
+  EXPECT_EQ(this->uart_.tx, set_frame(UNANSWERED_PROPERTY_ID, "03"));
+
+  this->uart_.push_rx(ack_frame());
+  this->loop_times(2);
+
+  EXPECT_EQ(outcomes, std::vector<ScanOutcome>{ScanOutcome::SCAN_OUTCOME_OK});
 }
 
 // A corrupted ACK during a GET leaves the GET open: the data frame that follows answers it (issue #50).

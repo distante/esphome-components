@@ -1,4 +1,8 @@
 #include "sec_touch_sniffer.h"
+#include <algorithm>
+#include <cstdarg>
+#include <cstdio>
+#include <cstring>
 #include "esphome/core/log.h"
 #include "esphome/core/hal.h"
 #include "json_chunk_writer.h"
@@ -46,43 +50,134 @@ void SecTouchSniffer::dump_config() {
   ESP_LOGCONFIG(TAG, "  History: %s", this->store_.history().is_allocated() ? "on" : "off");
 }
 
-void SecTouchSniffer::request_scan(bool start, const ScanRun &run) {
-  this->scan_request_.store(
-      PendingScanRequest{start ? ScanRequest::SCAN_REQUEST_START : ScanRequest::SCAN_REQUEST_STOP, run});
+// --- The run slot ---
+
+bool SecTouchSniffer::claim_slot_(Running run) {
+  if (this->slot_ != Running::RUNNING_NONE) {
+    return false;
+  }
+  this->slot_ = run;
+  return true;
+}
+
+bool SecTouchSniffer::request_run_(const PendingRun &run) {
+  {
+    LockGuard guard(this->run_lock_);
+    if (!this->claim_slot_(run.run)) {
+      return false;
+    }
+    this->pending_ = run;
+  }
+  this->enable_loop_soon_any_context();
+  return true;
+}
+
+void SecTouchSniffer::release_run_() {
+  LockGuard guard(this->run_lock_);
+  this->slot_ = Running::RUNNING_NONE;
+  this->stop_pending_ = false;
+}
+
+bool SecTouchSniffer::request_scan_start(const ScanRun &run) {
+  PendingRun pending{};
+  pending.run = Running::RUNNING_SCAN;
+  pending.scan = run;
+  return this->request_run_(pending);
+}
+
+bool SecTouchSniffer::request_probe(ProbeKind kind, uint8_t id, const ProbeValue &value) {
+  PendingRun pending{};
+  pending.run = Running::RUNNING_PROBE;
+  pending.probe_kind = kind;
+  pending.probe_id = id;
+  pending.probe_value = value;
+  return this->request_run_(pending);
+}
+
+void SecTouchSniffer::request_scan_stop() {
+  {
+    LockGuard guard(this->run_lock_);
+    // The slot, not is_scanning_: a scan holds it from its start's claim, before loop() begins it.
+    if (this->slot_ != Running::RUNNING_SCAN) {
+      return;
+    }
+    this->stop_pending_ = true;
+  }
   this->enable_loop_soon_any_context();
 }
 
 void SecTouchSniffer::loop() {
-  // Disabled before the request is taken, so a request queued after this point enables the loop again.
+  // Disabled before the requests are taken, so a request queued after this point enables the loop again.
   this->disable_loop();
-  const PendingScanRequest request = this->scan_request_.exchange(NO_SCAN_REQUEST);
-  if (request.kind == ScanRequest::SCAN_REQUEST_START) {
-    this->start_scan(request.run);
-    return;
+  this->apply_requests_(this->take_requests_());
+}
+
+SecTouchSniffer::Requests SecTouchSniffer::take_requests_() {
+  LockGuard guard(this->run_lock_);
+  const Requests requests{.start = this->pending_, .stop = this->stop_pending_};
+  this->pending_.run = Running::RUNNING_NONE;
+  this->stop_pending_ = false;
+  return requests;
+}
+
+void SecTouchSniffer::apply_requests_(const Requests &requests) {
+  const PendingRun &start = requests.start;
+  if (start.run == Running::RUNNING_SCAN) {
+    this->begin_scan_(start.scan);
+  } else if (start.run == Running::RUNNING_PROBE) {
+    this->begin_probe_(start.probe_kind, start.probe_id, start.probe_value);
   }
-  if (request.kind == ScanRequest::SCAN_REQUEST_STOP) {
+  // After the start: a stop queued for a scan that was still waiting stops it now.
+  if (requests.stop) {
     this->stop_scan();
   }
 }
 
-void SecTouchSniffer::start_scan(const ScanRun &run) {
-  if (this->is_scanning_) {
-    return;
+ScanFields SecTouchSniffer::scan_fields_() {
+  ScanRun run = DEFAULT_DISCOVER_RUN;
+  {
+    LockGuard guard(this->run_lock_);
+    run = this->scan_run_;
   }
+  return ScanFields{.ran = this->scan_ran_,
+                    .active = this->is_scanning_,
+                    .completed = this->scan_completed_,
+                    .run = run,
+                    .current = this->current_scan_id_};
+}
+
+// --- Scans ---
+
+bool SecTouchSniffer::start_scan(const ScanRun &run) {
+  {
+    LockGuard guard(this->run_lock_);
+    if (!this->claim_slot_(Running::RUNNING_SCAN)) {
+      return false;
+    }
+  }
+  this->begin_scan_(run);
+  return true;
+}
+
+void SecTouchSniffer::begin_scan_(const ScanRun &run) {
   if (run.goal == ScanGoal::SCAN_GOAL_CHECK) {
     ESP_LOGI(TAG, "Scan mode ON — check: every known property ID");
+  } else if (run.listed) {
+    ESP_LOGI(TAG, "Scan mode ON — discover: %d listed IDs, known IDs skipped", run.ids.count());
   } else {
     ESP_LOGI(TAG, "Scan mode ON — discover: IDs %d to %d, known IDs skipped", run.from, run.to);
   }
+  {
+    LockGuard guard(this->run_lock_);
+    this->scan_run_ = run;
+  }
   // No resume: every run begins at its goal's first ID.
-  this->scan_goal_ = run.goal;
-  this->scan_from_ = run.from;
-  this->scan_to_ = run.to;
   this->current_scan_id_ = first_scan_id(run);
   this->scan_completed_ = false;
   this->scan_ran_ = true;
   this->scan_retry_pending_ = false;
   this->pending_query_id_ = NO_PENDING_QUERY;
+  this->running_ = Running::RUNNING_SCAN;
   this->is_scanning_ = true;
   this->parent_->enter_scan_mode();
   // First task is submitted by on_queue_empty_() which fires immediately because
@@ -104,12 +199,14 @@ void SecTouchSniffer::end_scan_(bool completed) {
   this->pending_query_id_ = NO_PENDING_QUERY;
   this->scan_completed_ = completed;
   this->is_scanning_ = false;
+  this->running_ = Running::RUNNING_NONE;
   this->parent_->exit_scan_mode();
+  this->release_run_();
 }
 
 int SecTouchSniffer::take_next_scan_id_() {
   const int id = this->current_scan_id_;
-  this->current_scan_id_ = next_scan_id(this->scan_run_(), id + 1);
+  this->current_scan_id_ = next_scan_id(this->scan_run_, id + 1);
   return id;
 }
 
@@ -120,10 +217,28 @@ void SecTouchSniffer::query_(int property_id) {
 }
 
 void SecTouchSniffer::on_queue_empty_() {
-  if (!this->is_scanning_) {
+  if (this->running_ == Running::RUNNING_PROBE) {
+    if (!this->probe_request_in_flight_) {
+      return;
+    }
+    this->probe_request_in_flight_ = false;
+    ScanOutcome outcome = this->parent_->get_last_scan_outcome();
+    const bool was_get = this->probe_get_in_flight_;
+    this->probe_get_in_flight_ = false;
+    // An ok GET whose answer never reached the tap (another ID answered) has no value: a failed attempt.
+    if (was_get && outcome == ScanOutcome::SCAN_OUTCOME_OK && !this->probe_read_seen_) {
+      outcome = ScanOutcome::SCAN_OUTCOME_TIMEOUT;
+    }
+    this->advance_probe_(
+        [this, outcome](WriteProbe &probe) { return probe.on_answer(outcome, this->probe_read_.view(), millis_64()); });
     return;
   }
+  if (this->is_scanning_) {
+    this->on_scan_queue_empty_();
+  }
+}
 
+void SecTouchSniffer::on_scan_queue_empty_() {
   if (this->pending_query_id_ != NO_PENDING_QUERY) {
     const int queried = this->pending_query_id_;
     this->pending_query_id_ = NO_PENDING_QUERY;
@@ -164,7 +279,111 @@ void SecTouchSniffer::on_queue_empty_() {
   });
 }
 
+// --- Write probes ---
+
+void SecTouchSniffer::begin_probe_(ProbeKind kind, uint8_t id, const ProbeValue &value) {
+  const bool restore = kind == ProbeKind::PROBE_KIND_RESTORE;
+  ESP_LOGI(TAG, "%s of property_id %d to '%.*s' — scan mode ON", restore ? "Restore" : "Write probe", id,
+           static_cast<int>(value.len), value.bytes);
+  this->running_ = Running::RUNNING_PROBE;
+  this->probe_request_in_flight_ = false;
+  this->probe_get_in_flight_ = false;
+  // Pauses polling; the probe's own GETs and SETs are the only tasks until it ends.
+  this->parent_->enter_scan_mode();
+  this->advance_probe_([this, restore, id, &value](WriteProbe &probe) {
+    this->probe_ran_ = true;
+    return restore ? probe.start_restore(id, value) : probe.start_probe(id, value);
+  });
+}
+
+template<typename Step> void SecTouchSniffer::advance_probe_(Step step) {
+  ProbeCommand command{};
+  {
+    LockGuard guard(this->run_lock_);
+    command = step(this->probe_);
+  }
+  this->run_probe_command_(command);
+}
+
+void SecTouchSniffer::run_probe_command_(ProbeCommand command) {
+  const int id = this->probe_.result().id;
+  switch (command.action) {
+    case ProbeAction::PROBE_ACTION_GET:
+      this->probe_read_seen_ = false;
+      this->probe_get_in_flight_ = true;
+      this->probe_request_in_flight_ = true;
+      this->parent_->add_discovery_get_task(id);
+      return;
+    case ProbeAction::PROBE_ACTION_SET: {
+      // NUL-terminated for SetDataTask; set_value() is at most SET_VALUE_CAP bytes (probe_request_from()).
+      char value[SET_VALUE_CAP + 1]{};
+      const std::string_view set_value = this->probe_.set_value();
+      std::memcpy(value, set_value.data(), std::min(set_value.size(), static_cast<size_t>(SET_VALUE_CAP)));
+      if (this->parent_->add_discovery_set_task(id, value)) {
+        this->probe_request_in_flight_ = true;
+        return;
+      }
+      // Can't happen while the probe holds scan mode; counted as a SET that got no answer.
+      this->advance_probe_(
+          [](WriteProbe &probe) { return probe.on_answer(ScanOutcome::SCAN_OUTCOME_TIMEOUT, "", millis_64()); });
+      return;
+    }
+    case ProbeAction::PROBE_ACTION_WAIT:
+      this->set_timeout("probe_wait", command.wait_ms, [this]() {
+        if (this->running_ != Running::RUNNING_PROBE) {
+          return;
+        }
+        this->advance_probe_([](WriteProbe &probe) { return probe.on_wait_over(); });
+      });
+      return;
+    case ProbeAction::PROBE_ACTION_FINISHED:
+      this->end_probe_();
+      return;
+  }
+}
+
+void SecTouchSniffer::end_probe_() {
+  this->cancel_timeout("probe_wait");
+  this->running_ = Running::RUNNING_NONE;
+  this->probe_request_in_flight_ = false;
+  this->probe_get_in_flight_ = false;
+  const ProbeResult &result = this->probe_.result();
+  if (result.restore == ProbeRestore::PROBE_RESTORE_FAILED) {
+    ProbeValue now_at;
+    if (this->probe_.last_read(now_at)) {
+      ESP_LOGE(TAG, "Restore failed: property_id %d is now '%.*s', was '%.*s'", result.id, static_cast<int>(now_at.len),
+               now_at.bytes, static_cast<int>(result.original.len), result.original.bytes);
+    } else {
+      ESP_LOGE(TAG, "Restore failed: property_id %d is now unknown, was '%.*s'", result.id,
+               static_cast<int>(result.original.len), result.original.bytes);
+    }
+  } else if (result.kind == ProbeKind::PROBE_KIND_RESTORE) {
+    ESP_LOGI(TAG, "Restore of property_id %d: %s", result.id, probe_restore_name(result.restore));
+  } else {
+    ESP_LOGI(TAG, "Write probe of property_id %d: %s, restore %s", result.id, probe_verdict_name(result.verdict),
+             probe_restore_name(result.restore));
+  }
+  this->parent_->exit_scan_mode();
+  this->release_run_();
+}
+
+bool SecTouchSniffer::probe_result_(ProbeResult &out) {
+  LockGuard guard(this->run_lock_);
+  if (!this->probe_ran_) {
+    return false;
+  }
+  out = this->probe_.result();
+  return true;
+}
+
+// --- The message tap ---
+
 void SecTouchSniffer::on_message_(int command_id, int property_id, const std::string &raw_value) {
+  if (this->probe_get_in_flight_ && property_id == this->probe_.result().id) {
+    this->probe_read_ = ProbeValue::of(raw_value);
+    this->probe_read_seen_ = true;
+  }
+
   const uint32_t now_s = uptime_s();
   RecordResult result;
   // Read under the lock too: the httpd task's clear also writes the store.
@@ -225,26 +444,48 @@ bool SecTouchSniffer::canHandle(AsyncWebServerRequest *request) const {
   return route_of(request) != SnifferRoute::ROUTE_NONE;
 }
 
+void SecTouchSniffer::handleBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index,
+                                 size_t total) {
+  if (index == 0) {
+    this->body_received_ = 0;
+  }
+  // Only the first SET_VALUE_CAP + 1 bytes are kept: enough for probe_request_from() to refuse a longer value.
+  for (size_t i = 0; i < len; i++) {
+    if (this->body_received_ + i < sizeof(this->body_)) {
+      this->body_[this->body_received_ + i] = static_cast<char>(data[i]);
+    }
+  }
+  this->body_received_ += len;
+}
+
 void SecTouchSniffer::handleRequest(AsyncWebServerRequest *request) {
   switch (route_of(request)) {
     case SnifferRoute::ROUTE_PAGE:
       this->serve_page_(request);
-      return;
+      break;
     case SnifferRoute::ROUTE_DATA:
       this->serve_data_(*request);
-      return;
+      break;
     case SnifferRoute::ROUTE_SCAN_START:
-      this->serve_scan_(*request, /*start=*/true);
-      return;
+      this->serve_scan_start_(*request);
+      break;
     case SnifferRoute::ROUTE_SCAN_STOP:
-      this->serve_scan_(*request, /*start=*/false);
-      return;
+      this->serve_scan_stop_(*request);
+      break;
     case SnifferRoute::ROUTE_CLEAR:
       this->serve_clear_(*request);
-      return;
+      break;
+    case SnifferRoute::ROUTE_PROBE:
+      this->serve_probe_(*request, ProbeKind::PROBE_KIND_PROBE);
+      break;
+    case SnifferRoute::ROUTE_RESTORE:
+      this->serve_probe_(*request, ProbeKind::PROBE_KIND_RESTORE);
+      break;
     case SnifferRoute::ROUTE_NONE:
-      return;
+      break;
   }
+  // The body belongs to this request only.
+  this->body_received_ = 0;
 }
 
 // Straight from flash, as web_server serves its own page.
@@ -278,6 +519,26 @@ void SecTouchSniffer::end_json_response_(httpd_req_t *req) {
   httpd_resp_send_chunk(req, nullptr, 0);
 }
 
+void SecTouchSniffer::send_error_(httpd_req_t *req, const char *format, ...) {
+  va_list args;
+  va_start(args, format);
+  vsnprintf(this->message_, sizeof(this->message_), format, args);
+  va_end(args);
+  this->begin_json_response_(req, HTTPD_400);
+  this->json_.raw(R"({"error":)");
+  this->json_.string(this->message_);
+  this->json_.raw("}");
+  this->end_json_response_(req);
+}
+
+void SecTouchSniffer::send_busy_(httpd_req_t *req) {
+  const ScanState scan = scan_state(this->scan_fields_());
+  const bool has_probe = this->probe_result_(this->probe_scratch_);
+  this->begin_json_response_(req, "409 Conflict");
+  write_busy_json(this->json_, scan, has_probe ? &this->probe_scratch_ : nullptr);
+  this->end_json_response_(req);
+}
+
 void SecTouchSniffer::serve_data_(httpd_req_t *req) {
   const StringRef name = App.get_name();
   const DeviceInfo device{
@@ -286,9 +547,12 @@ void SecTouchSniffer::serve_data_(httpd_req_t *req) {
       .boot = this->boot_,
       .uptime_ms = millis_64(),
   };
+  // Read before the records, so a page that sees `done` also has the last answer.
+  const ScanState scan = scan_state(this->scan_fields_());
+  const bool has_probe = this->probe_result_(this->probe_scratch_);
   this->begin_json_response_(req);
   write_data_json(
-      this->json_, this->store_, device, scan_state(this->scan_fields_()), since_from_uri(req->uri),
+      this->json_, this->store_, device, scan, has_probe ? &this->probe_scratch_ : nullptr, since_from_uri(req->uri),
       this->record_scratch_,
       [this](auto read) {
         LockGuard guard(this->store_lock_);
@@ -298,25 +562,67 @@ void SecTouchSniffer::serve_data_(httpd_req_t *req) {
   this->end_json_response_(req);
 }
 
-void SecTouchSniffer::serve_scan_(httpd_req_t *req, bool start) {
-  ScanRun run = DEFAULT_DISCOVER_RUN;
-  if (start) {
-    const ScanStart parsed = scan_start_from_uri(req->uri);
-    if (!parsed.valid) {
-      // Nothing starts.
-      this->begin_json_response_(req, HTTPD_400);
-      this->json_.raw(R"({"error":"from and to must both be given, 0-)");
-      this->json_.number(MAX_PROPERTY_ID);
-      this->json_.raw(R"(, with from <= to"})");
-      this->end_json_response_(req);
+void SecTouchSniffer::serve_scan_start_(httpd_req_t *req) {
+  const ScanStart parsed = scan_start_from_uri(req->uri);
+  switch (parsed.error) {
+    case ScanStartError::SCAN_START_OK:
+      break;
+    case ScanStartError::SCAN_START_BAD_RANGE:
+      this->send_error_(req, "from and to must both be given, 0-%d, with from <= to", MAX_PROPERTY_ID);
       return;
-    }
-    run = parsed.run;
+    case ScanStartError::SCAN_START_BAD_IDS:
+      this->send_error_(req, "ids must be a comma-separated list of 1-%d distinct IDs, 0-%d", MAX_SCAN_LIST_IDS,
+                        MAX_PROPERTY_ID);
+      return;
+    case ScanStartError::SCAN_START_IDS_WITH_RANGE:
+      this->send_error_(req, "give either ids or from and to, not both");
+      return;
   }
-  const ScanFields fields = this->scan_fields_();
-  this->request_scan(start, run);
+  if (!this->request_scan_start(parsed.run)) {
+    this->send_busy_(req);
+    return;
+  }
   this->begin_json_response_(req);
-  write_scan_json(this->json_, scan_reply(fields, start, run));
+  write_scan_json(this->json_, scan_start_reply(parsed.run));
+  this->end_json_response_(req);
+}
+
+void SecTouchSniffer::serve_scan_stop_(httpd_req_t *req) {
+  const ScanFields fields = this->scan_fields_();
+  this->request_scan_stop();
+  this->begin_json_response_(req);
+  write_scan_json(this->json_, scan_stop_reply(fields));
+  this->end_json_response_(req);
+}
+
+void SecTouchSniffer::serve_probe_(httpd_req_t *req, ProbeKind kind) {
+  // A form's body (or one without a Content-Type) never reaches handleBody(): the server reads it for itself.
+  if (req->content_len > 0 && this->body_received_ != req->content_len) {
+    this->send_error_(req, "send the value as the request body with a Content-Type such as text/plain");
+    return;
+  }
+  const size_t kept = std::min(this->body_received_, sizeof(this->body_));
+  const ProbeRequest parsed = probe_request_from(req->uri, std::string_view(this->body_, kept));
+  switch (parsed.error) {
+    case ProbeRequestError::PROBE_REQUEST_OK:
+      break;
+    case ProbeRequestError::PROBE_REQUEST_BAD_ID:
+      this->send_error_(req, "id must be a property ID, 0-%d", MAX_PROPERTY_ID);
+      return;
+    case ProbeRequestError::PROBE_REQUEST_KNOWN_ID:
+      this->send_error_(req, "id is a known property: its own entities write it");
+      return;
+    case ProbeRequestError::PROBE_REQUEST_BAD_VALUE:
+      this->send_error_(req, "the value must be at most %d bytes, without NUL, TAB, STX or ETX", SET_VALUE_CAP);
+      return;
+  }
+  if (!this->request_probe(kind, parsed.id, parsed.value)) {
+    this->send_busy_(req);
+    return;
+  }
+  this->probe_scratch_ = probe_start_result(kind, parsed.id, parsed.value);
+  this->begin_json_response_(req);
+  write_probe_json(this->json_, &this->probe_scratch_);
   this->end_json_response_(req);
 }
 

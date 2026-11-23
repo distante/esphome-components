@@ -33,6 +33,9 @@ inline std::vector<uint8_t> data_frame(int property_id, const std::string &value
   return frame(data_head(property_id, value) + std::to_string(crc));
 }
 
+/// `[STX][ACK][ETX]`: the panel's ACK of a request, and the hub's ACK of a data frame.
+inline std::vector<uint8_t> ack_frame() { return frame(std::string(1, static_cast<char>(ACK))); }
+
 /// `[STX]32800[TAB]`: how every GET the hub sends starts.
 inline const std::string get_start = std::string(1, static_cast<char>(STX)) + std::to_string(COMMANDID_GET) + tab;
 

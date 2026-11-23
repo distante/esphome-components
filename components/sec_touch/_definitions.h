@@ -12,12 +12,12 @@
 namespace esphome {
 namespace sec_touch {
 
-#define STX 0x02    // Start of Text
-#define ETX 0x0A    // End of Text
-#define ACK 0x06    // Acknowledge
-#define NAK 0x15    // Not Acknowledge
-#define TAB 0x09    // Tab
-#define NOISE 0xFF  // 255
+#define STX WIRE_STX  // Start of Text
+#define ETX WIRE_ETX  // End of a frame: a line feed, see WIRE_ETX
+#define ACK WIRE_ACK  // Acknowledge
+#define NAK WIRE_NAK  // Not Acknowledge
+#define TAB WIRE_TAB  // Tab
+#define NOISE 0xFF    // 255
 
 /**
  * Callback for when a property is updated
@@ -144,8 +144,7 @@ struct BaseTask {
 };
 
 struct SetDataTask : public BaseTask {
-  // fits date and clock strings like "13:47:00"
-  char value[16];
+  char value[SET_VALUE_CAP + 1];
 
   static std::unique_ptr<SetDataTask> create(TaskTargetType targetType, int property_id, const char *value) {
     if ((targetType == TaskTargetType::LEVEL && contains(FAN_LEVEL_IDS, property_id)) ||
@@ -154,6 +153,12 @@ struct SetDataTask : public BaseTask {
       return std::unique_ptr<SetDataTask>(new SetDataTask(targetType, property_id, value));  // Valid task
     }
     return nullptr;  // Null unique_ptr if validation fails
+  }
+
+  // Bypasses ID validation — for the sniffer's write probe only. A value over SET_VALUE_CAP is cut there. The LEVEL
+  // target type is a placeholder: no SET reads it.
+  static std::unique_ptr<SetDataTask> create_unchecked(int property_id, const char *value) {
+    return std::unique_ptr<SetDataTask>(new SetDataTask(TaskTargetType::LEVEL, property_id, value));
   }
 
   TaskType get_task_type() const override { return TaskType::SET_DATA; }

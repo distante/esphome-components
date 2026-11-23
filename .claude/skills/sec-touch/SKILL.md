@@ -1,9 +1,15 @@
 ---
 name: sec-touch
-description: "Use before planning, changing or reviewing anything under components/sec_touch/ or components/sec_touch_sniffer/."
+description: "Use before planning, changing or reviewing anything under components/sec_touch/ or components/sec_touch_sniffer/, and before sending any request to a real SEC-Touch device or its sniffer."
 ---
 
 SEC-Touch rules, on top of [coding-standards](../coding-standards/SKILL.md). The sniffer is part of SEC-Touch: it is the development tool used to map the panel's properties.
+
+## Real device
+
+**Never send data to a property ID that is not known.** On a real controller, never send a write probe (`POST /sniffer/probe`), a restore (`POST /sniffer/restore`) or any SET for a property ID outside the known-property catalogue (`components/sec_touch/protocol_ids.h`). That holds even for a value the device should refuse (too long, a forbidden byte): validation is code that can fail, and an unknown property may control anything. Write to an unknown ID only when the user names the ID and the value in the conversation. To test a refusal on hardware, use a known ID, which the device refuses before anything else.
+
+Reads are fine: GET `/sniffer/data`, the page, the logs, and discover scans (they only query).
 
 ## Protocol (both components)
 

@@ -433,10 +433,6 @@ web_server_base:   # or web_server:
 
 ### What I have found so far
 
-Scan performed over IDs 1–208. The text sensor used then left registered listeners out, so the IDs registered at the time (78–82, 173–175 and 177) are missing below; their meaning is already documented above.
-
-**If you recognize a pattern or know what an ID controls, please open a PR or issue.**
-
 #### Time programs (Zeitprogramm): IDs 101–166
 
 Each fan pair has a Zeitprogramm screen with 5 switch times (Schaltzeit). Each switch time has a time, a Modus and an Aktiv box. The panel keeps one block of 11 IDs per fan pair:
@@ -477,13 +473,13 @@ Fan pair 1: times and Aktiv checked against its screen, Modus read from the scan
 | Modus (107–111) | level 0 | level 3 | level 4 | level 3 | level 0 |
 
 - The screen title shows the pair's label, not its number. Here: pair 1 = "Kellerraum" (`35`), pair 2 = "Küche" (`21`).
-- Pair 6 has label `0`, no fan. Its block holds defaults: `00`, 06:00 · 09:00 · 15:00 · 20:00 · 22:00, all `0`.
+- Pair 6 has label `0`, no fan (level 178 = 255 in the earlier scan). Its block holds defaults: `00`, 06:00 · 09:00 · 15:00 · 20:00 · 22:00, all `0`.
 - The pattern ends at 166. 167 (`0.0.00:00`) and 168 (`4.153.07:36`, ticks every minute) look like ID 55.
 - Not in `protocol_ids.h` yet: [#85](https://github.com/distante/esphome-components/issues/85) decides whether they become known IDs.
 
 How sure:
 
-| Part | | How |
+| Part | Status | How |
 |---|---|---|
 | Aktiv, switch times 1 and 2 | ✅ tested | experiments: 101 `02` ↔ `03` (switch time 1), `03` ↔ `01` (switch time 2); write probe and set and keep `03` (the only write) |
 | Aktiv, switch times 4 and 5 | ✅ panel | 112 = `18` matches pair 2's screen |
@@ -495,6 +491,12 @@ How sure:
 | Modus `1` `5` `6` | ⚠️ assumed | same as the fan levels; `1` only seen in blocks 3 and 5, not checked |
 | Times, block = pair | ✅ panel | discover scan 95–172 matched the screens of pairs 1 and 2 |
 | Blocks 3–6 | ⚠️ assumed | position; not checked on their screens |
+
+Scan performed over IDs 1–208. The text sensor used then left registered listeners out, so the IDs registered at the time (78–82, 173–175 and 177) are missing below; their meaning is already documented above.
+
+Earlier scan of the same controller, taken before CRC checking: a single value may be corrupt. Pair 1's time program differs from today's (101 reads 18 here, `03` in [Time programs](#time-programs-zeitprogramm-ids-101166)), most likely changed since.
+
+**If you recognize a pattern or know what an ID controls, please open a PR or issue.**
 
 > **Note:** the values below went through `atoi` and are truncated at the first non-digit. Many IDs carry strings (dates, times, versions, hex flags). See [RAW_VALUES.md](RAW_VALUES.md) for the raw strings and the decoded IDs.
 
@@ -676,7 +678,7 @@ How sure:
 | 165 | 0 | Time program, pair 6: switch time 4, Modus | Medium |
 | 166 | 0 | Time program, pair 6: switch time 5, Modus | Medium |
 | 167 | 0 | | |
-| 168 | 3 | Ticks every minute (`4.153.07:36`) | Medium |
+| 168 | 3 | Ticks every minute (later scan: `4.153.07:36`) | Medium |
 | 169 | 0 | | |
 | 170 | 0 | | |
 | 171 | 0 | | |

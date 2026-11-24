@@ -464,7 +464,7 @@ Inside a block, for switch times 1–5 (Schaltzeit):
 | 3, 4 | 4 + 8 = 12 | `0C` |
 | 4, 5 | 8 + 16 = 24 | `18` |
 
-Fan pair 1: times and Aktiv checked against its screen, Modus read from the scan:
+Fan pair 1, read and checked against its screen:
 
 | Switch time | 1 | 2 | 3 | 4 | 5 |
 |---|---|---|---|---|---|
@@ -487,7 +487,7 @@ How sure:
 | Modus `0` `7` | ✅ tested, ✅ panel | experiment on 111; pair 2's screen: `0` empty Manuell bar, `7` Stoßlüften |
 | Modus `8` `9` | ✅ tested | experiment on 111 |
 | Modus `2` | ✅ panel | pair 2's screen: low Manuell bar |
-| Modus `3` `4` | ⚠️ icon only | pair 1's screen shows the Manuell icon; levels not compared |
+| Modus `3` `4` | ✅ panel | pair 1's screen: 3, 4 and 3 bars for switch times 2–4 |
 | Modus `1` `5` `6` | ⚠️ assumed | same as the fan levels; `1` only seen in blocks 3 and 5, not checked |
 | Times, block = pair | ✅ panel | discover scan 95–172 matched the screens of pairs 1 and 2 |
 | Blocks 3–6 | ⚠️ assumed | position; not checked on their screens |

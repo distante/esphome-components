@@ -41,3 +41,13 @@ Enforces [coding-standards](../coding-standards/SKILL.md)' single source: every 
 2. An instruction that is already a rule there becomes a link to it, never a second wording. Example: a review check that repeated coding-standards' "grep for the concept by names, synonyms and value" step.
 
 Done when each added instruction has a grep behind it, and each restatement is reported with its `file:line` and the rule it restates.
+
+## Docs and PR text are short and visual
+
+Enforces [Docs and PR text](../coding-standards/SKILL.md#docs-and-pr-text) on every `.md` the diff touches and on the PR body.
+
+1. Find prose that carries structure: a paragraph listing IDs, offsets, values or statuses that a table or sketch would show. Example: a "How it was confirmed" paragraph per field where a table with one row per part and a ✅ / ⚠️ column holds the same facts.
+2. Find a fact stated twice, jargon where a plain word fits, and raw dumps (exports, logs) added to the repo.
+3. For a rewrite, check that every fact of the old text survives.
+
+Done when each hit is reported with its `file:line` and the shape that replaces it.

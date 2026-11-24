@@ -474,7 +474,7 @@ Fan pair 1, read and checked against its screen:
 
 - The screen title shows the pair's label, not its number. Here: pair 1 = "Kellerraum" (`35`), pair 2 = "Küche" (`21`).
 - Pair 6 has label `0`, no fan (level 178 = 255 in the [earlier scan](#earlier-full-scan-ids-1208)). Its block holds defaults: `00`, 06:00 · 09:00 · 15:00 · 20:00 · 22:00, all `0`.
-- The pattern ends at 166. 167 (`0.0.00:00`) and 168 (`4.153.07:36`, ticks every minute) look like ID 55.
+- The pattern ends at 166. 168 (`4.153.07:36`) is the Betriebszeit (`years.days.HH:MM`); 167 and 55 share its format.
 - Not in `protocol_ids.h` yet: [#85](https://github.com/distante/esphome-components/issues/85) decides whether they become known IDs.
 
 How sure:
@@ -568,7 +568,7 @@ Earlier scan of the same controller, taken before CRC checking: a single value m
 | 52 | 70 | | |
 | 53 | 10 | | |
 | 54 | 20 | | |
-| 55 | 0 | | |
+| 55 | 0 | Same format as 168 (`0.360.00:00`), unknown counter | Low |
 | 56 | 127 | | |
 | 57 | 0 | | |
 | 58 | 1 | | |
@@ -675,8 +675,8 @@ Earlier scan of the same controller, taken before CRC checking: a single value m
 | 164 | 0 | Time program, pair 6: switch time 3, Modus | Medium |
 | 165 | 0 | Time program, pair 6: switch time 4, Modus | Medium |
 | 166 | 0 | Time program, pair 6: switch time 5, Modus | Medium |
-| 167 | 0 | | |
-| 168 | 3 | Ticks every minute (later scan: `4.153.07:36`) | Medium |
+| 167 | 0 | Same format as 168 (`0.0.00:00`), unknown counter | Low |
+| 168 | 3 | Betriebszeit (operating time), `years.days.HH:MM`: later scan `4.153.07:36`, panel 4 years 153 days 8:36 an hour later | High |
 | 169 | 0 | | |
 | 170 | 0 | | |
 | 171 | 0 | | |

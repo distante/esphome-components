@@ -254,7 +254,7 @@ test("known IDs are never candidates", () => {
   assert.deepEqual(exportedExperiments({ experiments: [known] })[0].candidates, []);
 });
 
-test("only the open experiment narrows the experiments, not the records", () => {
+test("JSON: only the open experiment narrows the experiments, not the records", () => {
   const second = { ...experimentWith([], { name: "fan 2 mode" }), key: "e2" };
   const options = { ...NO_EXPERIMENTS, experiments: [fanExperiment(), second], openExperimentKey: "e2" };
   const exported = (onlyOpen) =>

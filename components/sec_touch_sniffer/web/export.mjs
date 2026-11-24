@@ -23,7 +23,7 @@ const meaningOf = (catalogue, row) => knownMeaning(catalogue, row.id, row.raw)?.
  * @property {boolean} includeMuted "include muted IDs": muted IDs stay in records and capture entries, flagged
  * @property {object[]} experiments every stored experiment (see experiments.mjs)
  * @property {string | null} openExperimentKey the open experiment's key, null when none is open
- * @property {boolean} onlyOpen "only the open experiment": narrows `experiments` to the open one
+ * @property {boolean} onlyOpen "JSON: only the open experiment": narrows `experiments` to the open one
  * @property {object | null} pendingProbe the probe or restore awaiting its result (see write_probe.mjs)
  */
 
@@ -171,8 +171,11 @@ export function exportCsv(catalogue, copy, notes, options) {
   return lines.join("\r\n");
 }
 
-/** The export file names' common start; the CSV is always `<base>.csv`. */
+/** The export file names' common start. */
 export const EXPORT_FILE_BASE = "sec_touch_sniffer";
+
+/** The CSV export's file name: always the full dump, so never named after an experiment. */
+export const CSV_FILE_NAME = `${EXPORT_FILE_BASE}.csv`;
 
 /**
  * The JSON export's file name: `<base>-<slug>.json` for an export narrowed to the open experiment, `<base>.json`
@@ -181,7 +184,7 @@ export const EXPORT_FILE_BASE = "sec_touch_sniffer";
 export function jsonFileName(openName) {
   const slug = (openName ?? "")
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");

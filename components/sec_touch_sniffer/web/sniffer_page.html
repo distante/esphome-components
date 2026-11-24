@@ -243,7 +243,7 @@ import {
   runningProbe,
 } from "./write_probe.mjs";
 import { checkCards } from "./check_cards.mjs";
-import { EXPORT_FILE_BASE, exportCsv, exportJson, jsonFileName } from "./export.mjs";
+import { CSV_FILE_NAME, exportCsv, exportJson, jsonFileName } from "./export.mjs";
 import { deviceKey, LAST_MAC_KEY, parseStored, storedText } from "./storage.mjs";
 import { STATUS_COLOURS, TYPE_COLOURS } from "./colours.mjs";
 import { drawerBadges } from "./drawer_head.mjs";
@@ -1401,7 +1401,7 @@ $("export-json").addEventListener("click", () => {
   download(fileName, exportJson(CATALOGUE, copy, notes, options, Date.now()), "application/json");
 });
 $("export-csv").addEventListener("click", () =>
-  download(`${EXPORT_FILE_BASE}.csv`, exportCsv(CATALOGUE, copy, notes, exportOptions()), "text/csv"));
+  download(CSV_FILE_NAME,exportCsv(CATALOGUE, copy, notes, exportOptions()), "text/csv"));
 
 buildStatic();
 renderTabs();

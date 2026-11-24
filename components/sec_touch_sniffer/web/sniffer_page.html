@@ -128,7 +128,7 @@
   <label><input id="only-open" type="checkbox"> JSON: only the open experiment</label>
   <button id="export-json">Export JSON</button>
   <button id="export-csv">Export CSV</button>
-  <button id="reset-options" title="Untick every checkbox and tick every filter chip, as on a first visit">Reset options</button>
+  <button id="reset-options" title="Untick every checkbox and tick every filter chip, as on a first visit; search, changed within and colour by stay">Reset options</button>
   <button id="clear-data" title="Forget every captured value on the device and in this browser; notes, mutes and experiments stay">Clear data</button>
 </div>
 <div id="goal-tabs" class="bigtabs"></div>
@@ -458,7 +458,10 @@ function saveOptions() {
   }
 }
 
-/** Sets every checkbox, its state and its box. The chips are rebuilt on their new sets. */
+/**
+ * Sets every checkbox, its state and its box. The chips are rebuilt on their new sets. The two experiment boxes are
+ * drawn by render, unticked while no experiment is open.
+ */
 function applyOptions(options) {
   showKnown = options.showKnown;
   includeMuted = options.includeMuted;
@@ -468,7 +471,6 @@ function applyOptions(options) {
   filter.statuses = new Set(options.statuses);
   $("show-known").checked = showKnown;
   $("include-muted").checked = includeMuted;
-  $("only-open").checked = onlyOpen;
   $("f-types").replaceChildren();
   addChips($("f-types"), TYPE_COLOURS, filter.types);
   $("f-statuses").replaceChildren();
@@ -863,6 +865,7 @@ function renderHeader() {
   $("online").textContent = requestFailed ? `${state} · request failed` : state;
   $("online").classList.toggle("offline", online === false || requestFailed);
   $("only-open").disabled = openKey === null;
+  $("only-open").checked = onlyOpen && openKey !== null;
 }
 
 function renderScan() {
@@ -1361,6 +1364,14 @@ $("only-open").addEventListener("change", (event) => {
 $("reset-options").addEventListener("click", () => {
   applyOptions(defaultOptions());
   saveOptions();
+  render();
+});
+// Another open page changed or reset the checkboxes: follow it, so its next save does not undo ours.
+window.addEventListener("storage", (event) => {
+  if (event.key !== OPTIONS_KEY) {
+    return;
+  }
+  applyOptions(storedOptions());
   render();
 });
 $("scan-toggle").addEventListener("click", toggleScan);

@@ -223,7 +223,7 @@ Decided in [What should the sniffer HTML page look like and do?](https://github.
 ### Discover
 
 Today's page minus known properties, plus [experiments](#experiments).
-- **ID map**: a 16×16 grid of IDs 0–255 with **known IDs as blank gaps**; a "show known" checkbox (off by default, page memory only) shows them greyed with their value, and their meaning in the tooltip, still outside the filters, feed and experiments. Each cell shows its ID and the start of its trimmed raw value, coloured by guessed type or by scan status (user's choice). A cell flashes on change. A ring shows the open experiment's candidate state: **orange** = candidate, **green** = corroborated; the legend shows both. The scan cursor is outlined while a scan runs. A never-seen ID has a white cell with a dashed border, so it does not look like an `unqueried` one. The grid fills the width left of the side column and sizes its rows to the window height, so all 256 cells fit without scrolling.
+- **ID map**: a 16×16 grid of IDs 0–255 with **known IDs as blank gaps**; a "show known" checkbox (off by default, [stored per browser](#browser-storage)) shows them greyed with their value, and their meaning in the tooltip, still outside the filters, feed and experiments. Each cell shows its ID and the start of its trimmed raw value, coloured by guessed type or by scan status (user's choice). A cell flashes on change. A ring shows the open experiment's candidate state: **orange** = candidate, **green** = corroborated; the legend shows both. The scan cursor is outlined while a scan runs. A never-seen ID has a white cell with a dashed border, so it does not look like an `unqueried` one. The grid fills the width left of the side column and sizes its rows to the window height, so all 256 cells fit without scrolling.
 - **Drawer** (click a cell): raw value (trimmed, with a marker when it was padded on the wire), type, query status, change count, last change, history (newest first) and a note field.
 - **Change feed**: recent changes across unknown IDs (`time ID old → new`), newest first. Clicking an entry selects its ID.
 - **Per-ID mute**: a drawer button removes the ID from the feed and from experiments (a muted ID is never a candidate); its cell still updates.
@@ -288,6 +288,8 @@ Runs in the browser only; the device serves raw strings.
 Decided in [What does the experiment panel look like in discover?](https://github.com/distante/esphome-components/issues/97), [How does a write probe run, and how does it fail safely?](https://github.com/distante/esphome-components/issues/98), [What do the exports record for experiments and write probes?](https://github.com/distante/esphome-components/issues/100) and [How do the decisions become the updated sniffer spec, and how is it sliced?](https://github.com/distante/esphome-components/issues/101).
 
 Keyed by the ESP's MAC: a copy of the records, per-ID notes and mutes, the last discover range, the **experiments** (name, created time, full range, captures, probe results) and a **pending probe**. Notes, mutes and experiments never go to the device. The goal and the open experiment are not stored.
+- **After a reboot** (`boot` changed): the device wins for every ID it has. IDs only in the browser copy stay, greyed out as stale, until the device sees them again.
+- **Clear data** (a header button, after a confirm): `POST /sniffer/clear` empties the device's records, then the page drops its browser copy. Notes, mutes, experiments and the discover range stay. The device's scan and probe go on, but the page abandons a capture in flight and stores nothing ([Captures](#experiments)). If the device refuses or is offline, nothing is cleared. Other open pages see the new `boot` and take the empty store as a reboot, so their IDs turn stale.
 
 **Checkboxes**, stored once per browser (not per MAC), and saved on every change:
 
@@ -296,9 +298,11 @@ Keyed by the ESP's MAC: a copy of the records, per-ID notes and mutes, the last 
 | "include muted IDs", "JSON: only the open experiment", "show known", "only candidates" | off |
 | the type and status filter chips | all ticked |
 
-A **"Reset options"** header button restores the defaults. The search box, "changed within" and "colour by" are not stored. An unreadable stored checkbox falls back to its default on its own.
-- **After a reboot** (`boot` changed): the device wins for every ID it has. IDs only in the browser copy stay, greyed out as stale, until the device sees them again.
-- **Clear data** (a header button, after a confirm): `POST /sniffer/clear` empties the device's records, then the page drops its browser copy. Notes, mutes, experiments and the discover range stay. The device's scan and probe go on, but the page abandons a capture in flight and stores nothing ([Captures](#experiments)). If the device refuses or is offline, nothing is cleared. Other open pages see the new `boot` and take the empty store as a reboot, so their IDs turn stale.
+- **"Reset options"**, a header button, restores the defaults.
+- The search box, "changed within" and "colour by" are not stored.
+- An unreadable stored checkbox falls back to its default on its own.
+- Other open pages pick up a change or a reset at once.
+- With no experiment open, "only candidates" and "JSON: only the open experiment" show unticked and disabled; their stored value comes back when an experiment opens.
 
 ### Export
 

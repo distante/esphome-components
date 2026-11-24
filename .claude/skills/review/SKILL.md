@@ -55,7 +55,7 @@ Done when each stored item is listed with what a later-added value gets.
 
 Enforces the Page JS and HTML bullet of [Tooling](../coding-standards/SKILL.md#tooling): no formatter checks these lines.
 
-1. Read every added or changed line in `components/*/web/` against its neighbours: spacing after commas and around operators, wrapping, indentation. Example: `download(CSV_FILE_NAME,exportCsv(` missing the space after the comma.
+1. Read every added or changed line in `components/*/web/` against its neighbours: spacing after commas, wrapping, indentation. Example: `download(CSV_FILE_NAME,exportCsv(` missing the space after the comma.
 
 Done when each hit is reported with its `file:line`.
 

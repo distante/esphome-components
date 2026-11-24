@@ -436,7 +436,7 @@ Decided in [What is the contract between the device and the page?](https://githu
 
 **Raw value encoding:** byte-exact. Standard JSON escapes for `"` and `\`. Control bytes (< 0x20) and bytes ≥ 0x80 are sent as `\u00XX`, one code point per byte (Latin-1), so the page and the export recover the exact bytes. ASCII passes unchanged.
 
-**Device identity:** browser storage is keyed by the ESP's **MAC** (12 lowercase hex digits). `boot` is a random id generated at setup (8 hex digits), only for reboot detection; a clear draws a new one, since it empties the store as a reboot does. `name` is the ESPHome node name, for display. The panel's ID 3 is not used as a key.
+**Device identity:** browser storage is keyed by the ESP's **MAC** (12 lowercase hex digits), except the checkboxes ([Browser storage](#browser-storage)). `boot` is a random id generated at setup (8 hex digits), only for reboot detection; a clear draws a new one, since it empties the store as a reboot does. `name` is the ESPHome node name, for display. The panel's ID 3 is not used as a key.
 
 ---
 

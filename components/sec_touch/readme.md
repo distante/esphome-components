@@ -393,7 +393,7 @@ See [RAW_VALUES.md](RAW_VALUES.md#how-to-reproduce) for a capture walkthrough.
 
 #### Finding what an ID controls
 
-An experiment finds the unknown ID behind one panel setting: you change the setting on the panel, capture, and the page keeps only the IDs that follow it. The example is the one that found ID 101, the "Aktiv" checkbox of "Schaltzeit 1" on the panel's "Zeitprogramm Kellerraum" screen.
+An experiment finds the unknown ID behind one panel setting: you change the setting on the panel, capture, and the page keeps only the IDs that follow it. The example is the one that found ID 101 through the "Aktiv" checkbox of "Schaltzeit 1" on the panel's "Zeitprogramm Kellerraum" screen. (ID 101 turned out to hold the Aktiv boxes of all 5 switch times, see [Time programs](#time-programs-zeitprogramm-ids-101166).)
 
 1. **Open the page** at `http://<device>/sniffer`, on the Discover tab. In the scan row, set **from** and **to** to the range to search. The whole range 1–255 always works. A smaller one, such as 90–130, makes every capture quicker, but the setting's ID must be inside it. The experiment keeps the range of its first capture.
 2. **Start an experiment.** The coach box on the right asks "What setting will you change on the panel?". Type the setting, such as `Schaltzeit 1 aktiv`, and click **Start experiment**. A sub-tab with that name appears.
@@ -436,6 +436,49 @@ web_server_base:   # or web_server:
 Scan performed over IDs 1–208. The text sensor used then left registered listeners out, so the IDs registered at the time (78–82, 173–175 and 177) are missing below; their meaning is already documented above.
 
 **If you recognize a pattern or know what an ID controls, please open a PR or issue.**
+
+#### Time programs (Zeitprogramm): IDs 101–166
+
+Each fan pair has a Zeitprogramm screen with 5 switch times (Schaltzeit). Each switch time has a time, a Modus and an Aktiv box. The panel keeps one block of 11 IDs per fan pair:
+
+| Fan pair | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|
+| Block | 101–111 | 112–122 | 123–133 | 134–144 | 145–155 | 156–166 |
+| Label / level ID | 78 / 173 | 79 / 174 | 80 / 175 | 81 / 176 | 82 / 177 | 83 / 178 |
+
+Inside a block (switch times S1–S5):
+
+| Offset | Holds | Values |
+|---|---|---|
+| +0 | Aktiv of all 5 | hex, one bit each: `01` S1 · `02` S2 · `04` S3 · `08` S4 · `10` S5 (`03` = S1 + S2) |
+| +1 … +5 | time of S1 … S5 | `HH:MM:SS` |
+| +6 … +10 | Modus of S1 … S5 | `0`–`6` Manuell level · `7` Stoßlüften · `8` Feuchte · `9` CO2 ([fan levels](#fan-pair-level-special-values) without 10 and 11) |
+
+Fan pair 1, read and checked against its screen:
+
+| | S1 | S2 | S3 | S4 | S5 |
+|---|---|---|---|---|---|
+| Aktiv (101 = `03`) | ✓ | ✓ | – | – | – |
+| Time (102–106) | 16:00 | 10:00 | 20:00 | 09:00 | 22:00 |
+| Modus (107–111) | level 0 | level 3 | level 4 | level 3 | level 0 |
+
+- The screen title shows the pair's label, not its number. Here: pair 1 = "Kellerraum" (`35`), pair 2 = "Küche" (`21`).
+- Pair 6 has no fan. Its block holds defaults: `00`, 06:00 · 09:00 · 15:00 · 20:00 · 22:00, all `0`.
+- The pattern ends at 166. 167 (`0.0.00:00`) and 168 (`4.153.07:36`, ticks every minute) look like ID 55.
+- Not in `protocol_ids.h` yet: [#85](https://github.com/distante/esphome-components/issues/85) decides whether they become known IDs.
+
+How sure:
+
+| Part | | How |
+|---|---|---|
+| Aktiv S1, S2 | ✅ tested | experiments: 101 `02` ↔ `03` (S1), `03` ↔ `01` (S2); write probe and set and keep `03` (the only write) |
+| Aktiv S4, S5 | ✅ panel | 112 = `18` matches pair 2's screen |
+| Aktiv S3 | ⚠️ assumed | bit position; `0C` in blocks 3–5 fits |
+| Modus `0` `7` `8` `9` | ✅ tested | experiment on 111 |
+| Modus `1`–`4` | ✅ panel | match the Manuell bars |
+| Modus `5` `6` | ⚠️ assumed | same as the fan levels |
+| Times, block = pair | ✅ panel | discover scan 95–172 matched the screens of pairs 1 and 2 |
+| Blocks 3–6 | ⚠️ assumed | position; not checked on their screens |
 
 > **Note:** the values below went through `atoi` and are truncated at the first non-digit. Many IDs carry strings (dates, times, versions, hex flags). See [RAW_VALUES.md](RAW_VALUES.md) for the raw strings and the decoded IDs.
 
@@ -550,74 +593,74 @@ Scan performed over IDs 1–208. The text sensor used then left registered liste
 | 98 | 2000 | | |
 | 99 | -50 | | |
 | 100 | 50 | | |
-| 101 | 18 | | |
-| 102 | 6 | | |
-| 103 | 11 | | |
-| 104 | 22 | | |
-| 105 | 9 | | |
-| 106 | 22 | | |
-| 107 | 0 | | |
-| 108 | 7 | | |
-| 109 | 4 | | |
-| 110 | 3 | | |
-| 111 | 0 | | |
-| 112 | 18 | | |
-| 113 | 13 | | |
-| 114 | 14 | | |
-| 115 | 7 | | |
-| 116 | 23 | | |
-| 117 | 7 | | |
-| 118 | 7 | | |
-| 119 | 0 | | |
-| 120 | 7 | | |
-| 121 | 2 | | |
-| 122 | 0 | | |
-| 123 | 0 | | |
-| 124 | 13 | | |
-| 125 | 14 | | |
-| 126 | 22 | | |
-| 127 | 4 | | |
-| 128 | 12 | | |
-| 129 | 7 | | |
-| 130 | 0 | | |
-| 131 | 1 | | |
-| 132 | 0 | | |
-| 133 | 0 | | |
-| 134 | 0 | | |
-| 135 | 13 | | |
-| 136 | 14 | | |
-| 137 | 20 | | |
-| 138 | 8 | | |
-| 139 | 12 | | |
-| 140 | 7 | | |
-| 141 | 0 | | |
-| 142 | 2 | | |
-| 143 | 0 | | |
-| 144 | 0 | | |
-| 145 | 0 | | |
-| 146 | 0 | | |
-| 147 | 23 | | |
-| 148 | 8 | | |
-| 149 | 15 | | |
-| 150 | 4 | | |
-| 151 | 7 | | |
-| 152 | 1 | | |
-| 153 | 1 | | |
-| 154 | 0 | | |
-| 155 | 7 | | |
-| 156 | 0 | | |
-| 157 | 6 | | |
-| 158 | 9 | | |
-| 159 | 15 | | |
-| 160 | 20 | | |
-| 161 | 22 | | |
-| 162 | 0 | | |
-| 163 | 0 | | |
-| 164 | 0 | | |
-| 165 | 0 | | |
-| 166 | 0 | | |
+| 101 | 18 | Time program, pair 1: Aktiv bits | High |
+| 102 | 6 | Time program, pair 1: S1 time | High |
+| 103 | 11 | Time program, pair 1: S2 time | High |
+| 104 | 22 | Time program, pair 1: S3 time | High |
+| 105 | 9 | Time program, pair 1: S4 time | High |
+| 106 | 22 | Time program, pair 1: S5 time | High |
+| 107 | 0 | Time program, pair 1: S1 Modus | High |
+| 108 | 7 | Time program, pair 1: S2 Modus | High |
+| 109 | 4 | Time program, pair 1: S3 Modus | High |
+| 110 | 3 | Time program, pair 1: S4 Modus | High |
+| 111 | 0 | Time program, pair 1: S5 Modus | High |
+| 112 | 18 | Time program, pair 2: Aktiv bits | High |
+| 113 | 13 | Time program, pair 2: S1 time | High |
+| 114 | 14 | Time program, pair 2: S2 time | High |
+| 115 | 7 | Time program, pair 2: S3 time | High |
+| 116 | 23 | Time program, pair 2: S4 time | High |
+| 117 | 7 | Time program, pair 2: S5 time | High |
+| 118 | 7 | Time program, pair 2: S1 Modus | High |
+| 119 | 0 | Time program, pair 2: S2 Modus | High |
+| 120 | 7 | Time program, pair 2: S3 Modus | High |
+| 121 | 2 | Time program, pair 2: S4 Modus | High |
+| 122 | 0 | Time program, pair 2: S5 Modus | High |
+| 123 | 0 | Time program, pair 3: Aktiv bits | High |
+| 124 | 13 | Time program, pair 3: S1 time | High |
+| 125 | 14 | Time program, pair 3: S2 time | High |
+| 126 | 22 | Time program, pair 3: S3 time | High |
+| 127 | 4 | Time program, pair 3: S4 time | High |
+| 128 | 12 | Time program, pair 3: S5 time | High |
+| 129 | 7 | Time program, pair 3: S1 Modus | High |
+| 130 | 0 | Time program, pair 3: S2 Modus | High |
+| 131 | 1 | Time program, pair 3: S3 Modus | High |
+| 132 | 0 | Time program, pair 3: S4 Modus | High |
+| 133 | 0 | Time program, pair 3: S5 Modus | High |
+| 134 | 0 | Time program, pair 4: Aktiv bits | High |
+| 135 | 13 | Time program, pair 4: S1 time | High |
+| 136 | 14 | Time program, pair 4: S2 time | High |
+| 137 | 20 | Time program, pair 4: S3 time | High |
+| 138 | 8 | Time program, pair 4: S4 time | High |
+| 139 | 12 | Time program, pair 4: S5 time | High |
+| 140 | 7 | Time program, pair 4: S1 Modus | High |
+| 141 | 0 | Time program, pair 4: S2 Modus | High |
+| 142 | 2 | Time program, pair 4: S3 Modus | High |
+| 143 | 0 | Time program, pair 4: S4 Modus | High |
+| 144 | 0 | Time program, pair 4: S5 Modus | High |
+| 145 | 0 | Time program, pair 5: Aktiv bits | High |
+| 146 | 0 | Time program, pair 5: S1 time | High |
+| 147 | 23 | Time program, pair 5: S2 time | High |
+| 148 | 8 | Time program, pair 5: S3 time | High |
+| 149 | 15 | Time program, pair 5: S4 time | High |
+| 150 | 4 | Time program, pair 5: S5 time | High |
+| 151 | 7 | Time program, pair 5: S1 Modus | High |
+| 152 | 1 | Time program, pair 5: S2 Modus | High |
+| 153 | 1 | Time program, pair 5: S3 Modus | High |
+| 154 | 0 | Time program, pair 5: S4 Modus | High |
+| 155 | 7 | Time program, pair 5: S5 Modus | High |
+| 156 | 0 | Time program, pair 6: Aktiv bits | High |
+| 157 | 6 | Time program, pair 6: S1 time | High |
+| 158 | 9 | Time program, pair 6: S2 time | High |
+| 159 | 15 | Time program, pair 6: S3 time | High |
+| 160 | 20 | Time program, pair 6: S4 time | High |
+| 161 | 22 | Time program, pair 6: S5 time | High |
+| 162 | 0 | Time program, pair 6: S1 Modus | High |
+| 163 | 0 | Time program, pair 6: S2 Modus | High |
+| 164 | 0 | Time program, pair 6: S3 Modus | High |
+| 165 | 0 | Time program, pair 6: S4 Modus | High |
+| 166 | 0 | Time program, pair 6: S5 Modus | High |
 | 167 | 0 | | |
-| 168 | 3 | | |
+| 168 | 3 | Counter, ticks every minute (`4.153.07:36`) | Medium |
 | 169 | 0 | | |
 | 170 | 0 | | |
 | 171 | 0 | | |

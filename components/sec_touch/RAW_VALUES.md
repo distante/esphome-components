@@ -64,7 +64,7 @@ Hypotheses from the raw strings, unverified unless noted:
 | 13, 16   | `-----------`                   | Empty text fields of the same width as 3 and 10                                                   |
 | 20, 21   | `00.00.00`, `00:00:00`          | A second date/time pair (last error? filter change?). Unset on this controller, set on the upstream one (`20=6, 21=16` after `atoi`) |
 | 55       | `0.360.00:00`                   | Unknown composite value                                                                           |
-| 101–155  | `03`, `09:00:00`, `22:00:00`, … | Time programs ("Automatik Zeit"): blocks of 11 IDs starting at 101, 112, 123, 134, 145, each with switching times `HH:MM:SS`. 153–155 are missing from this scan, so the last block and whether more follow are unconfirmed |
+| 101–166  | `03`, `09:00:00`, `22:00:00`, `7`, … | **Confirmed:** time programs, one block of 11 IDs per fan pair, see [Time programs](readme.md#time-programs-zeitprogramm-ids-101166) |
 | 99, 100  | `-50.0`, `50.0`                 | Decimal values (a range, maybe temperature)                                                       |
 
 Values with leading zeros (`5=0100`, `7=01`, `85=00`) are strings as well.

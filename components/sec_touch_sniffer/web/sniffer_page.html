@@ -128,6 +128,7 @@
   <label><input id="only-open" type="checkbox"> JSON: only the open experiment</label>
   <button id="export-json">Export JSON</button>
   <button id="export-csv">Export CSV</button>
+  <button id="reset-options" title="Untick every checkbox and tick every filter chip, as on a first visit">Reset options</button>
   <button id="clear-data" title="Forget every captured value on the device and in this browser; notes, mutes and experiments stay">Clear data</button>
 </div>
 <div id="goal-tabs" class="bigtabs"></div>
@@ -244,7 +245,16 @@ import {
 } from "./write_probe.mjs";
 import { checkCards } from "./check_cards.mjs";
 import { CSV_FILE_NAME, exportCsv, exportJson, jsonFileName } from "./export.mjs";
-import { deviceKey, LAST_MAC_KEY, parseStored, storedText } from "./storage.mjs";
+import {
+  defaultOptions,
+  deviceKey,
+  LAST_MAC_KEY,
+  OPTIONS_KEY,
+  optionsText,
+  parseOptions,
+  parseStored,
+  storedText,
+} from "./storage.mjs";
 import { STATUS_COLOURS, TYPE_COLOURS } from "./colours.mjs";
 import { drawerBadges } from "./drawer_head.mjs";
 import { knownCellTitle, knownIds, meaningText } from "./known_meaning.mjs";
@@ -357,7 +367,8 @@ let online = null;
 let requestFailed = false;
 const filter = allPass();
 let colourBy = "type";
-// Whether discover's map shows known IDs greyed instead of as gaps. Page memory only: never stored.
+// The checkboxes, stored for this browser (see applyOptions). showKnown: whether discover's map shows known IDs
+// greyed instead of as gaps.
 let showKnown = false;
 let includeMuted = false;
 let onlyOpen = false;
@@ -420,6 +431,48 @@ function save() {
   } catch {
     // Full or blocked storage: the page still works, the copy just does not survive a reload.
   }
+}
+
+/** The checkboxes stored for this browser; the defaults when storage is empty, unreadable or blocked. */
+function storedOptions() {
+  try {
+    return parseOptions(localStorage.getItem(OPTIONS_KEY));
+  } catch {
+    return defaultOptions();
+  }
+}
+
+function saveOptions() {
+  const options = {
+    showKnown,
+    includeMuted,
+    onlyOpen,
+    onlyCandidates: filter.onlyCandidates,
+    types: filter.types,
+    statuses: filter.statuses,
+  };
+  try {
+    localStorage.setItem(OPTIONS_KEY, optionsText(options));
+  } catch {
+    // Full or blocked storage: the checkboxes just reset on a reload.
+  }
+}
+
+/** Sets every checkbox, its state and its box. The chips are rebuilt on their new sets. */
+function applyOptions(options) {
+  showKnown = options.showKnown;
+  includeMuted = options.includeMuted;
+  onlyOpen = options.onlyOpen;
+  filter.onlyCandidates = options.onlyCandidates;
+  filter.types = new Set(options.types);
+  filter.statuses = new Set(options.statuses);
+  $("show-known").checked = showKnown;
+  $("include-muted").checked = includeMuted;
+  $("only-open").checked = onlyOpen;
+  $("f-types").replaceChildren();
+  addChips($("f-types"), TYPE_COLOURS, filter.types);
+  $("f-statuses").replaceChildren();
+  addChips($("f-statuses"), STATUS_COLOURS, filter.statuses);
 }
 
 // ───── experiments ─────
@@ -794,8 +847,6 @@ function buildStatic() {
     cells.push(cell);
     $("grid").append(cell);
   }
-  addChips($("f-types"), TYPE_COLOURS, filter.types);
-  addChips($("f-statuses"), STATUS_COLOURS, filter.statuses);
   $("f-changed").append(...CHANGED_WITHIN_PRESETS.map(([ms, label]) => el("option", { value: ms }, label)));
   $("goal-tabs").append(...GOAL_TABS.map(([tabGoal, title, does]) =>
     el("button", { "data-goal": tabGoal }, title, " ", el("small", {}, `— ${does}`))));
@@ -933,13 +984,14 @@ function renderKnownCell(cell, id, raw) {
 function addChips(parent, colours, chosen) {
   for (const [key, colour] of Object.entries(colours)) {
     const box = el("input", { type: "checkbox" });
-    box.checked = true;
+    box.checked = chosen.has(key);
     box.addEventListener("change", () => {
       if (box.checked) {
         chosen.add(key);
       } else {
         chosen.delete(key);
       }
+      saveOptions();
       render();
     });
     // background-color, not background, so the fading overlay of .faded stays.
@@ -1282,6 +1334,7 @@ $("f-query").addEventListener("input", (event) => {
 });
 $("f-candidates").addEventListener("change", (event) => {
   filter.onlyCandidates = event.target.checked;
+  saveOptions();
   render();
 });
 $("f-changed").addEventListener("change", (event) => {
@@ -1294,13 +1347,21 @@ $("colour-by").addEventListener("change", (event) => {
 });
 $("show-known").addEventListener("change", (event) => {
   showKnown = event.target.checked;
+  saveOptions();
   render();
 });
 $("include-muted").addEventListener("change", (event) => {
   includeMuted = event.target.checked;
+  saveOptions();
 });
 $("only-open").addEventListener("change", (event) => {
   onlyOpen = event.target.checked;
+  saveOptions();
+});
+$("reset-options").addEventListener("click", () => {
+  applyOptions(defaultOptions());
+  saveOptions();
+  render();
 });
 $("scan-toggle").addEventListener("click", toggleScan);
 $("goal-tabs").addEventListener("click", (event) => {
@@ -1404,6 +1465,7 @@ $("export-csv").addEventListener("click", () =>
   download(CSV_FILE_NAME,exportCsv(CATALOGUE, copy, notes, exportOptions()), "text/csv"));
 
 buildStatic();
+applyOptions(storedOptions());
 renderTabs();
 const storedMac = lastMac();
 if (storedMac !== null) {

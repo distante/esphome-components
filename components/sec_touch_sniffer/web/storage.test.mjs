@@ -13,7 +13,20 @@ import {
   TIMEOUT,
   walkOf,
 } from "./fixture_experiments.mjs";
-import { deviceKey, LAST_MAC_KEY, parseStored, STORAGE_PREFIX, storedText } from "./storage.mjs";
+import {
+  defaultOptions,
+  deviceKey,
+  LAST_MAC_KEY,
+  OPTIONS_KEY,
+  optionsText,
+  parseOptions,
+  parseStored,
+  STORAGE_PREFIX,
+  storedText,
+} from "./storage.mjs";
+import { allPass } from "./filters.mjs";
+import { STATUSES } from "./records.mjs";
+import { TYPES } from "./type_guess.mjs";
 
 const BROWSER_NOW_MS = Date.UTC(2026, 10, 21, 12, 0, 0);
 
@@ -160,4 +173,56 @@ test("a corrupt copy gives an empty copy but keeps the notes and mutes", () => {
   assert.deepEqual(stored.copy, emptyCopy());
   assert.deepEqual(stored.notes, { 5: "x" });
   assert.deepEqual(stored.mutes, new Set([5]));
+});
+
+test("every checkbox starts off and every filter chip ticked", () => {
+  const filter = allPass();
+  assert.deepEqual(defaultOptions(), {
+    showKnown: false,
+    includeMuted: false,
+    onlyOpen: false,
+    onlyCandidates: filter.onlyCandidates,
+    types: filter.types,
+    statuses: filter.statuses,
+  });
+});
+
+test("the checkboxes survive a round trip through storage", () => {
+  const options = {
+    showKnown: true,
+    includeMuted: true,
+    onlyOpen: true,
+    onlyCandidates: true,
+    types: new Set([TYPES[0]]),
+    statuses: new Set(),
+  };
+
+  assert.deepEqual(parseOptions(optionsText(options)), options);
+});
+
+test("nothing stored or unreadable storage gives the defaults", () => {
+  for (const text of [null, "", "{not json", "[]", "42"]) {
+    assert.deepEqual(parseOptions(text), defaultOptions(), String(text));
+  }
+});
+
+test("each unreadable checkbox falls back to its default on its own", () => {
+  const text = JSON.stringify({
+    showKnown: "yes",
+    includeMuted: true,
+    types: "int",
+    statuses: [STATUSES[0], "gone", 7],
+  });
+
+  assert.deepEqual(parseOptions(text), {
+    ...defaultOptions(),
+    includeMuted: true,
+    statuses: new Set([STATUSES[0]]),
+  });
+});
+
+test("the options entry is not a device entry", () => {
+  assert.ok(OPTIONS_KEY.startsWith(STORAGE_PREFIX));
+  assert.notEqual(OPTIONS_KEY, LAST_MAC_KEY);
+  assert.doesNotMatch(OPTIONS_KEY.slice(STORAGE_PREFIX.length), /^[0-9A-Fa-f:]+$/);
 });

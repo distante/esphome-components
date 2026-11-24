@@ -4,6 +4,7 @@
  * answered. DOM-free: the page only reads and writes the strings.
  */
 
+import { allPass } from "./filters.mjs";
 import { emptyCopy, fromStored, isObject, isStringOrNull, OUTCOMES, toStored, wholeDecimal } from "./records.mjs";
 import { isPendingProbe, isProbeEntry } from "./write_probe.mjs";
 
@@ -117,4 +118,50 @@ export function parseStored(text, defaultRange) {
  */
 export function storedText({ copy, notes, mutes, range, experiments, pendingProbe }) {
   return JSON.stringify({ copy: toStored(copy), notes, mutes: [...mutes], range, experiments, pendingProbe });
+}
+
+/** The key of the page's checkboxes, shared by every device. Not hex, so it never collides with a device key. */
+export const OPTIONS_KEY = `${STORAGE_PREFIX}options`;
+
+/**
+ * The page's checkboxes, as the page starts and as "Reset options" restores them.
+ *
+ * @returns {{showKnown: boolean, includeMuted: boolean, onlyOpen: boolean, onlyCandidates: boolean,
+ *   types: Set<string>, statuses: Set<string>}} `types` and `statuses` are the ticked filter chips
+ */
+export function defaultOptions() {
+  const { onlyCandidates, types, statuses } = allPass();
+  return { showKnown: false, includeMuted: false, onlyOpen: false, onlyCandidates, types, statuses };
+}
+
+/** A stored chip list, kept to the chips that still exist; null when it is not a list. */
+const chipsOf = (stored, all) => (Array.isArray(stored) ? new Set(stored.filter((chip) => all.has(chip))) : null);
+
+/**
+ * @param {string | null} text what browser storage held under `OPTIONS_KEY`, or null when nothing
+ * @returns {object} the checkboxes (see `defaultOptions`); each unreadable one falls back to its default
+ */
+export function parseOptions(text) {
+  const defaults = defaultOptions();
+  const stored = text === null ? null : parseJson(text);
+  if (!isObject(stored)) {
+    return defaults;
+  }
+  const flag = (name) => (typeof stored[name] === "boolean" ? stored[name] : defaults[name]);
+  return {
+    showKnown: flag("showKnown"),
+    includeMuted: flag("includeMuted"),
+    onlyOpen: flag("onlyOpen"),
+    onlyCandidates: flag("onlyCandidates"),
+    types: chipsOf(stored.types, defaults.types) ?? defaults.types,
+    statuses: chipsOf(stored.statuses, defaults.statuses) ?? defaults.statuses,
+  };
+}
+
+/**
+ * @param {object} options the checkboxes (see `defaultOptions`)
+ * @returns {string} what browser storage keeps under `OPTIONS_KEY`
+ */
+export function optionsText(options) {
+  return JSON.stringify({ ...options, types: [...options.types], statuses: [...options.statuses] });
 }

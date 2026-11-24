@@ -287,7 +287,16 @@ Runs in the browser only; the device serves raw strings.
 
 Decided in [What does the experiment panel look like in discover?](https://github.com/distante/esphome-components/issues/97), [How does a write probe run, and how does it fail safely?](https://github.com/distante/esphome-components/issues/98), [What do the exports record for experiments and write probes?](https://github.com/distante/esphome-components/issues/100) and [How do the decisions become the updated sniffer spec, and how is it sliced?](https://github.com/distante/esphome-components/issues/101).
 
-Keyed by the ESP's MAC: a copy of the records, per-ID notes and mutes, the last discover range, the **experiments** (name, created time, full range, captures, probe results) and a **pending probe**. Notes, mutes and experiments never go to the device. The goal, the open experiment and "show known" are not stored.
+Keyed by the ESP's MAC: a copy of the records, per-ID notes and mutes, the last discover range, the **experiments** (name, created time, full range, captures, probe results) and a **pending probe**. Notes, mutes and experiments never go to the device. The goal and the open experiment are not stored.
+
+**Checkboxes**, stored once per browser (not per MAC), and saved on every change:
+
+| Stored | Default |
+|---|---|
+| "include muted IDs", "JSON: only the open experiment", "show known", "only candidates" | off |
+| the type and status filter chips | all ticked |
+
+A **"Reset options"** header button restores the defaults. The search box, "changed within" and "colour by" are not stored. An unreadable stored checkbox falls back to its default on its own.
 - **After a reboot** (`boot` changed): the device wins for every ID it has. IDs only in the browser copy stay, greyed out as stale, until the device sees them again.
 - **Clear data** (a header button, after a confirm): `POST /sniffer/clear` empties the device's records, then the page drops its browser copy. Notes, mutes, experiments and the discover range stay. The device's scan and probe go on, but the page abandons a capture in flight and stores nothing ([Captures](#experiments)). If the device refuses or is offline, nothing is cleared. Other open pages see the new `boot` and take the empty store as a reboot, so their IDs turn stale.
 

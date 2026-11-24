@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE time-program entities</title>
+<!--
+  PROTOTYPE, throwaway. Wayfinder ticket #113:
+  "What do a fan pair's time-program entities look like in YAML and HA?"
+  Three variants of the YAML config and the resulting HA view, switchable via ?variant=A|B|C
+  and the bottom bar (or ← →). Names toggle: ?names=de|en. Data: fan pair 1 from the readme.
+  VERDICT (2026-11-24): C with names from the fan entry; see the resolution comment on #113.
+-->
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --ink:#1c1e21; --mute:#6b7280; --line:#e3e5e8; --code:#0f172a; --codeink:#e2e8f0; --acc:#03a9f4; --on:#ffc107; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111317; --card:#1c1f24; --ink:#e6e7ea; --mute:#9aa0a8; --line:#2c3037; --code:#0b0f17; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui, sans-serif; padding:16px 16px 90px; }
+  h1 { font-size:18px; margin:0 0 4px; } h2 { font-size:15px; margin:0 0 8px; } h3 { font-size:13px; margin:14px 0 6px; color:var(--mute); text-transform:uppercase; letter-spacing:.04em; }
+  .q { color:var(--mute); margin:0 0 14px; }
+  .grid { display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap:16px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  pre { background:var(--code); color:var(--codeink); padding:12px; border-radius:8px; overflow:auto; font:12.5px/1.5 ui-monospace, Menlo, monospace; margin:0; }
+  .k { color:#7dd3fc; } .c { color:#64748b; } .s { color:#bef264; }
+  .dev { border:1px solid var(--line); border-radius:8px; margin-bottom:12px; overflow:hidden; }
+  .dev header { padding:8px 12px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:8px; }
+  .dev header small { color:var(--mute); }
+  .row { display:grid; grid-template-columns: 22px 1fr auto; gap:8px; align-items:center; padding:6px 12px; border-bottom:1px solid var(--line); }
+  .row:last-child { border-bottom:0; }
+  .row .ic { width:18px; height:18px; border-radius:50%; background:var(--line); display:grid; place-items:center; font-size:11px; }
+  .row .eid { display:block; color:var(--mute); font:11px ui-monospace, monospace; }
+  .val { font-variant-numeric: tabular-nums; }
+  .pill { border:1px solid var(--line); border-radius:6px; padding:2px 8px; }
+  .tog { width:34px; height:18px; border-radius:9px; background:var(--line); position:relative; }
+  .tog.on { background:var(--acc); } .tog::after { content:""; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#fff; } .tog.on::after { left:18px; }
+  .sep { padding:4px 12px; background:var(--bg); color:var(--mute); font-size:12px; }
+  table { border-collapse:collapse; width:100%; } th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); } th { color:var(--mute); font-weight:600; font-size:12px; }
+  .pro { color:#16a34a; } .con { color:#dc2626; }
+  ul.tr { margin:0; padding-left:18px; } ul.tr li { margin:2px 0; }
+  .muted { color:var(--mute); }
+  .bar { position:fixed; left:50%; bottom:16px; transform:translateX(-50%); background:#111; color:#fff; border-radius:999px; padding:6px 8px; display:flex; gap:8px; align-items:center; box-shadow:0 6px 20px rgba(0,0,0,.35); font-size:13px; z-index:9; max-width:calc(100vw - 32px); }
+  .bar button { background:#333; color:#fff; border:0; border-radius:999px; padding:6px 12px; cursor:pointer; font:inherit; }
+  .bar .lbl { padding:0 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .banner { background:#fff3cd; color:#664d03; border-radius:8px; padding:6px 10px; margin-bottom:12px; font-size:12px; }
+</style>
+</head>
+<body>
+<div class="banner">PROTOTYPE · throwaway · answers wayfinder ticket "What do a fan pair's time-program entities look like in YAML and HA?" · values: fan pair 1 (Kellerraum) from the readme</div>
+<h1 id="title"></h1>
+<p class="q" id="sub"></p>
+<div class="grid">
+  <div class="card"><h2>YAML</h2><pre id="yaml"></pre><h3>Trade-offs</h3><ul class="tr" id="trade"></ul></div>
+  <div class="card"><h2 id="hatitle">Home Assistant</h2><div id="ha"></div></div>
+</div>
+
+<div class="bar">
+  <button id="prev" aria-label="previous variant">←</button>
+  <span class="lbl" id="lbl"></span>
+  <button id="next" aria-label="next variant">→</button>
+  <button id="names" title="toggle entity name language"></button>
+</div>
+
+<script>
+const PAIR = { n: 1, label: "Kellerraum", aktiv: [1,1,0,0,0], time: ["16:00","10:00","20:00","09:00","22:00"], modus: [0,3,4,3,0] };
+const MODUS = ["Manuell 0","Manuell 1","Manuell 2","Manuell 3","Manuell 4","Manuell 5","Manuell 6","Stoßlüften","Feuchte","CO2"];
+const T = {
+  de: { st: "Schaltzeit", time: "Zeit", modus: "Modus", aktiv: "Aktiv", prog: "Zeitprogramm" },
+  en: { st: "Switch time", time: "time", modus: "mode", aktiv: "active", prog: "Time program" },
+};
+const params = new URLSearchParams(location.search);
+let names = params.get("names") === "en" ? "en" : "de";
+const slug = s => s.toLowerCase().replace(/ß/g,"ss").replace(/ü/g,"u").replace(/ö/g,"o").replace(/ä/g,"a").replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
+const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+const hl = y => esc(y).replace(/^(\s*#.*)$/gm,'<span class="c">$1</span>').replace(/^(\s*-?\s*)([a-z_0-9]+):/gm,'$1<span class="k">$2</span>:').replace(/("[^"]*")/g,'<span class="s">$1</span>');
+
+function row(kind, name, eid, slot) {
+  let v = "";
+  if (kind === "time") { v = `<span class="pill val">${PAIR.time[slot]}</span>`; }
+  if (kind === "modus") { v = `<span class="pill">${MODUS[PAIR.modus[slot]]} ▾</span>`; }
+  if (kind === "aktiv") { v = `<span class="tog ${PAIR.aktiv[slot] ? "on" : ""}"></span>`; }
+  const ic = { time: "🕓", modus: "≡", aktiv: "⏻" }[kind];
+  return `<div class="row"><span class="ic">${ic}</span><span>${name}<span class="eid">${eid}</span></span>${v}</div>`;
+}
+function entityName(i, kind) { const t = T[names]; return `${t.st} ${i + 1} ${t[kind]}`; }
+function domain(kind) { return { time: "datetime", modus: "select", aktiv: "switch" }[kind]; }
+
+// Device page, sorted by name the way HA lists a section: rows group by switch time.
+function devicePage(devName, kinds, slots, prefix) {
+  const t = T[names];
+  let h = `<div class="dev"><header><b>${devName}</b><small>sub-device of ventilation-controller · relation: child</small></header><div class="sep">Configuration</div>`;
+  for (const i of slots) {
+    for (const k of kinds) {
+      const nm = entityName(i, k);
+      h += row(k, nm, `${domain(k)}.${slug(prefix + " " + nm)}`, i);
+    }
+  }
+  return h + `</div>`;
+}
+
+const VARIANTS = {
+  A: {
+    name: "One block per pair",
+    sub: "Opt-in per pair in the hub. Each listed pair gets all 15 entities on its own sub-device; the YAML only names the pair.",
+    yaml: () => `sec_touch:
+  uart_id: sec_touch_uart
+  # Opt-in: only the listed pairs get a time program.
+  time_programs:
+    - fan_number: 1
+      name: "${PAIR.label}"     # sub-device name; panel label is runtime, so YAML names it
+      # area_id: keller         # optional, standard device option
+    - fan_number: 2
+      name: "Küche"
+
+# The component creates per pair, on sub-device "<name> ${T[names].prog}":
+#   ${entityName(0,"time")} … ${entityName(4,"time")}     datetime (type: time)
+#   ${entityName(0,"modus")} … ${entityName(4,"modus")}   select (10 options)
+#   ${entityName(0,"aktiv")} … ${entityName(4,"aktiv")}   switch
+# all entity_category: config. No per-entity options.`,
+    ha: () => devicePage(`${PAIR.label} ${T[names].prog}`, ["time","modus","aktiv"], [0,1,2,3,4], PAIR.label),
+    trade: [
+      ["pro", "4 lines per pair. Matches the decided \"opt-in per pair\"."],
+      ["pro", "Device page reads as 5 rows of time · Modus · Aktiv (sorted by name)."],
+      ["pro", "Same entity names on every pair; the sub-device tells them apart."],
+      ["con", "New pattern: today every sec_touch entity is a platform entry (fan, select, text_sensor…)."],
+      ["con", "No per-entity icon, name, internal or web_server group without extra keys."],
+      ["con", "Always 15 entities per pair, even if only Aktiv matters."],
+    ],
+  },
+  B: {
+    name: "Per platform, per field",
+    sub: "Follows the existing pattern (text_sensor's mode_text / label_text): one platform entry per domain and pair, each field a sub-key you opt into.",
+    yaml: () => {
+      const t = T[names];
+      const sub = (kind, key) => [0,1,2,3,4].map(i => `    ${key}_${i+1}:\n      name: "${entityName(i, kind)}"`).join("\n");
+      return `esphome:
+  devices:
+    - id: tp_kellerraum
+      name: "${PAIR.label} ${t.prog}"
+      relation: child            # required since 2026.11.0
+
+datetime:
+  - platform: sec_touch
+    fan_number: 1
+    device_id: tp_kellerraum   # user wires the grouping
+${sub("time","switch_time")}
+
+select:
+  - platform: sec_touch
+    fan_number: 1
+    device_id: tp_kellerraum
+${sub("modus","modus")}
+
+switch:
+  - platform: sec_touch
+    fan_number: 1
+    device_id: tp_kellerraum
+${sub("aktiv","aktiv")}
+# Leave out a key → no entity for that field.`;
+    },
+    ha: () => devicePage(`${PAIR.label} ${T[names].prog}`, ["time","modus","aktiv"], [0,1,2,3,4], PAIR.label),
+    trade: [
+      ["pro", "Same shape as every other sec_touch entity; all standard entity options work (icon, internal, web_server…)."],
+      ["pro", "Opt-in per field: e.g. only the 5 Aktiv switches."],
+      ["pro", "HA looks the same as A when fully declared."],
+      ["con", "≈45 lines per pair; 6 pairs ≈ 270 lines of YAML."],
+      ["con", "Grouping and names are the user's job; easy to mismatch fan_number and device_id."],
+      ["con", "Opt-in is per field, not per pair: a half-declared switch time is possible."],
+    ],
+  },
+  C: {
+    name: "Per pair, per switch time, + action",
+    sub: "Opt-in per pair in the hub, narrowed to the switch times you use. Adds an optional api action to set a whole row. HA view shown as a dashboard card plus the action call.",
+    yaml: () => `sec_touch:
+  uart_id: sec_touch_uart
+  time_programs:
+    - fan_number: 1
+      name: "${PAIR.label}"
+      switch_times: [1, 2]       # default: all 5
+    - fan_number: 2
+      name: "Küche"
+
+api:
+  actions:                       # optional extra, added by the component
+    # sec_touch.set_switch_time(fan_number, switch_time, time, modus, aktiv)
+
+# Entities as in A, only for switch times 1 and 2: 6 instead of 15.`,
+    ha: () => {
+      const t = T[names];
+      let h = devicePage(`${PAIR.label} ${t.prog}`, ["time","modus","aktiv"], [0,1], PAIR.label);
+      h += `<h3>Dashboard: entities card, one row per switch time</h3><table><tr><th>${t.st}</th><th>${t.time}</th><th>${t.modus}</th><th>${t.aktiv}</th></tr>`;
+      for (const i of [0,1]) { h += `<tr><td>${i+1}</td><td class="val">${PAIR.time[i]}</td><td>${MODUS[PAIR.modus[i]]}</td><td><span class="tog ${PAIR.aktiv[i] ? "on" : ""}"></span></td></tr>`; }
+      h += `</table><h3>Automation / developer tools</h3><pre>${hl(`action: esphome.ventilation_controller_set_switch_time
+data:
+  fan_number: 1
+  switch_time: 2
+  time: "06:30:00"
+  modus: 3        # Manuell 3
+  aktiv: true`)}</pre>`;
+      return h;
+    },
+    trade: [
+      ["pro", "Fewest entities: hide switch times you never use."],
+      ["pro", "One action call sets a whole row (time + Modus + Aktiv) in automations."],
+      ["con", "A switch time used on the panel but not listed is invisible in HA."],
+      ["con", "Action has no state; it needs the entities anyway to read back."],
+      ["con", "Two write paths (entities and action) to keep consistent."],
+    ],
+  },
+  D: {
+    name: "On the fan entry, fan's name",
+    sub: "Opt-in on the pair's existing fan entry. The sub-device and its name come from the fan's name plus an English suffix, overridable. Entity names English by default, each overridable.",
+    yaml: () => `fan:
+  - platform: sec_touch
+    fan_number: 1
+    name: "${PAIR.label}"
+    time_program: true           # opt-in; sub-device "${PAIR.label} time program"
+  - platform: sec_touch
+    fan_number: 2
+    name: "Küche"
+    time_program:                # long form: override names
+      device_name: "Küche Zeitprogramm"
+      names:
+        time: "Schaltzeit {n} Zeit"
+        mode: "Schaltzeit {n} Modus"
+        active: "Schaltzeit {n} Aktiv"
+
+# A pair without a fan entry has no time program.`,
+    ha: () => {
+      const keep = names; names = "en";
+      const h = devicePage(`${PAIR.label} time program`, ["time","modus","aktiv"], [0,1,2,3,4], PAIR.label);
+      names = keep; return h;
+    },
+    trade: [
+      ["pro", "Uses the name the user already gave the pair; no second name to keep in step."],
+      ["pro", "Stays inside the existing platform-entry pattern; 1 line per pair in the short form."],
+      ["pro", "English by default like the rest of the component; German or anything else via overrides."],
+      ["con", "Needs a fan entry for the pair, even if the user only wants the program."],
+      ["con", "The fan platform's schema grows a nested block that creates entities of 3 other domains."],
+    ],
+  },
+};
+const KEYS = Object.keys(VARIANTS);
+let cur = KEYS.includes(params.get("variant")) ? params.get("variant") : "A";
+
+function render() {
+  const v = VARIANTS[cur];
+  document.getElementById("title").textContent = `Variant ${cur}: ${v.name}`;
+  document.getElementById("sub").textContent = v.sub;
+  document.getElementById("yaml").innerHTML = hl(v.yaml());
+  document.getElementById("ha").innerHTML = v.ha();
+  document.getElementById("trade").innerHTML = v.trade.map(([c, s]) => `<li class="${c}">${c === "pro" ? "+" : "−"} <span style="color:var(--ink)">${esc(s)}</span></li>`).join("");
+  document.getElementById("lbl").textContent = `${cur} (${v.name})`;
+  document.getElementById("names").textContent = `names: ${names === "de" ? "panel (DE)" : "English"}`;
+  const p = new URLSearchParams(location.search); p.set("variant", cur); p.set("names", names);
+  history.replaceState(null, "", "?" + p.toString());
+}
+function step(d) { cur = KEYS[(KEYS.indexOf(cur) + d + KEYS.length) % KEYS.length]; render(); }
+document.getElementById("prev").onclick = () => step(-1);
+document.getElementById("next").onclick = () => step(1);
+document.getElementById("names").onclick = () => { names = names === "de" ? "en" : "de"; render(); };
+addEventListener("keydown", e => {
+  if (e.target.closest("input, textarea, [contenteditable]")) { return; }
+  if (e.key === "ArrowLeft") { step(-1); }
+  if (e.key === "ArrowRight") { step(1); }
+});
+render();
+</script>
+</body>
+</html>

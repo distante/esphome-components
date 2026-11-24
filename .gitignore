@@ -162,3 +162,5 @@ sdkconfig.*
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+.temp

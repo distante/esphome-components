@@ -49,7 +49,7 @@ Closes #<issue>
 
 ## Rules
 
-No preambles. Terms from [GLOSSARY.md](../../../GLOSSARY.md).
+No preambles. Terms from [GLOSSARY.md](../../../GLOSSARY.md). Writing follows [Docs and PR text](../coding-standards/SKILL.md#docs-and-pr-text).
 
 - **TL;DR**: for the panel owner, not a developer. What they notice: what works now, what stops failing, what YAML they must change. No identifiers, files, or bytes. No owner-visible change (tests, CI, docs) → one sentence naming who benefits.
 - **What changes for you**: before/after journey of everyone the change touches. Owner journey: actions, what panel/HA show. Developer journey (contributor or their agent): what they read, run, or get from tooling, tests, CI, docs. Both when both change. Label each journey with whose it is. Shapes: [visuals.md](visuals.md).

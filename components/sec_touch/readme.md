@@ -393,7 +393,7 @@ See [RAW_VALUES.md](RAW_VALUES.md#how-to-reproduce) for a capture walkthrough.
 
 #### Finding what an ID controls
 
-An experiment finds the unknown ID behind one panel setting: you change the setting on the panel, capture, and the page keeps only the IDs that follow it. The example is the one that found ID 101, the "Aktiv" checkbox of "Schaltzeit 1" on the panel's "Zeitprogramm Kellerraum" screen.
+An experiment finds the unknown ID behind one panel setting: you change the setting on the panel, capture, and the page keeps only the IDs that follow it. The example is the one that found ID 101 through the "Aktiv" checkbox of "Schaltzeit 1" on the panel's "Zeitprogramm Kellerraum" screen. (ID 101 turned out to hold the Aktiv boxes of all 5 switch times, see [Time programs](#time-programs-zeitprogramm-ids-101166).)
 
 1. **Open the page** at `http://<device>/sniffer`, on the Discover tab. In the scan row, set **from** and **to** to the range to search. The whole range 1–255 always works. A smaller one, such as 90–130, makes every capture quicker, but the setting's ID must be inside it. The experiment keeps the range of its first capture.
 2. **Start an experiment.** The coach box on the right asks "What setting will you change on the panel?". Type the setting, such as `Schaltzeit 1 aktiv`, and click **Start experiment**. A sub-tab with that name appears.
@@ -433,7 +433,66 @@ web_server_base:   # or web_server:
 
 ### What I have found so far
 
+#### Time programs (Zeitprogramm): IDs 101–166
+
+Each fan pair has a Zeitprogramm screen with 5 switch times (Schaltzeit). Each switch time has a time, a Modus and an Aktiv box. The panel keeps one block of 11 IDs per fan pair:
+
+| Fan pair | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|
+| Block | 101–111 | 112–122 | 123–133 | 134–144 | 145–155 | 156–166 |
+| Label / level ID | 78 / 173 | 79 / 174 | 80 / 175 | 81 / 176 | 82 / 177 | 83 / 178 |
+
+Inside a block, for switch times 1–5 (Schaltzeit):
+
+| ID in the block | Pair 1 | Holds | Values |
+|---|---|---|---|
+| 1st | 101 | which switch times are Aktiv | one value for all 5, see below |
+| 2nd–6th | 102–106 | time of switch time 1 … 5 | `HH:MM:SS` |
+| 7th–11th | 107–111 | Modus of switch time 1 … 5 | `0`–`6` Manuell level · `7` Stoßlüften · `8` Feuchte · `9` CO2 ([fan levels](#fan-pair-level-special-values) without 10 and 11) |
+
+**Reading the Aktiv value.** Each switch time has a number. Add up the numbers of the ticked ones and write the sum in hexadecimal, 2 digits:
+
+| Switch time | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|
+| Number | 1 | 2 | 4 | 8 | 16 |
+
+| Ticked switch times | Sum | Value |
+|---|---|---|
+| none | 0 | `00` |
+| 2 | 2 | `02` |
+| 1, 2 | 1 + 2 = 3 | `03` |
+| 3, 4 | 4 + 8 = 12 | `0C` |
+| 4, 5 | 8 + 16 = 24 | `18` |
+
+Fan pair 1, read and checked against its screen:
+
+| Switch time | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|
+| Aktiv (101 = `03`) | ✓ | ✓ | – | – | – |
+| Time (102–106) | 16:00 | 10:00 | 20:00 | 09:00 | 22:00 |
+| Modus (107–111) | level 0 | level 3 | level 4 | level 3 | level 0 |
+
+- The screen title shows the pair's label, not its number. Here: pair 1 = "Kellerraum" (`35`), pair 2 = "Küche" (`21`).
+- Pair 6 has label `0`, no fan (level 178 = 255 in the [earlier scan](#earlier-full-scan-ids-1208)). Its block holds defaults: `00`, 06:00 · 09:00 · 15:00 · 20:00 · 22:00, all `0`.
+- The pattern ends at 166. 168 (`4.153.07:36`) is the Betriebszeit (`years.days.HH:MM`); 167 and 55 share its format.
+- Not in `protocol_ids.h` yet: [#85](https://github.com/distante/esphome-components/issues/85) decides whether they become known IDs.
+
+How sure:
+
+| Part | Status | How |
+|---|---|---|
+| Aktiv, switch times 1 and 2 | ✅ tested | experiments: 101 `02` ↔ `03` (switch time 1), `03` ↔ `01` (switch time 2); write probe and set and keep `03` (the only write) |
+| Aktiv, switch times 3, 4 and 5 | ✅ panel | 112 = `18` matches pair 2's screen (4 and 5 ticked); `0C` matches the screens of pairs 3–5 (3 and 4 ticked) |
+| Modus `0` `5` `6` `7` `8` `9` | ✅ tested | experiments on 111 |
+| Modus `0`–`4` `7` | ✅ panel | Manuell bars and Stoßlüften on the screens of pairs 1–5 |
+| Times, block = pair | ✅ panel | discover scan 95–172 matched the screens of pairs 1–5 |
+| Block 6 | ⚠️ assumed | position; pair 6 has no fan, so no screen to check |
+
+#### Earlier full scan: IDs 1–208
+
 Scan performed over IDs 1–208. The text sensor used then left registered listeners out, so the IDs registered at the time (78–82, 173–175 and 177) are missing below; their meaning is already documented above.
+
+Earlier scan of the same controller, taken before CRC checking: a single value may be corrupt. Pair 1's time program differs from today's (101 reads 18 here, `03` in [Time programs](#time-programs-zeitprogramm-ids-101166)), most likely changed since.
 
 **If you recognize a pattern or know what an ID controls, please open a PR or issue.**
 
@@ -509,7 +568,7 @@ Scan performed over IDs 1–208. The text sensor used then left registered liste
 | 52 | 70 | | |
 | 53 | 10 | | |
 | 54 | 20 | | |
-| 55 | 0 | | |
+| 55 | 0 | Same format as 168 (`0.360.00:00`), unknown counter | Low |
 | 56 | 127 | | |
 | 57 | 0 | | |
 | 58 | 1 | | |
@@ -550,74 +609,74 @@ Scan performed over IDs 1–208. The text sensor used then left registered liste
 | 98 | 2000 | | |
 | 99 | -50 | | |
 | 100 | 50 | | |
-| 101 | 18 | | |
-| 102 | 6 | | |
-| 103 | 11 | | |
-| 104 | 22 | | |
-| 105 | 9 | | |
-| 106 | 22 | | |
-| 107 | 0 | | |
-| 108 | 7 | | |
-| 109 | 4 | | |
-| 110 | 3 | | |
-| 111 | 0 | | |
-| 112 | 18 | | |
-| 113 | 13 | | |
-| 114 | 14 | | |
-| 115 | 7 | | |
-| 116 | 23 | | |
-| 117 | 7 | | |
-| 118 | 7 | | |
-| 119 | 0 | | |
-| 120 | 7 | | |
-| 121 | 2 | | |
-| 122 | 0 | | |
-| 123 | 0 | | |
-| 124 | 13 | | |
-| 125 | 14 | | |
-| 126 | 22 | | |
-| 127 | 4 | | |
-| 128 | 12 | | |
-| 129 | 7 | | |
-| 130 | 0 | | |
-| 131 | 1 | | |
-| 132 | 0 | | |
-| 133 | 0 | | |
-| 134 | 0 | | |
-| 135 | 13 | | |
-| 136 | 14 | | |
-| 137 | 20 | | |
-| 138 | 8 | | |
-| 139 | 12 | | |
-| 140 | 7 | | |
-| 141 | 0 | | |
-| 142 | 2 | | |
-| 143 | 0 | | |
-| 144 | 0 | | |
-| 145 | 0 | | |
-| 146 | 0 | | |
-| 147 | 23 | | |
-| 148 | 8 | | |
-| 149 | 15 | | |
-| 150 | 4 | | |
-| 151 | 7 | | |
-| 152 | 1 | | |
-| 153 | 1 | | |
-| 154 | 0 | | |
-| 155 | 7 | | |
-| 156 | 0 | | |
-| 157 | 6 | | |
-| 158 | 9 | | |
-| 159 | 15 | | |
-| 160 | 20 | | |
-| 161 | 22 | | |
-| 162 | 0 | | |
-| 163 | 0 | | |
-| 164 | 0 | | |
-| 165 | 0 | | |
-| 166 | 0 | | |
-| 167 | 0 | | |
-| 168 | 3 | | |
+| 101 | 18 | Time program, pair 1: Aktiv of switch times 1–5 | High |
+| 102 | 6 | Time program, pair 1: switch time 1, time | High |
+| 103 | 11 | Time program, pair 1: switch time 2, time | High |
+| 104 | 22 | Time program, pair 1: switch time 3, time | High |
+| 105 | 9 | Time program, pair 1: switch time 4, time | High |
+| 106 | 22 | Time program, pair 1: switch time 5, time | High |
+| 107 | 0 | Time program, pair 1: switch time 1, Modus | High |
+| 108 | 7 | Time program, pair 1: switch time 2, Modus | High |
+| 109 | 4 | Time program, pair 1: switch time 3, Modus | High |
+| 110 | 3 | Time program, pair 1: switch time 4, Modus | High |
+| 111 | 0 | Time program, pair 1: switch time 5, Modus | High |
+| 112 | 18 | Time program, pair 2: Aktiv of switch times 1–5 | High |
+| 113 | 13 | Time program, pair 2: switch time 1, time | High |
+| 114 | 14 | Time program, pair 2: switch time 2, time | High |
+| 115 | 7 | Time program, pair 2: switch time 3, time | High |
+| 116 | 23 | Time program, pair 2: switch time 4, time | High |
+| 117 | 7 | Time program, pair 2: switch time 5, time | High |
+| 118 | 7 | Time program, pair 2: switch time 1, Modus | High |
+| 119 | 0 | Time program, pair 2: switch time 2, Modus | High |
+| 120 | 7 | Time program, pair 2: switch time 3, Modus | High |
+| 121 | 2 | Time program, pair 2: switch time 4, Modus | High |
+| 122 | 0 | Time program, pair 2: switch time 5, Modus | High |
+| 123 | 0 | Time program, pair 3: Aktiv of switch times 1–5 | High |
+| 124 | 13 | Time program, pair 3: switch time 1, time | High |
+| 125 | 14 | Time program, pair 3: switch time 2, time | High |
+| 126 | 22 | Time program, pair 3: switch time 3, time | High |
+| 127 | 4 | Time program, pair 3: switch time 4, time | High |
+| 128 | 12 | Time program, pair 3: switch time 5, time | High |
+| 129 | 7 | Time program, pair 3: switch time 1, Modus | High |
+| 130 | 0 | Time program, pair 3: switch time 2, Modus | High |
+| 131 | 1 | Time program, pair 3: switch time 3, Modus | High |
+| 132 | 0 | Time program, pair 3: switch time 4, Modus | High |
+| 133 | 0 | Time program, pair 3: switch time 5, Modus | High |
+| 134 | 0 | Time program, pair 4: Aktiv of switch times 1–5 | High |
+| 135 | 13 | Time program, pair 4: switch time 1, time | High |
+| 136 | 14 | Time program, pair 4: switch time 2, time | High |
+| 137 | 20 | Time program, pair 4: switch time 3, time | High |
+| 138 | 8 | Time program, pair 4: switch time 4, time | High |
+| 139 | 12 | Time program, pair 4: switch time 5, time | High |
+| 140 | 7 | Time program, pair 4: switch time 1, Modus | High |
+| 141 | 0 | Time program, pair 4: switch time 2, Modus | High |
+| 142 | 2 | Time program, pair 4: switch time 3, Modus | High |
+| 143 | 0 | Time program, pair 4: switch time 4, Modus | High |
+| 144 | 0 | Time program, pair 4: switch time 5, Modus | High |
+| 145 | 0 | Time program, pair 5: Aktiv of switch times 1–5 | High |
+| 146 | 0 | Time program, pair 5: switch time 1, time | High |
+| 147 | 23 | Time program, pair 5: switch time 2, time | High |
+| 148 | 8 | Time program, pair 5: switch time 3, time | High |
+| 149 | 15 | Time program, pair 5: switch time 4, time | High |
+| 150 | 4 | Time program, pair 5: switch time 5, time | High |
+| 151 | 7 | Time program, pair 5: switch time 1, Modus | High |
+| 152 | 1 | Time program, pair 5: switch time 2, Modus | High |
+| 153 | 1 | Time program, pair 5: switch time 3, Modus | High |
+| 154 | 0 | Time program, pair 5: switch time 4, Modus | High |
+| 155 | 7 | Time program, pair 5: switch time 5, Modus | High |
+| 156 | 0 | Time program, pair 6: Aktiv of switch times 1–5 | Medium |
+| 157 | 6 | Time program, pair 6: switch time 1, time | Medium |
+| 158 | 9 | Time program, pair 6: switch time 2, time | Medium |
+| 159 | 15 | Time program, pair 6: switch time 3, time | Medium |
+| 160 | 20 | Time program, pair 6: switch time 4, time | Medium |
+| 161 | 22 | Time program, pair 6: switch time 5, time | Medium |
+| 162 | 0 | Time program, pair 6: switch time 1, Modus | Medium |
+| 163 | 0 | Time program, pair 6: switch time 2, Modus | Medium |
+| 164 | 0 | Time program, pair 6: switch time 3, Modus | Medium |
+| 165 | 0 | Time program, pair 6: switch time 4, Modus | Medium |
+| 166 | 0 | Time program, pair 6: switch time 5, Modus | Medium |
+| 167 | 0 | Same format as 168 (`0.0.00:00`), unknown counter | Low |
+| 168 | 3 | Betriebszeit (operating time), `years.days.HH:MM`: later scan `4.153.07:36`, panel 4 years 153 days 8:36 an hour later | High |
 | 169 | 0 | | |
 | 170 | 0 | | |
 | 171 | 0 | | |

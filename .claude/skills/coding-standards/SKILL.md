@@ -91,3 +91,14 @@ Every change lands with tests in one of five layers:
   - **Starting a task while already in a worktree** (a session reused with `/clear`, for example): when that worktree holds no earlier work on this task, which is the usual case, call `ExitWorktree` with `action: "keep"` first, then `EnterWorktree` with a new `name`. `EnterWorktree` refuses to create a worktree from inside another, and one made by hand from there nests inside it. Stay in the current worktree only when it already holds this task's own earlier work.
 - **Formatting and linting.** Before committing, run `pre-commit run --files <changed files>` and keep its fixes. Never format with a clang-format from outside the venv or pre-commit: other versions format differently.
 - **Git hooks.** Commit with the hooks running. Never bypass them: no `--no-verify`, no `PRE_COMMIT_ALLOW_NO_CONFIG`.
+
+### Docs and PR text
+
+Readmes, reports, PR bodies and issue comments are read by a skimming human and by agents paying per token. Write them short and visual:
+
+- **Show structure.** A layout, a mapping, a before/after or a status per item goes in a table or a Mermaid diagram. A code block holds only code, pseudocode, a call tree or a file tree. Prose carries only what has no structure: a reason, a caveat.
+- **Plain words.** Use a technical term only when it names the thing (an ID, a panel label, a protocol constant).
+- **One fact, one place.** A value sits in one table; other places link to it.
+- **Short sentences**, one idea per bullet.
+- **Keep every fact.** Shortening drops words, never data.
+- **Raw dumps stay out of the repo.** An export or a full log becomes a table of the values that matter.

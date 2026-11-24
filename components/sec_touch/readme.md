@@ -482,15 +482,11 @@ How sure:
 | Part | Status | How |
 |---|---|---|
 | Aktiv, switch times 1 and 2 | ✅ tested | experiments: 101 `02` ↔ `03` (switch time 1), `03` ↔ `01` (switch time 2); write probe and set and keep `03` (the only write) |
-| Aktiv, switch times 4 and 5 | ✅ panel | 112 = `18` matches pair 2's screen |
-| Aktiv, switch time 3 | ⚠️ assumed | by elimination (1, 2, 8, 16 are known); `0C` in blocks 3–5 fits |
-| Modus `0` `7` | ✅ tested, ✅ panel | experiment on 111; pair 2's screen: `0` empty Manuell bar, `7` Stoßlüften |
-| Modus `8` `9` | ✅ tested | experiment on 111 |
-| Modus `2` | ✅ panel | pair 2's screen: low Manuell bar |
-| Modus `3` `4` | ✅ panel | pair 1's screen: 3, 4 and 3 bars for switch times 2–4 |
-| Modus `1` `5` `6` | ⚠️ assumed | same as the fan levels; `1` only seen in blocks 3 and 5, not checked |
-| Times, block = pair | ✅ panel | discover scan 95–172 matched the screens of pairs 1 and 2 |
-| Blocks 3–6 | ⚠️ assumed | position; not checked on their screens |
+| Aktiv, switch times 3, 4 and 5 | ✅ panel | 112 = `18` matches pair 2's screen (4 and 5 ticked); `0C` matches the screens of pairs 3–5 (3 and 4 ticked) |
+| Modus `0` `5` `6` `7` `8` `9` | ✅ tested | experiments on 111 |
+| Modus `0`–`4` `7` | ✅ panel | Manuell bars and Stoßlüften on the screens of pairs 1–5 |
+| Times, block = pair | ✅ panel | discover scan 95–172 matched the screens of pairs 1–5 |
+| Block 6 | ⚠️ assumed | position; pair 6 has no fan, so no screen to check |
 
 #### Earlier full scan: IDs 1–208
 
@@ -635,39 +631,39 @@ Earlier scan of the same controller, taken before CRC checking: a single value m
 | 120 | 7 | Time program, pair 2: switch time 3, Modus | High |
 | 121 | 2 | Time program, pair 2: switch time 4, Modus | High |
 | 122 | 0 | Time program, pair 2: switch time 5, Modus | High |
-| 123 | 0 | Time program, pair 3: Aktiv of switch times 1–5 | Medium |
-| 124 | 13 | Time program, pair 3: switch time 1, time | Medium |
-| 125 | 14 | Time program, pair 3: switch time 2, time | Medium |
-| 126 | 22 | Time program, pair 3: switch time 3, time | Medium |
-| 127 | 4 | Time program, pair 3: switch time 4, time | Medium |
-| 128 | 12 | Time program, pair 3: switch time 5, time | Medium |
-| 129 | 7 | Time program, pair 3: switch time 1, Modus | Medium |
-| 130 | 0 | Time program, pair 3: switch time 2, Modus | Medium |
-| 131 | 1 | Time program, pair 3: switch time 3, Modus | Medium |
-| 132 | 0 | Time program, pair 3: switch time 4, Modus | Medium |
-| 133 | 0 | Time program, pair 3: switch time 5, Modus | Medium |
-| 134 | 0 | Time program, pair 4: Aktiv of switch times 1–5 | Medium |
-| 135 | 13 | Time program, pair 4: switch time 1, time | Medium |
-| 136 | 14 | Time program, pair 4: switch time 2, time | Medium |
-| 137 | 20 | Time program, pair 4: switch time 3, time | Medium |
-| 138 | 8 | Time program, pair 4: switch time 4, time | Medium |
-| 139 | 12 | Time program, pair 4: switch time 5, time | Medium |
-| 140 | 7 | Time program, pair 4: switch time 1, Modus | Medium |
-| 141 | 0 | Time program, pair 4: switch time 2, Modus | Medium |
-| 142 | 2 | Time program, pair 4: switch time 3, Modus | Medium |
-| 143 | 0 | Time program, pair 4: switch time 4, Modus | Medium |
-| 144 | 0 | Time program, pair 4: switch time 5, Modus | Medium |
-| 145 | 0 | Time program, pair 5: Aktiv of switch times 1–5 | Medium |
-| 146 | 0 | Time program, pair 5: switch time 1, time | Medium |
-| 147 | 23 | Time program, pair 5: switch time 2, time | Medium |
-| 148 | 8 | Time program, pair 5: switch time 3, time | Medium |
-| 149 | 15 | Time program, pair 5: switch time 4, time | Medium |
-| 150 | 4 | Time program, pair 5: switch time 5, time | Medium |
-| 151 | 7 | Time program, pair 5: switch time 1, Modus | Medium |
-| 152 | 1 | Time program, pair 5: switch time 2, Modus | Medium |
-| 153 | 1 | Time program, pair 5: switch time 3, Modus | Medium |
-| 154 | 0 | Time program, pair 5: switch time 4, Modus | Medium |
-| 155 | 7 | Time program, pair 5: switch time 5, Modus | Medium |
+| 123 | 0 | Time program, pair 3: Aktiv of switch times 1–5 | High |
+| 124 | 13 | Time program, pair 3: switch time 1, time | High |
+| 125 | 14 | Time program, pair 3: switch time 2, time | High |
+| 126 | 22 | Time program, pair 3: switch time 3, time | High |
+| 127 | 4 | Time program, pair 3: switch time 4, time | High |
+| 128 | 12 | Time program, pair 3: switch time 5, time | High |
+| 129 | 7 | Time program, pair 3: switch time 1, Modus | High |
+| 130 | 0 | Time program, pair 3: switch time 2, Modus | High |
+| 131 | 1 | Time program, pair 3: switch time 3, Modus | High |
+| 132 | 0 | Time program, pair 3: switch time 4, Modus | High |
+| 133 | 0 | Time program, pair 3: switch time 5, Modus | High |
+| 134 | 0 | Time program, pair 4: Aktiv of switch times 1–5 | High |
+| 135 | 13 | Time program, pair 4: switch time 1, time | High |
+| 136 | 14 | Time program, pair 4: switch time 2, time | High |
+| 137 | 20 | Time program, pair 4: switch time 3, time | High |
+| 138 | 8 | Time program, pair 4: switch time 4, time | High |
+| 139 | 12 | Time program, pair 4: switch time 5, time | High |
+| 140 | 7 | Time program, pair 4: switch time 1, Modus | High |
+| 141 | 0 | Time program, pair 4: switch time 2, Modus | High |
+| 142 | 2 | Time program, pair 4: switch time 3, Modus | High |
+| 143 | 0 | Time program, pair 4: switch time 4, Modus | High |
+| 144 | 0 | Time program, pair 4: switch time 5, Modus | High |
+| 145 | 0 | Time program, pair 5: Aktiv of switch times 1–5 | High |
+| 146 | 0 | Time program, pair 5: switch time 1, time | High |
+| 147 | 23 | Time program, pair 5: switch time 2, time | High |
+| 148 | 8 | Time program, pair 5: switch time 3, time | High |
+| 149 | 15 | Time program, pair 5: switch time 4, time | High |
+| 150 | 4 | Time program, pair 5: switch time 5, time | High |
+| 151 | 7 | Time program, pair 5: switch time 1, Modus | High |
+| 152 | 1 | Time program, pair 5: switch time 2, Modus | High |
+| 153 | 1 | Time program, pair 5: switch time 3, Modus | High |
+| 154 | 0 | Time program, pair 5: switch time 4, Modus | High |
+| 155 | 7 | Time program, pair 5: switch time 5, Modus | High |
 | 156 | 0 | Time program, pair 6: Aktiv of switch times 1–5 | Medium |
 | 157 | 6 | Time program, pair 6: switch time 1, time | Medium |
 | 158 | 9 | Time program, pair 6: switch time 2, time | Medium |

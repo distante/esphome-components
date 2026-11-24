@@ -301,6 +301,7 @@ Keyed by the ESP's MAC: a copy of the records, per-ID notes and mutes, the last 
 - **"Reset options"**, a header button, restores the defaults.
 - The search box, "changed within" and "colour by" are not stored.
 - An unreadable stored checkbox falls back to its default on its own.
+- Chips are stored as the unticked ones, so a new chip starts ticked.
 - Other open pages pick up a change or a reset at once.
 - With no experiment open, "only candidates" and "JSON: only the open experiment" show unticked and disabled; their stored value comes back when an experiment opens.
 
@@ -318,6 +319,11 @@ Decided in [What do sniffer exports record with two goals?](https://github.com/d
 
 **`experiments`**: every experiment stored for this MAC. A checkbox **"JSON: only the open experiment"** next to the export narrows the array to the open sub-tab; it is disabled when no experiment is open. Records stay the full dump either way. The CSV has no experiments, so the checkbox does not touch it.
 
+- **Experiment** `{name, from, to, created_at, captures, candidates, disqualified, probes}`: `from`/`to` are the full range fixed at the first capture, `null` before any capture; `created_at` is a wall ISO time. Deleted captures are gone.
+- **Capture** `{label, at, uptime_ms, boot, full, entries}`: `label` as typed; `at` wall ISO; `uptime_ms` and `boot` from the device at capture time, so a capture lines up with record history across a reboot; `full` is `true` for a full capture and `false` for a narrowed one; `entries` is `{"<id>": {"outcome": "ok"|"nak"|"timeout", "raw": "…"|null}}` for exactly the IDs the capture queried. An absent ID was not queried, which stays distinct from a timeout. Raw values use the records' `\u00XX` encoding.
+- **Derived at export time** (there is no import, so nothing conflicts with a recompute): `candidates` `[{id, status: "candidate"|"corroborated", values: [{label, raw, count}]}]` with labels in their first spelling, and `disqualified` `[{id, conflicts: [{label, raws: [...]}]}]`.
+- **`probes`**, oldest first: every probe and restore run from that experiment's cards, in the device's `probe` object shape (`kind, id, value, original, steps, verdict, restore`) plus a wall `at`. A failed restore is `restore: "failed"`, with the last `get` step's value and `original` giving "now Y, was Z". A pending probe the device no longer knew gets **`interrupted: true`**, `verdict: null` and its steps as last seen. A probe still running at export time is exported as is, with `active: true`.
+
 **File names** ([#108](https://github.com/distante/esphome-components/issues/108)):
 
 | Export | File name |
@@ -334,11 +340,6 @@ The slug comes from the open experiment's name:
 4. Leading and trailing `-` dropped.
 
 Example: `Kellerraum Schaltzeit 2 aktiv` → `sec_touch_sniffer-kellerraum-schaltzeit-2-aktiv.json`. Two experiments with the same name give the same file name; the browser adds its own `(1)`.
-
-- **Experiment** `{name, from, to, created_at, captures, candidates, disqualified, probes}`: `from`/`to` are the full range fixed at the first capture, `null` before any capture; `created_at` is a wall ISO time. Deleted captures are gone.
-- **Capture** `{label, at, uptime_ms, boot, full, entries}`: `label` as typed; `at` wall ISO; `uptime_ms` and `boot` from the device at capture time, so a capture lines up with record history across a reboot; `full` is `true` for a full capture and `false` for a narrowed one; `entries` is `{"<id>": {"outcome": "ok"|"nak"|"timeout", "raw": "…"|null}}` for exactly the IDs the capture queried. An absent ID was not queried, which stays distinct from a timeout. Raw values use the records' `\u00XX` encoding.
-- **Derived at export time** (there is no import, so nothing conflicts with a recompute): `candidates` `[{id, status: "candidate"|"corroborated", values: [{label, raw, count}]}]` with labels in their first spelling, and `disqualified` `[{id, conflicts: [{label, raws: [...]}]}]`.
-- **`probes`**, oldest first: every probe and restore run from that experiment's cards, in the device's `probe` object shape (`kind, id, value, original, steps, verdict, restore`) plus a wall `at`. A failed restore is `restore: "failed"`, with the last `get` step's value and `original` giving "now Y, was Z". A pending probe the device no longer knew gets **`interrupted: true`**, `verdict: null` and its steps as last seen. A probe still running at export time is exported as is, with `active: true`.
 
 ---
 

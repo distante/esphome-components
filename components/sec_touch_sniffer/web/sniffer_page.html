@@ -367,11 +367,11 @@ let online = null;
 let requestFailed = false;
 const filter = allPass();
 let colourBy = "type";
-// The checkboxes, stored for this browser (see applyOptions). showKnown: whether discover's map shows known IDs
-// greyed instead of as gaps.
-let showKnown = false;
-let includeMuted = false;
-let onlyOpen = false;
+// The checkboxes, stored for this browser: applyOptions sets them at startup, before any render. showKnown:
+// whether discover's map shows known IDs greyed instead of as gaps.
+let showKnown;
+let includeMuted;
+let onlyOpen;
 const flashIds = new Set();
 // The ID whose note the drawer's note field holds.
 let drawerFor = null;
@@ -1473,7 +1473,7 @@ $("export-json").addEventListener("click", () => {
   download(fileName, exportJson(CATALOGUE, copy, notes, options, Date.now()), "application/json");
 });
 $("export-csv").addEventListener("click", () =>
-  download(CSV_FILE_NAME,exportCsv(CATALOGUE, copy, notes, exportOptions()), "text/csv"));
+  download(CSV_FILE_NAME, exportCsv(CATALOGUE, copy, notes, exportOptions()), "text/csv"));
 
 buildStatic();
 applyOptions(storedOptions());

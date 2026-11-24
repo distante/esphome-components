@@ -1,7 +1,8 @@
 /**
  * What the page keeps in browser storage (see .specs/sniffer.md, "Browser storage"): per device MAC, its browser
  * copy, notes, mutes, last discover range, experiments and pending probe, plus the MAC of the last device that
- * answered. DOM-free: the page only reads and writes the strings.
+ * answered; and, once per browser under `OPTIONS_KEY`, the page's checkboxes. DOM-free: the page only reads and
+ * writes the strings.
  */
 
 import { allPass } from "./filters.mjs";
@@ -134,8 +135,15 @@ export function defaultOptions() {
   return { showKnown: false, includeMuted: false, onlyOpen: false, onlyCandidates, types, statuses };
 }
 
-/** A stored chip list, kept to the chips that still exist; null when it is not a list. */
-const chipsOf = (stored, all) => (Array.isArray(stored) ? new Set(stored.filter((chip) => all.has(chip))) : null);
+/**
+ * Storage keeps the unticked chips, so a chip added in a later firmware starts ticked.
+ *
+ * @param {unknown} unticked the stored unticked chips
+ * @param {Set<string>} all every chip
+ * @returns {Set<string>} the ticked chips; all of them when `unticked` is not a list
+ */
+const tickedChips = (unticked, all) =>
+  Array.isArray(unticked) ? new Set([...all].filter((chip) => !unticked.includes(chip))) : all;
 
 /**
  * @param {string | null} text what browser storage held under `OPTIONS_KEY`, or null when nothing
@@ -153,15 +161,21 @@ export function parseOptions(text) {
     includeMuted: flag("includeMuted"),
     onlyOpen: flag("onlyOpen"),
     onlyCandidates: flag("onlyCandidates"),
-    types: chipsOf(stored.types, defaults.types) ?? defaults.types,
-    statuses: chipsOf(stored.statuses, defaults.statuses) ?? defaults.statuses,
+    types: tickedChips(stored.untickedTypes, defaults.types),
+    statuses: tickedChips(stored.untickedStatuses, defaults.statuses),
   };
 }
 
 /**
  * @param {object} options the checkboxes (see `defaultOptions`)
- * @returns {string} what browser storage keeps under `OPTIONS_KEY`
+ * @returns {string} what browser storage keeps under `OPTIONS_KEY`, with the unticked chips (see `tickedChips`)
  */
-export function optionsText(options) {
-  return JSON.stringify({ ...options, types: [...options.types], statuses: [...options.statuses] });
+export function optionsText({ types, statuses, ...flags }) {
+  const { types: allTypes, statuses: allStatuses } = defaultOptions();
+  const untickedOf = (all, ticked) => [...all].filter((chip) => !ticked.has(chip));
+  return JSON.stringify({
+    ...flags,
+    untickedTypes: untickedOf(allTypes, types),
+    untickedStatuses: untickedOf(allStatuses, statuses),
+  });
 }

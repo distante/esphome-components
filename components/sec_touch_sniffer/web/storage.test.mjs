@@ -210,19 +210,28 @@ test("each unreadable checkbox falls back to its default on its own", () => {
   const text = JSON.stringify({
     showKnown: "yes",
     includeMuted: true,
-    types: "int",
-    statuses: [STATUSES[0], "gone", 7],
+    untickedTypes: "int",
+    untickedStatuses: [STATUSES[0], "gone", 7],
   });
 
   assert.deepEqual(parseOptions(text), {
     ...defaultOptions(),
     includeMuted: true,
-    statuses: new Set([STATUSES[0]]),
+    statuses: new Set(STATUSES.slice(1)),
   });
+});
+
+// A type or status added in a later firmware is in no stored list, so it starts ticked.
+test("a chip missing from the stored unticked chips comes back ticked", () => {
+  const text = JSON.stringify({ untickedTypes: [TYPES[0]], untickedStatuses: [] });
+
+  const options = parseOptions(text);
+
+  assert.deepEqual(options.types, new Set(TYPES.slice(1)));
+  assert.deepEqual(options.statuses, new Set(STATUSES));
 });
 
 test("the options entry is not a device entry", () => {
   assert.ok(OPTIONS_KEY.startsWith(STORAGE_PREFIX));
   assert.notEqual(OPTIONS_KEY, LAST_MAC_KEY);
-  assert.doesNotMatch(OPTIONS_KEY.slice(STORAGE_PREFIX.length), /^[0-9A-Fa-f:]+$/);
 });

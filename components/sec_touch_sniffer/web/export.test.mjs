@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { exportCsv, exportJson } from "./export.mjs";
+import { EXPORT_FILE_BASE, exportCsv, exportJson, jsonFileName } from "./export.mjs";
 import { applyResponse, emptyCopy, fromStored, toStored, withProbe } from "./records.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
 import {
@@ -310,4 +310,30 @@ test("the JSON scan object carries ids for a list run", () => {
   const copy = applyResponse(emptyCopy(), deviceResponse([], { scan: listScan }), BROWSER_NOW_MS).copy;
 
   assert.deepEqual(JSON.parse(exportJson(FIXTURE_CATALOGUE, copy, {}, NO_EXPERIMENTS, BROWSER_NOW_MS)).scan, listScan);
+});
+
+test("the full export's JSON file has the plain name", () => {
+  assert.equal(jsonFileName(null), `${EXPORT_FILE_BASE}.json`);
+});
+
+test("an export of the open experiment is named after the experiment", () => {
+  const cases = [
+    ["plain", "plain"],
+    ["Kellerraum Schaltzeit 2 aktiv", "kellerraum-schaltzeit-2-aktiv"],
+    ["Kellerräume Lüftung", "kellerraume-luftung"],
+    ["Café", "cafe"],
+    ["a/b\\c", "a-b-c"],
+    ["Straße", "stra-e"],
+    ["a  --//  b", "a-b"],
+    ["  --Fan 3!!  ", "fan-3"],
+  ];
+  for (const [name, slug] of cases) {
+    assert.equal(jsonFileName(name), `${EXPORT_FILE_BASE}-${slug}.json`, name);
+  }
+});
+
+test("a name with no usable character falls back to the plain file name", () => {
+  for (const name of ["", "///", " - ", "Привет"]) {
+    assert.equal(jsonFileName(name), `${EXPORT_FILE_BASE}.json`, name);
+  }
 });

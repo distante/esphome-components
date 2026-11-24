@@ -125,7 +125,7 @@
   <span id="device" class="mute"></span>
   <span class="grow"></span>
   <label title="Off: muted IDs are left out of the records and the capture entries"><input id="include-muted" type="checkbox"> include muted IDs</label>
-  <label><input id="only-open" type="checkbox"> only the open experiment</label>
+  <label><input id="only-open" type="checkbox"> JSON: only the open experiment</label>
   <button id="export-json">Export JSON</button>
   <button id="export-csv">Export CSV</button>
   <button id="clear-data" title="Forget every captured value on the device and in this browser; notes, mutes and experiments stay">Clear data</button>
@@ -243,7 +243,7 @@ import {
   runningProbe,
 } from "./write_probe.mjs";
 import { checkCards } from "./check_cards.mjs";
-import { exportCsv, exportJson } from "./export.mjs";
+import { EXPORT_FILE_BASE, exportCsv, exportJson, jsonFileName } from "./export.mjs";
 import { deviceKey, LAST_MAC_KEY, parseStored, storedText } from "./storage.mjs";
 import { STATUS_COLOURS, TYPE_COLOURS } from "./colours.mjs";
 import { drawerBadges } from "./drawer_head.mjs";
@@ -1395,11 +1395,13 @@ $("experiment-view").addEventListener("change", (event) => {
   probeSelections.set(id, values[Number(selectBox.value)]);
 });
 $("clear-data").addEventListener("click", clearData);
-$("export-json").addEventListener("click", () =>
-  download("sec_touch_sniffer.json", exportJson(CATALOGUE, copy, notes, exportOptions(), Date.now()),
-    "application/json"));
+$("export-json").addEventListener("click", () => {
+  const options = exportOptions();
+  const fileName = jsonFileName(options.onlyOpen ? (openExperiment()?.name ?? null) : null);
+  download(fileName, exportJson(CATALOGUE, copy, notes, options, Date.now()), "application/json");
+});
 $("export-csv").addEventListener("click", () =>
-  download("sec_touch_sniffer.csv", exportCsv(CATALOGUE, copy, notes, exportOptions()), "text/csv"));
+  download(`${EXPORT_FILE_BASE}.csv`, exportCsv(CATALOGUE, copy, notes, exportOptions()), "text/csv"));
 
 buildStatic();
 renderTabs();

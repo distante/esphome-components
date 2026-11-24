@@ -170,3 +170,20 @@ export function exportCsv(catalogue, copy, notes, options) {
   }
   return lines.join("\r\n");
 }
+
+/** The export file names' common start; the CSV is always `<base>.csv`. */
+export const EXPORT_FILE_BASE = "sec_touch_sniffer";
+
+/**
+ * The JSON export's file name: `<base>-<slug>.json` for an export narrowed to the open experiment, `<base>.json`
+ * for the full export (`openName` null) and for a name with no usable character.
+ */
+export function jsonFileName(openName) {
+  const slug = (openName ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return slug === "" ? `${EXPORT_FILE_BASE}.json` : `${EXPORT_FILE_BASE}-${slug}.json`;
+}

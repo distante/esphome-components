@@ -303,7 +303,24 @@ Decided in [What do sniffer exports record with two goals?](https://github.com/d
 - **`known`**: true/false, from the catalogue module.
 - **`meaning`**: the expected meaning when a known property's value matches, `unexpected value x` when it doesn't (the same text as the check cards), and `null` (JSON) / empty (CSV) for unknown properties and for known ones with no value yet. History entries get no meanings.
 
-**`experiments`**: every experiment stored for this MAC. A checkbox **"only the open experiment"** next to the export narrows the array to the open sub-tab; it is disabled when no experiment is open. Records stay the full dump either way.
+**`experiments`**: every experiment stored for this MAC. A checkbox **"JSON: only the open experiment"** next to the export narrows the array to the open sub-tab; it is disabled when no experiment is open. Records stay the full dump either way. The CSV has no experiments, so the checkbox does not touch it.
+
+**File names** ([#108](https://github.com/distante/esphome-components/issues/108)):
+
+| Export | File name |
+|---|---|
+| CSV | `sec_touch_sniffer.csv` |
+| JSON, full | `sec_touch_sniffer.json` |
+| JSON, "JSON: only the open experiment" ticked | `sec_touch_sniffer-<slug>.json`; `sec_touch_sniffer.json` when the slug is empty |
+
+The slug comes from the open experiment's name:
+
+1. Unicode NFD, then combining marks (U+0300–U+036F) dropped: `ä` → `a`, `é` → `e`.
+2. Lower-cased.
+3. Each run of characters outside `a-z0-9` becomes one `-` (spaces, slashes, `ß`, non-Latin scripts).
+4. Leading and trailing `-` dropped.
+
+Example: `Kellerraum Schaltzeit 2 aktiv` → `sec_touch_sniffer-kellerraum-schaltzeit-2-aktiv.json`. Two experiments with the same name give the same file name; the browser adds its own `(1)`.
 
 - **Experiment** `{name, from, to, created_at, captures, candidates, disqualified, probes}`: `from`/`to` are the full range fixed at the first capture, `null` before any capture; `created_at` is a wall ISO time. Deleted captures are gone.
 - **Capture** `{label, at, uptime_ms, boot, full, entries}`: `label` as typed; `at` wall ISO; `uptime_ms` and `boot` from the device at capture time, so a capture lines up with record history across a reboot; `full` is `true` for a full capture and `false` for a narrowed one; `entries` is `{"<id>": {"outcome": "ok"|"nak"|"timeout", "raw": "…"|null}}` for exactly the IDs the capture queried. An absent ID was not queried, which stays distinct from a timeout. Raw values use the records' `\u00XX` encoding.
@@ -505,7 +522,7 @@ Ships as **v1.5.0** (minor: fans and HA entities are untouched; the hub gains th
 8. The catalogue header is the only definition of the known IDs, level names, label names and `0A00`/`0800`; the component builds against it and the page's catalogue module is generated from it at build time.
 9. Check shows one card per fan and a Global card with meaning and raw value; a non-matching value shows as `unexpected value x` in red; registered fans carry the badge.
 10. Discover shows no known ID in the map (unless "show known" is ticked, then greyed and outside the filters), feed, filters or experiments. The mark is gone: no `mark.mjs`, no mark box, no "changed since mark" list, ring or filter, and no `mark`/`mark_raw` in the export.
-11. JSON and CSV exports carry `known` and `meaning` per record and are identical in both goals; the JSON carries `scan.goal`, `scan.ids` and `experiments` with captures, candidates, disqualified and probes as specified. Muted IDs are absent from records and capture entries unless "include muted IDs" is ticked, then present and flagged `muted`; they are never candidates or disqualified. "only the open experiment" narrows `experiments` only.
+11. JSON and CSV exports carry `known` and `meaning` per record and are identical in both goals; the JSON carries `scan.goal`, `scan.ids` and `experiments` with captures, candidates, disqualified and probes as specified. Muted IDs are absent from records and capture entries unless "include muted IDs" is ticked, then present and flagged `muted`; they are never candidates or disqualified. "JSON: only the open experiment" narrows `experiments` only, and names the JSON file after the open experiment ([File names](#export)).
 12. A value with control or non-ASCII bytes round-trips byte-exact through JSON `\u00XX` escaping into the export, in records, capture entries and probe steps.
 13. **Heap check**, on the maintainer's controller in a single boot: record heap free, largest block and min free before and after a discover scan that finds new IDs, a check scan, a narrowed capture and a write probe, with the page open plus a second web client, and through an OTA update. If min free drops under ~20 KB, shrink the history pool first.
 14. A discover start with `ids` queries exactly the listed unknown IDs in ascending order, a duplicate once, and reports them in `scan.ids`. A capture is stored only when its run completes, with an entry per queried ID; a stopped run stores nothing, and a capture abandoned on a `boot` change stores nothing. Experiments survive Clear data.

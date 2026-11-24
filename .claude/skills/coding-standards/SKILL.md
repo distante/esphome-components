@@ -96,7 +96,7 @@ Every change lands with tests in one of five layers:
 
 Readmes, reports and PR bodies are read by a skimming human and by agents paying per token. Write them short and visual:
 
-- **Show structure.** A layout, a mapping, a before/after or a status per item goes in a table, a diagram or a code-block sketch. Prose carries only what has no structure: a reason, a caveat.
+- **Show structure.** A layout, a mapping, a before/after or a status per item goes in a table or a Mermaid diagram. A code block holds only code, pseudocode, a call tree or a file tree. Prose carries only what has no structure: a reason, a caveat.
 - **Plain words.** Use a technical term only when it names the thing (an ID, a panel label, a protocol constant).
 - **One fact, one place.** A value sits in one table; other places link to it.
 - **Short sentences**, one idea per bullet.

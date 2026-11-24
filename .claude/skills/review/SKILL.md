@@ -46,7 +46,7 @@ Done when each added instruction has a grep behind it, and each restatement is r
 
 Enforces [Docs and PR text](../coding-standards/SKILL.md#docs-and-pr-text) on every `.md` the diff touches and on the PR body.
 
-1. Find prose that carries structure: a paragraph listing IDs, offsets, values or statuses that a table or sketch would show. Example: a "How it was confirmed" paragraph per field where a table with one row per part and a ✅ / ⚠️ column holds the same facts.
+1. Find prose that carries structure: a paragraph listing IDs, offsets, values or statuses that a table or sketch would show. Example: a "How it was confirmed" paragraph per field where a table with one row per part and a ✅ / ⚠️ column holds the same facts. Also flag a text-block drawing of a layout or flow, such as columns of offsets aligned with spaces, where a table or Mermaid diagram renders.
 2. Find a fact stated twice, jargon where a plain word fits, and raw dumps (exports, logs) added to the repo.
 3. For a rewrite, check that every fact of the old text survives.
 

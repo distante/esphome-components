@@ -42,6 +42,23 @@ Enforces [coding-standards](../coding-standards/SKILL.md)' single source: every 
 
 Done when each added instruction has a grep behind it, and each restatement is reported with its `file:line` and the rule it restates.
 
+## Stored state reads well in a later version
+
+Enforces [Stored state](../coding-standards/SKILL.md#stored-state).
+
+1. List everything the diff writes to browser storage or flash.
+2. For each, picture a later version that adds a value (a new type, status, option) and a user whose storage the current version wrote. The new value must take its default. Example: chips stored as the ticked list leave a later-added chip unticked.
+
+Done when each stored item is listed with what a later-added value gets.
+
+## Page JS and HTML are formatted by hand
+
+Enforces the Page JS and HTML bullet of [Tooling](../coding-standards/SKILL.md#tooling): no formatter checks these lines.
+
+1. Read every added or changed line in `components/*/web/` against its neighbours: spacing after commas, wrapping, indentation. Example: `download(CSV_FILE_NAME,exportCsv(` missing the space after the comma.
+
+Done when each hit is reported with its `file:line`.
+
 ## Docs and PR text are short and visual
 
 Enforces [Docs and PR text](../coding-standards/SKILL.md#docs-and-pr-text) on the lines the diff adds or changes in every `.md`, plus the PR body and issue comments. Its bullets are the criteria.

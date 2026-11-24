@@ -1,9 +1,11 @@
 /**
  * What the page keeps in browser storage (see .specs/sniffer.md, "Browser storage"): per device MAC, its browser
  * copy, notes, mutes, last discover range, experiments and pending probe, plus the MAC of the last device that
- * answered. DOM-free: the page only reads and writes the strings.
+ * answered; and, once per browser under `OPTIONS_KEY`, the page's checkboxes. DOM-free: the page only reads and
+ * writes the strings.
  */
 
+import { allPass } from "./filters.mjs";
 import { emptyCopy, fromStored, isObject, isStringOrNull, OUTCOMES, toStored, wholeDecimal } from "./records.mjs";
 import { isPendingProbe, isProbeEntry } from "./write_probe.mjs";
 
@@ -117,4 +119,63 @@ export function parseStored(text, defaultRange) {
  */
 export function storedText({ copy, notes, mutes, range, experiments, pendingProbe }) {
   return JSON.stringify({ copy: toStored(copy), notes, mutes: [...mutes], range, experiments, pendingProbe });
+}
+
+/** The key of the page's checkboxes, shared by every device. Not hex, so it never collides with a device key. */
+export const OPTIONS_KEY = `${STORAGE_PREFIX}options`;
+
+/**
+ * The page's checkboxes, as the page starts and as "Reset options" restores them.
+ *
+ * @returns {{showKnown: boolean, includeMuted: boolean, onlyOpen: boolean, onlyCandidates: boolean,
+ *   types: Set<string>, statuses: Set<string>}} `types` and `statuses` are the ticked filter chips
+ */
+export function defaultOptions() {
+  const { onlyCandidates, types, statuses } = allPass();
+  return { showKnown: false, includeMuted: false, onlyOpen: false, onlyCandidates, types, statuses };
+}
+
+/**
+ * Storage keeps the unticked chips, so a chip added in a later firmware starts ticked.
+ *
+ * @param {unknown} unticked the stored unticked chips
+ * @param {Set<string>} all every chip
+ * @returns {Set<string>} the ticked chips; all of them when `unticked` is not a list
+ */
+const tickedChips = (unticked, all) =>
+  Array.isArray(unticked) ? new Set([...all].filter((chip) => !unticked.includes(chip))) : all;
+
+/**
+ * @param {string | null} text what browser storage held under `OPTIONS_KEY`, or null when nothing
+ * @returns {object} the checkboxes (see `defaultOptions`); each unreadable one falls back to its default
+ */
+export function parseOptions(text) {
+  const defaults = defaultOptions();
+  const stored = text === null ? null : parseJson(text);
+  if (!isObject(stored)) {
+    return defaults;
+  }
+  const flag = (name) => (typeof stored[name] === "boolean" ? stored[name] : defaults[name]);
+  return {
+    showKnown: flag("showKnown"),
+    includeMuted: flag("includeMuted"),
+    onlyOpen: flag("onlyOpen"),
+    onlyCandidates: flag("onlyCandidates"),
+    types: tickedChips(stored.untickedTypes, defaults.types),
+    statuses: tickedChips(stored.untickedStatuses, defaults.statuses),
+  };
+}
+
+/**
+ * @param {object} options the checkboxes (see `defaultOptions`)
+ * @returns {string} what browser storage keeps under `OPTIONS_KEY`, with the unticked chips (see `tickedChips`)
+ */
+export function optionsText({ types, statuses, ...flags }) {
+  const { types: allTypes, statuses: allStatuses } = defaultOptions();
+  const untickedOf = (all, ticked) => [...all].filter((chip) => !ticked.has(chip));
+  return JSON.stringify({
+    ...flags,
+    untickedTypes: untickedOf(allTypes, types),
+    untickedStatuses: untickedOf(allStatuses, statuses),
+  });
 }

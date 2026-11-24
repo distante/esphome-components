@@ -61,6 +61,10 @@ Done when every criterion carries a mark and the closing keyword matches the mar
 
 Be mindful of memory usage, especially on devices with limited resources. Avoid dynamic memory allocation where possible and use static or stack allocation. Exception: `components/sec_touch_sniffer/` ([sec-touch](../sec-touch/SKILL.md)).
 
+### Stored state
+
+Data that outlives a version (browser storage, flash) is read later by code that knows more values than the code that wrote it. Store the exceptions to the default, so a value a later version adds takes its default for a returning user. Example: the sniffer stores the unticked filter chips, so a new chip starts ticked; storing the ticked ones would start it unticked.
+
 ### Reuse existing definitions
 
 Before adding a constant, enum, type or helper, search `components/` and `tests/` for one that already names the concept, and use it. Each value has a single source of truth: code and tests reference its name, never a bare literal or a second definition. A composition (which arrays make up a set) and an algorithm (a parser) are definitions too: state each once. When the existing definition sits behind an ESPHome include that a pure header must not pull in, move it into a pure header that both sides include.
@@ -90,6 +94,7 @@ Every change lands with tests in one of five layers:
 - **Worktrees.** Work in a git worktree (`EnterWorktree`, or `isolation: "worktree"` for subagents) unless the user says not to. Worktrees live in the main checkout's `.claude/worktrees/`.
   - **Starting a task while already in a worktree** (a session reused with `/clear`, for example): when that worktree holds no earlier work on this task, which is the usual case, call `ExitWorktree` with `action: "keep"` first, then `EnterWorktree` with a new `name`. `EnterWorktree` refuses to create a worktree from inside another, and one made by hand from there nests inside it. Stay in the current worktree only when it already holds this task's own earlier work.
 - **Formatting and linting.** Before committing, run `pre-commit run --files <changed files>` and keep its fixes. Never format with a clang-format from outside the venv or pre-commit: other versions format differently.
+- **Page JS and HTML** have no formatter in pre-commit. Format them by hand like the surrounding code: a space after each comma, the same wrapping and indentation.
 - **Git hooks.** Commit with the hooks running. Never bypass them: no `--no-verify`, no `PRE_COMMIT_ALLOW_NO_CONFIG`.
 
 ### Docs and PR text

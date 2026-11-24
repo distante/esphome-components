@@ -1366,7 +1366,7 @@ $("reset-options").addEventListener("click", () => {
   saveOptions();
   render();
 });
-// Another open page changed or reset the checkboxes: follow it, so its next save does not undo ours.
+// Another open page changed or reset the checkboxes: follow it, so our next save does not undo its change.
 window.addEventListener("storage", (event) => {
   if (event.key !== OPTIONS_KEY) {
     return;

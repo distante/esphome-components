@@ -115,7 +115,7 @@ Per listed switch time *N*, always created:
 | Level | `select`, options = the `LEVEL_NAMES` names the [meaning rule](#known-property-catalogue) accepts | `Switch time N level` | option index = level |
 | Enabled | `switch` | `Switch time N enabled` | bit *N−1* of the pair's enabled mask |
 
-- Names are English. With a `device_id` they are the same on every pair, and the sub-device tells them apart; without one they get the pair-name prefix ([Sub-device](#sub-device)). Every name is overridable.
+- Names are English. With a `device_id` they are the same on every pair, and the sub-device tells them apart; without one they get the pair-name prefix ([Sub-device](#sub-device)). The field entities keep these names; only the optional entities (`refresh`, `write_failed`, live state) take the usual ESPHome `name:`.
 - `entity_category`:
 
   | Entities | Category |
@@ -162,7 +162,8 @@ flowchart LR
 
 | Rule | Detail |
 |---|---|
-| No SET retry | Nothing is written twice. A failed SET is reported, then the read-back GET publishes the truth. |
+| No SET retry | Nothing is written twice. A failed SET is reported, then the read-back GET publishes the truth. A SET whose ACK arrives corrupted is no failure: its read-back decides (`not_kept` if it didn't land). |
+| Scan mode | The sniffer's scan clears the queue. Each time-program SET it drops ends as `timeout`, with no read-back; a mask GET it drops fails as below. |
 | One queued SET per ID | A newer write to an ID with a SET still queued replaces that task's value in place. A SET already in flight isn't touched; the newer write queues behind it. |
 | Time | Written as `HH:MM:00`. Seconds from HA are dropped, never rounded. |
 | Level | The select's index, 0–9, as a decimal string. |
@@ -267,7 +268,10 @@ The [readme copy block and HA call](https://github.com/distante/esphome-componen
 | Latest wins per ID | none new | It overwrites the queued `SetDataTask`'s fixed `value` buffer in place. |
 | Requested mask bits | static, 6 pairs × (set, clear) `uint8_t` | |
 | Panel clock anchor | static | |
-| Bulk `error` text | `std::string`, built only when a bulk call fails | ESPHome's `api.respond` takes a `std::string` anyway. This is the one stated heap use ([Memory rule](../.claude/skills/coding-standards/SKILL.md#memory)). |
+| Bulk `error` text | `std::string`, built only when a bulk call fails | ESPHome's `api.respond` takes a `std::string` anyway ([Memory rule](../.claude/skills/coding-standards/SKILL.md#memory)). |
+| Listener registrations | the hub's listener maps (`std::multimap` entries holding `std::function`s) and its task-end listener list (one entry per pair) | One entry per registered ID, at most 6 pairs × 11. Allocated while the entities are built, never freed. |
+| Bulk action list arguments | `std::vector`, ESPHome's action argument type | HA's `string[]`, `int[]` and `bool[]` arrive as vectors. |
+| Per-pair poll ID lists | static, 6 pairs × 11 IDs | |
 | Entities | static: ESPHome codegen builds each with placement new into a `static` buffer (`esphome/esphome/cpp_generator.py`, `Pvariable`) | Worst case 6 pairs × (15 + 4 + 2) = 126. Estimated 30–60 B each ([research](https://github.com/distante/esphome-components/blob/research/time-program-entities/.specs/research/time-program-entities.md#cost-of-90-extra-entities)), measured in the device check. No cap until then. |
 
 ---

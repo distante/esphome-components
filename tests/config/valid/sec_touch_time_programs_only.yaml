@@ -1,0 +1,30 @@
+# Time programs with no other sec_touch platform and no optional entity: no fan:, select:, switch:, button: or
+# event: section. The hub's AUTO_LOAD must bring in the entity domains the time programs use, and nothing else.
+
+esphome:
+  name: sec-touch-time-programs-only
+
+esp32:
+  board: esp32dev
+
+logger:
+  # Compiles every ESP_LOG* call, so the compile test sees -Wformat warnings.
+  level: VERY_VERBOSE
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+  time_programs:
+    - fan_number: 3
+      switch_times: [5]

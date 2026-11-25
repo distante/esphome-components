@@ -1,0 +1,26 @@
+# expect-error: fan_number 1 is listed twice in time_programs
+# A pair listed twice.
+
+esphome:
+  name: tp-duplicate-pair
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+  time_programs:
+    - fan_number: 1
+    - fan_number: 1

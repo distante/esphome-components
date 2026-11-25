@@ -1,0 +1,30 @@
+# expect-error: Duplicate switch entity with name 'Fan pair 2 Switch time 4 enabled'
+# No device_id, name or fan entry: `Fan pair N` prefixes the field names.
+
+esphome:
+  name: tp-name-default
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+  time_programs:
+    - fan_number: 2
+
+switch:
+  - platform: template
+    name: "Fan pair 2 Switch time 4 enabled"
+    optimistic: true

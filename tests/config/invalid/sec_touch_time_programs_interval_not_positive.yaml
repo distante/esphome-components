@@ -1,0 +1,26 @@
+# expect-error: value must be higher than 0s.
+# The poll interval must be above 0.
+
+esphome:
+  name: tp-interval-zero
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+  time_programs_update_interval: 0s
+  time_programs:
+    - fan_number: 1

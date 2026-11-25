@@ -1,12 +1,20 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import uart
-from esphome.const import CONF_ID
+from esphome.components import button, datetime, event, select, switch, uart
+from esphome.const import (
+    CONF_DEVICE_ID,
+    CONF_ENTITY_CATEGORY,
+    CONF_ID,
+    CONF_LEVEL,
+    CONF_NAME,
+    CONF_REFRESH,
+    CONF_TIME,
+    ENTITY_CATEGORY_CONFIG,
+    ENTITY_CATEGORY_DIAGNOSTIC,
+)
+from esphome.core import CORE
 
 DEPENDENCIES = ["uart"]
-# The hub's public interface uses text_sensor::TextSensor, so it must be in
-# the build even when the config has no text_sensor: section.
-AUTO_LOAD = ["text_sensor"]
 
 sec_touch_ns = cg.esphome_ns.namespace("sec_touch")
 SECTouchComponent = sec_touch_ns.class_(
@@ -23,6 +31,216 @@ CONF_GLOBAL_SETTINGS_UPDATE_INTERVAL = "global_settings_update_interval"
 CONF_OPTIONAL_CRC = "optional_crc"
 # The total of fan pairs that the SEC-Touch shows in the screen
 
+# Time programs (.specs/time-programs.md, "Configuration").
+CONF_TIME_PROGRAMS = "time_programs"
+CONF_TIME_PROGRAMS_UPDATE_INTERVAL = "time_programs_update_interval"
+CONF_FAN_NUMBER = "fan_number"
+CONF_SWITCH_TIMES = "switch_times"
+CONF_WRITE_FAILED = "write_failed"
+# Generated from switch_times before validation, never written by the user: one item per listed switch time.
+CONF_FIELD_ENTITIES = "field_entities"
+CONF_SWITCH_TIME = "switch_time"
+CONF_ENABLED = "enabled"
+
+FAN_PAIR_COUNT = len(FAN_LEVEL_IDS)
+# SWITCH_TIME_COUNT in protocol_ids.h; the generated code static_asserts that both agree.
+SWITCH_TIME_COUNT = 5
+
+TimeProgram = sec_touch_ns.class_("TimeProgram")
+TimeProgramTime = sec_touch_ns.class_("TimeProgramTime", datetime.TimeEntity)
+TimeProgramLevelSelect = sec_touch_ns.class_("TimeProgramLevelSelect", select.Select)
+TimeProgramEnabledSwitch = sec_touch_ns.class_(
+    "TimeProgramEnabledSwitch", switch.Switch
+)
+TimeProgramRefreshButton = sec_touch_ns.class_(
+    "TimeProgramRefreshButton", button.Button
+)
+TimeProgramWriteFailedEvent = sec_touch_ns.class_(
+    "TimeProgramWriteFailedEvent", event.Event
+)
+
+# The domains each time-program entity needs.
+TIME_PROGRAM_DOMAINS = ["datetime", "select", "switch"]
+REFRESH_DOMAIN = "button"
+WRITE_FAILED_DOMAIN = "event"
+
+
+def AUTO_LOAD(config):
+    # The hub's public interface uses text_sensor::TextSensor, so it must be in
+    # the build even when the config has no text_sensor: section.
+    base = ["text_sensor"]
+    # A falsy config is a tooling probe for the maximal set (None from
+    # dependency resolution, {} from the components-graph platform probe).
+    if not config:
+        return base + TIME_PROGRAM_DOMAINS + [REFRESH_DOMAIN, WRITE_FAILED_DOMAIN]
+    entries = config.get(CONF_TIME_PROGRAMS) or []
+    if not isinstance(entries, list):
+        entries = [entries]
+    if not entries:
+        return base
+    loads = base + TIME_PROGRAM_DOMAINS
+    if any(CONF_REFRESH in entry for entry in entries):
+        loads.append(REFRESH_DOMAIN)
+    if any(CONF_WRITE_FAILED in entry for entry in entries):
+        loads.append(WRITE_FAILED_DOMAIN)
+    return loads
+
+
+FAN_NUMBER_SCHEMA = cv.int_range(min=1, max=FAN_PAIR_COUNT)
+
+
+def _unique(what):
+    def validator(values):
+        seen = set()
+        for value in values:
+            if value in seen:
+                raise cv.Invalid(f"{what} {value} is listed twice")
+            seen.add(value)
+        return values
+
+    return validator
+
+
+SWITCH_TIMES_SCHEMA = cv.All(
+    cv.ensure_list(cv.int_range(min=1, max=SWITCH_TIME_COUNT)),
+    _unique("switch time"),
+)
+
+FIELD_ENTITIES_SCHEMA = cv.Schema(
+    {
+        cv.Required(CONF_SWITCH_TIME): cv.int_range(min=1, max=SWITCH_TIME_COUNT),
+        cv.Required(CONF_TIME): datetime.time_schema(TimeProgramTime),
+        cv.Required(CONF_LEVEL): select.select_schema(TimeProgramLevelSelect),
+        cv.Required(CONF_ENABLED): switch.switch_schema(TimeProgramEnabledSwitch),
+    }
+)
+
+TIME_PROGRAM_SCHEMA = cv.Schema(
+    {
+        cv.GenerateID(): cv.declare_id(TimeProgram),
+        cv.Required(CONF_FAN_NUMBER): FAN_NUMBER_SCHEMA,
+        cv.Optional(CONF_NAME): cv.string,
+        cv.Optional(CONF_DEVICE_ID): cv.sub_device_id,
+        cv.Optional(
+            CONF_SWITCH_TIMES, default=list(range(1, SWITCH_TIME_COUNT + 1))
+        ): SWITCH_TIMES_SCHEMA,
+        cv.Optional(CONF_REFRESH): button.button_schema(
+            TimeProgramRefreshButton, entity_category=ENTITY_CATEGORY_CONFIG
+        ),
+        cv.Optional(CONF_WRITE_FAILED): event.event_schema(
+            TimeProgramWriteFailedEvent, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+        ),
+        cv.Required(CONF_FIELD_ENTITIES): cv.ensure_list(FIELD_ENTITIES_SCHEMA),
+    }
+)
+
+# The entries a pair can have besides its field entities; their own device_id wins over the pair's.
+OPTIONAL_ENTITY_KEYS = (CONF_REFRESH, CONF_WRITE_FAILED)
+
+
+def _fan_entry_name(hub_config, fan_number):
+    """The name of this hub's `fan:` entry for `fan_number`, or None."""
+    hub_id = hub_config.get(CONF_ID)
+    for fan in (CORE.raw_config or {}).get("fan") or []:
+        if not isinstance(fan, dict) or fan.get("platform") != "sec_touch":
+            continue
+        if fan.get(CONF_FAN_NUMBER) != fan_number:
+            continue
+        if fan.get(CONF_SEC_TOUCH_ID) not in (None, hub_id):
+            continue
+        if fan.get(CONF_NAME):
+            return fan[CONF_NAME]
+    return None
+
+
+def _prepare_time_program(hub_config, entry):
+    """Builds a pair's field entities and gives each entity the pair's device_id, before any entity schema runs, so
+    ESPHome's per-device duplicate-name check sees the final names and devices (.specs/time-programs.md,
+    "Sub-device")."""
+    if not isinstance(entry, dict):
+        raise cv.Invalid("expected a dictionary")
+    if CONF_FIELD_ENTITIES in entry:
+        raise cv.Invalid(
+            f"{CONF_FIELD_ENTITIES} is generated from {CONF_SWITCH_TIMES}",
+            path=[CONF_FIELD_ENTITIES],
+        )
+    try:
+        fan_number = FAN_NUMBER_SCHEMA(entry.get(CONF_FAN_NUMBER))
+    except cv.Invalid as err:
+        err.prepend([CONF_FAN_NUMBER])
+        raise
+    try:
+        switch_times = SWITCH_TIMES_SCHEMA(
+            entry.get(CONF_SWITCH_TIMES, list(range(1, SWITCH_TIME_COUNT + 1)))
+        )
+    except cv.Invalid as err:
+        err.prepend([CONF_SWITCH_TIMES])
+        raise
+
+    entry = dict(entry)
+    device_id = entry.get(CONF_DEVICE_ID)
+    prefix = ""
+    if device_id is None:
+        pair_name = (
+            entry.get(CONF_NAME)
+            or _fan_entry_name(hub_config, fan_number)
+            or f"Fan pair {fan_number}"
+        )
+        prefix = f"{pair_name} "
+
+    def field(n, kind):
+        config = {
+            CONF_NAME: f"{prefix}Switch time {n} {kind}",
+            CONF_ENTITY_CATEGORY: ENTITY_CATEGORY_CONFIG,
+        }
+        if device_id is not None:
+            config[CONF_DEVICE_ID] = device_id
+        return config
+
+    entry[CONF_FIELD_ENTITIES] = [
+        {
+            CONF_SWITCH_TIME: n,
+            CONF_TIME: field(n, CONF_TIME),
+            CONF_LEVEL: field(n, CONF_LEVEL),
+            CONF_ENABLED: field(n, CONF_ENABLED),
+        }
+        for n in switch_times
+    ]
+    for key in OPTIONAL_ENTITY_KEYS:
+        optional_entity = entry.get(key)
+        if device_id is None or optional_entity is None:
+            continue
+        optional_entity = dict(optional_entity or {})
+        optional_entity.setdefault(CONF_DEVICE_ID, device_id)
+        entry[key] = optional_entity
+    return entry
+
+
+def _prepare_time_programs(hub_config):
+    if not isinstance(hub_config, dict) or CONF_TIME_PROGRAMS not in hub_config:
+        return hub_config
+    entries = hub_config[CONF_TIME_PROGRAMS]
+    if not isinstance(entries, list):
+        entries = [entries]
+    prepared = []
+    seen = set()
+    for i, entry in enumerate(entries):
+        try:
+            entry = _prepare_time_program(hub_config, entry)
+        except cv.Invalid as err:
+            err.prepend([CONF_TIME_PROGRAMS, i])
+            raise
+        fan_number = entry[CONF_FAN_NUMBER]
+        if fan_number in seen:
+            raise cv.Invalid(
+                f"fan_number {fan_number} is listed twice in {CONF_TIME_PROGRAMS}",
+                path=[CONF_TIME_PROGRAMS, i, CONF_FAN_NUMBER],
+            )
+        seen.add(fan_number)
+        prepared.append(entry)
+    return {**hub_config, CONF_TIME_PROGRAMS: prepared}
+
+
 CONFIG_SCHEMA = cv.Schema(
     {
         cv.GenerateID(): cv.declare_id(SECTouchComponent),
@@ -31,11 +249,17 @@ CONFIG_SCHEMA = cv.Schema(
             CONF_GLOBAL_SETTINGS_UPDATE_INTERVAL, default="30s"
         ): cv.positive_time_period_milliseconds,
         cv.Optional(CONF_OPTIONAL_CRC, default=False): cv.boolean,
+        # Positive: a zero interval would poll every idle loop.
+        cv.Optional(CONF_TIME_PROGRAMS_UPDATE_INTERVAL, default="5min"): cv.All(
+            cv.positive_not_null_time_period, cv.time_period_in_milliseconds_
+        ),
+        cv.Optional(CONF_TIME_PROGRAMS): cv.ensure_list(TIME_PROGRAM_SCHEMA),
     }
 )
 
 
 CONFIG_SCHEMA = cv.All(
+    _prepare_time_programs,
     CONFIG_SCHEMA.extend(uart.UART_DEVICE_SCHEMA)
     .extend(cv.COMPONENT_SCHEMA)
     .extend(cv.polling_component_schema("5s")),
@@ -51,6 +275,22 @@ FINAL_VALIDATE_SCHEMA = uart.final_validate_device_schema(
 )
 
 
+async def _time_program_to_code(hub, entry):
+    program = cg.new_Pvariable(entry[CONF_ID], hub, entry[CONF_FAN_NUMBER])
+    for fields in entry[CONF_FIELD_ENTITIES]:
+        n = fields[CONF_SWITCH_TIME]
+        await datetime.new_datetime(fields[CONF_TIME], program, n)
+        # The options come from C++ (SWITCH_TIME_LEVEL_OPTIONS), the one list of level names.
+        await select.new_select(fields[CONF_LEVEL], program, n, options=[])
+        await switch.new_switch(fields[CONF_ENABLED], program, n)
+    if refresh := entry.get(CONF_REFRESH):
+        await button.new_button(refresh, program)
+    if write_failed := entry.get(CONF_WRITE_FAILED):
+        # The event types come from C++ (WRITE_FAILURE_NAMES).
+        failed = cg.new_Pvariable(write_failed[CONF_ID], program)
+        await event.register_event(failed, write_failed, event_types=[])
+
+
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
@@ -62,3 +302,18 @@ async def to_code(config):
         )
     )
     cg.add(var.set_optional_crc(config[CONF_OPTIONAL_CRC]))
+    cg.add(
+        var.set_time_programs_update_interval_ms(
+            config[CONF_TIME_PROGRAMS_UPDATE_INTERVAL]
+        )
+    )
+    entries = config.get(CONF_TIME_PROGRAMS, [])
+    if entries:
+        cg.add_global(
+            cg.RawStatement(
+                f"static_assert(esphome::sec_touch::SWITCH_TIME_COUNT == {SWITCH_TIME_COUNT}, "
+                '"sec_touch/__init__.py SWITCH_TIME_COUNT must match protocol_ids.h");'
+            )
+        )
+    for entry in entries:
+        await _time_program_to_code(var, entry)

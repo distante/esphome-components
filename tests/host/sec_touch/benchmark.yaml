@@ -1,0 +1,5 @@
+# Entity domains the time programs need that have no sec_touch platform folder to pull them in (see the readme's
+# Tests section). The `time` key registers the datetime time platform, which defines USE_DATETIME_TIME.
+datetime: []
+time: []
+event: []

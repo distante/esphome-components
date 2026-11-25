@@ -1,0 +1,36 @@
+# expect-error: Duplicate button entity with name 'Refresh' found on device 'sec_touch_pair_2_time_program'
+# Pair 1's refresh button takes its own device_id (pair 2's), so it collides with pair 2's.
+
+esphome:
+  name: tp-optional-device-wins
+
+packages:
+  sec_touch_devices: !include ../../../components/sec_touch/examples/time-program-devices.yaml
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+  time_programs:
+    - fan_number: 1
+      device_id: sec_touch_pair_1_time_program
+      refresh:
+        name: "Refresh"
+        device_id: sec_touch_pair_2_time_program
+    - fan_number: 2
+      device_id: sec_touch_pair_2_time_program
+      refresh:
+        name: "Refresh"

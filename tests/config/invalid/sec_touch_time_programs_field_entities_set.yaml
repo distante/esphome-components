@@ -1,0 +1,26 @@
+# expect-error: field_entities is generated from switch_times
+# field_entities is generated, never written.
+
+esphome:
+  name: tp-field-entities-set
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+  time_programs:
+    - fan_number: 1
+      field_entities: []

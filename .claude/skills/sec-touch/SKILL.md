@@ -11,6 +11,15 @@ SEC-Touch rules, on top of [coding-standards](../coding-standards/SKILL.md). The
 
 Reads are fine: GET `/sniffer/data`, the page, the logs, and discover scans (they only query).
 
+### Driving it over REST
+
+URLs come from ESPHome's `web_server` and the sniffer's paths (`sniffer_data.h`); look them up there. What they don't tell you:
+
+- **A pair's mode goes through its mode select**, not the fan: web_server's fan `turn_on` ignores `preset_mode` and still answers 200. The select exists only where the YAML adds one ([readme](../../../components/sec_touch/readme.md), `split_special_modes`).
+- **A fan speed also switches the pair to Normal**, ending Automatik Zeit.
+- **IDs 209–255 time out**: a discover scan of 1–208 covers everything in about 2 min; 1–255 takes 5½.
+- **Check a write landed** by reading the pair's level ID in `/sniffer/data`; its `hist` shows when it changed.
+
 ## Protocol (both components)
 
 The SEC-Touch hardware and its UART protocol are fixed: command IDs, frame layout, property IDs and level values stay as they are. Code may rely on protocol constants coinciding (a SET and a data frame both start with `32`). Judge such code on readability alone.

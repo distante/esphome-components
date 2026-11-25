@@ -177,13 +177,13 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   void send_ack_message();
   void drop_data_message(DataMessageCheck check);
 
-  unsigned long task_start_time_ = 0;
-  unsigned long task_ready_at_ms_ = 0;
+  uint32_t task_start_time_ = 0;
+  uint32_t task_ready_at_ms_ = 0;
   uint32_t inter_task_delay_ms_ = 30;
   uint32_t global_settings_update_interval_ms_ = 30000;
-  unsigned long last_global_settings_update_ms_ = 0;
+  uint32_t last_global_settings_update_ms_ = 0;
   uint32_t time_programs_update_interval_ms_ = 300000;
-  unsigned long last_time_programs_update_ms_ = 0;
+  uint32_t last_time_programs_update_ms_ = 0;
   int current_running_task_property_id_ = -1;
   ScanOutcomeTracker scan_outcome_;
   bool optional_crc_{false};

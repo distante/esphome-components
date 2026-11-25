@@ -24,18 +24,18 @@ All 66 IDs (101–166) become known properties in one change. From then on they 
 | `TIME_PROGRAM_TIME_IDS` | 30 | 102–106, 113–117, … 157–161 |
 | `TIME_PROGRAM_LEVEL_IDS` | 30 | 107–111, 118–122, … 162–166 |
 
-- A `static_assert` checks the stride of 11 between pairs. No code computes IDs (no `101 + 11·(n−1)`) in C++, JS or Python.
+- A `static_assert` checks the stride of 11 between pairs. The arrays are the IDs' one source ([Reuse existing definitions](../.claude/skills/coding-standards/SKILL.md#reuse-existing-definitions)): no `101 + 11·(n−1)` anywhere.
 - `GLOBAL_SETTING_IDS` stays `{48, 1, 2}`. `is_known_property()`, `max_known_property_id()` and the page's `knownIds()` add the three arrays.
 - `page_bundle.py` parses them with its existing forms; it needs no new form.
-- Python keeps no copy of the IDs. The `time_programs` codegen passes only the pair number (1–6) and switch-time numbers (1–5); C++ looks the IDs up.
+- The `time_programs` codegen passes only the pair number (1–6) and switch-time numbers (1–5); C++ looks the IDs up.
 
-**Meaning** (in `known_property_meaning.h` and `known_meaning.mjs`, once each, like the existing rules):
+**Meaning** (in `known_property_meaning.h` and `known_meaning.mjs`, once each, like the existing rules). This table is the only definition of each field's valid values:
 
 | Field | Matches | Shows | Otherwise |
 |---|---|---|---|
 | Level | whole decimal 0–`AUTOMATIC_CO2_LEVEL` (9) | the `LEVEL_NAMES` name | `unexpected value x` (10, 11 and 255 included) |
 | Enabled | 2 hex digits, either case, ≤ `1F` | `1, 2 enabled` · `none enabled` | `unexpected value x` |
-| Time | exactly `HH:MM:SS`, HH 00–23, MM and SS 00–59, after the usual ASCII trim | the value as sent | `unexpected value x` |
+| Time | exactly `HH:MM:SS`, HH 00–23, MM and SS 00–59, after the usual ASCII trim | the trimmed value, like date and clock | `unexpected value x` |
 
 The enabled and time rules are new decode rules: the sniffer spec's [Known-property catalogue](sniffer.md#known-property-catalogue) is amended to list them.
 
@@ -75,7 +75,7 @@ sec_touch:
 |---|---|
 | `fan_number` | 1–6. A pair listed twice is a config error. Block 6 is handled like any pair. |
 | Not listed | No entities, no sub-device, no polling for that pair. |
-| `name` | The pair name, used as the name prefix when there is no `device_id`. Without it, the pair's `fan:` entry name; without a fan entry, `Fan pair N`. |
+| `name` | The pair name ([where it shows](#sub-device)). Without it, the pair's `fan:` entry name; without a fan entry, `Fan pair N`. |
 | `switch_times` | Only listed switch times get the 3 field entities. A switch time enabled on the panel but not listed stays hidden in HA. 1–5, no duplicates. |
 | `next_change` | Needs a `time:` source; none is a config error. |
 | `time_programs_update_interval` | Positive time period. |
@@ -99,7 +99,7 @@ sec_touch:
 | `device_id` | Optional. The ID of a device the user declares in `esphome: devices:`, ideally with `relation: child`. sec_touch copies it into the config of every entity of that pair **before** the entity schemas are validated, so ESPHome's per-device duplicate-name check, the API and MQTT see it. |
 | Without `device_id` | The pair's entities sit on the node's device, and each default name gets the pair name in front: `Kellerraum switch time 1 time`. |
 | Package | `components/sec_touch/examples/time-program-devices.yaml` declares 6 devices, `sec_touch_pair_N_time_program`, named `Fan pair N time program`, `relation: child`. A user who wants other names or fewer devices copies its block into their own `esphome: devices:` instead. |
-| `device_id` set on a single entity entry | Wins over the pair's `device_id` for that entity. |
+| `device_id` on an optional entity entry (`refresh`, `write_failed`, live-state entries) | Wins over the pair's `device_id` for that entity. The 15 field entities always follow the pair. |
 
 ---
 
@@ -116,9 +116,17 @@ Per listed switch time *N*, always created:
 | Enabled | `switch` | `Switch time N enabled` | bit *N−1* of the pair's enabled mask |
 
 - Names are English. With a `device_id` they are the same on every pair, and the sub-device tells them apart; without one they get the pair-name prefix ([Sub-device](#sub-device)). Every name is overridable.
-- `entity_category: config` on the 15 field entities, so HA lists each switch time as time · level · enabled on the device page.
+- `entity_category`:
+
+  | Entities | Category |
+  |---|---|
+  | 15 field entities | `config`, so HA lists each switch time as time · level · enabled on the device page |
+  | `refresh` | `config` |
+  | `write_failed` | `diagnostic` |
+  | live-state entities | none |
+
 - The switches keep `restore_mode: ALWAYS_OFF` and never call `restore()`: a boot never writes to the panel.
-- A level read of 10, 11, 255 or anything unparsable leaves the select with no state and logs a warning. A time that isn't `HH:MM:SS` leaves the datetime with no state and logs a warning. An enabled mask that isn't 2 hex digits ≤ `1F` leaves the pair's switches as they were and logs a warning.
+- A value the [meaning rule](#known-property-catalogue) marks unexpected leaves the select or datetime with no state, the switches as they were, logs a warning, and nothing is written.
 
 Optional per pair: `refresh` (button), `write_failed` (event), and the [live-state](#live-state) entities.
 
@@ -143,10 +151,13 @@ Decided in [How do time-program writes from HA work safely?](https://github.com/
 
 Writes are allowed at any time, whatever the pair's mode.
 
-```
-HA command ─► publish new value at once
-           ─► queue SET (one per ID, latest wins)
-SET ends (ACK / NAK / timeout) ─► queue one GET of that ID ─► publish what it returns
+```mermaid
+flowchart LR
+  cmd[HA command] --> pub[publish new value at once]
+  cmd --> set[queue SET<br/>one per ID, latest wins]
+  set --> ends{SET ends<br/>ACK / NAK / timeout}
+  ends --> get[queue one GET of that ID]
+  get --> show[publish what it returns]
 ```
 
 | Rule | Detail |
@@ -156,7 +167,7 @@ SET ends (ACK / NAK / timeout) ─► queue one GET of that ID ─► publish wh
 | Time | Written as `HH:MM:00`. Seconds from HA are dropped, never rounded. |
 | Level | The select's index, 0–9, as a decimal string. |
 | Enabled mask | Per pair, the hub keeps the requested bit changes (bits to set, bits to clear). When the write is due: GET the mask fresh, apply only those bits, SET. Bits of switch times outside `switch_times` and any bit above 5 stay as they are. Changes merge; per bit, the later request wins. |
-| Mask GET fails | After the hub's one GET retry: write nothing, fire `mask_unreadable`, log a warning, republish the switches from the last good mask. |
+| Mask GET fails | The hub retries a GET only after a dropped reply (`get_retry.h`), not after a timeout or NAK. When the GET fails: write nothing, fire `mask_unreadable`, log a warning, republish the switches from the last good mask. |
 | Read-back | A `not_kept` is a read-back that differs from what was sent; seconds are ignored when comparing times. Live-state entities recompute from the read-back. |
 
 **`write_failed` event types** (an ESPHome event carries only its type; the log names the field, and in HA the entity that jumped back shows it):
@@ -176,11 +187,12 @@ HA's toast can't show these: entity commands from HA get no result back from ESP
 
 Decided in [Should sec_touch compute which switch time is in effect, and how is it shown?](https://github.com/distante/esphome-components/issues/120). The panel has no property that says which switch time is in effect ([Find the ID that says which switch time is in effect](https://github.com/distante/esphome-components/issues/116)), so sec_touch computes it.
 
-**Model** (pure C++ header, host tests):
+**Model** (a pure header, [Implementation notes](#implementation-notes)):
 
-- **In effect:** the latest enabled switch time at or before the panel time. The program repeats daily: before the day's first enabled switch time, the previous day's last one is in effect.
+- **In effect:** as defined in the [glossary](../GLOSSARY.md#language) (Switch time in effect). "At or before" includes the panel time itself.
+- **Next change:** the first enabled switch time strictly after the panel time, wrapping to the next day.
 - **Assumption:** the panel never shows the level it runs, so this model can't be checked on the device. The readme says so.
-- **Clock:** the panel clock (IDs 1 and 2), which is what fires the switch times. Advanced with `millis()` between reads, re-anchored on each good read. A failed read keeps the old anchor. Drift needs no handling.
+- **Clock:** the panel clock (IDs 1 and 2), which is what fires the switch times. Advanced with `millis()` between reads, re-anchored on each good read. Drift needs no handling.
 - **Running:** the program runs only when the pair's level ID reads `AUTOMATIC_TIME_LEVEL` (10).
 
 **Entities** (each optional, under the pair's `time_programs` entry):
@@ -190,18 +202,21 @@ Decided in [Should sec_touch compute which switch time is in effect, and how is 
 | Switch time in effect | text_sensor | `switch time 1`…`switch time 5` · `none` · `not running` · `conflict` |
 | Running level | text_sensor | `LEVEL_NAMES` name (0–9) · `none` · `not running` · `conflict` |
 | Next level | text_sensor | `LEVEL_NAMES` name (0–9) · `none` · `not running` · `conflict` |
-| Next change | timestamp sensor | time source now + (next switch time − panel now); NaN when there is none |
+| Next change | timestamp sensor | time source now + (next switch time − panel now); no value (NaN) when there is none |
 
 The state words are defined once in a C++ header the tests share. `not running` is used, not `off`, because `off` is level 0's name.
 
 | Case | Switch time in effect | Running level | Next change / Next level |
 |---|---|---|---|
-| Not in Automatik Zeit (level ID ≠ 10) | `not running` | `not running` | NaN / `not running` |
-| Automatik Zeit, no switch time enabled | `none` | `none` | NaN / `none` |
+| Not in Automatik Zeit (level ID ≠ 10) | `not running` | `not running` | no value (NaN) / `not running` |
+| Automatik Zeit, no switch time enabled | `none` | `none` | no value (NaN) / `none` |
 | Two enabled switch times tied at the time in effect | `conflict` | `conflict` | as normal |
 | The next change is a tie | as normal | as normal | valid / `conflict` |
 | A tie at another time of day | no effect | no effect | no effect |
+| Exactly one enabled switch time | that switch time | its level | itself 24 h later / its level |
 | Inputs not read once yet (boot) | nothing published | nothing published | nothing published |
+| An input read fails or is unexpected | from the last good value of that input (for the clock: the old anchor), warning logged | same | same |
+| … and that input never read well yet | as boot | as boot | as boot |
 
 - **Inputs:** the pair's enabled mask, its 5 times and 5 levels, its level ID, and the panel clock.
 - **Recompute:** on every input read, plus one timeout set for the next change. An entity publishes only when its value changes.
@@ -213,7 +228,7 @@ The state words are defined once in a C++ header the tests share. `not running` 
 
 Decided in [What does the bulk-set action for a pair's time program look like?](https://github.com/distante/esphome-components/issues/119).
 
-`sec_touch.set_time_program` is an ESPHome automation action with `on_success:` and `on_error:` (like `http_request`). It sets a pair's whole program. To call it from HA, the user wraps it in their own `api: actions:` with `api.respond`; the readme has the block to copy. It also works on the device (template button, `on_time`).
+`sec_touch.set_time_program` is an ESPHome automation action with `on_success:` and `on_error:`. It sets a pair's whole program. To call it from HA, the user wraps it in their own `api: actions:` with `api.respond`; the readme has the block to copy. It also works on the device (template button, `on_time`).
 
 | Argument | Type | Rule |
 |---|---|---|
@@ -252,14 +267,14 @@ The [readme copy block and HA call](https://github.com/distante/esphome-componen
 | Latest wins per ID | none new | It overwrites the queued `SetDataTask`'s fixed `value` buffer in place. |
 | Requested mask bits | static, 6 pairs × (set, clear) `uint8_t` | |
 | Panel clock anchor | static | |
-| Bulk `error` text | `std::string`, built only when a bulk call fails | ESPHome's `api.respond` takes a `std::string` anyway. This is the one stated heap use. |
+| Bulk `error` text | `std::string`, built only when a bulk call fails | ESPHome's `api.respond` takes a `std::string` anyway. This is the one stated heap use ([Memory rule](../.claude/skills/coding-standards/SKILL.md#memory)). |
 | Entities | created once by codegen | Worst case 6 pairs × (15 + 4 + 2) = 126. Estimated 30–60 B each ([research](https://github.com/distante/esphome-components/blob/research/time-program-entities/.specs/research/time-program-entities.md#cost-of-90-extra-entities)), measured in the device check. No cap until then. |
 
 ---
 
 ## Implementation notes
 
-Pure headers (no ESPHome includes, host tests in `tests/cpp/`) hold the logic; the entities and the hub only call them:
+Pure headers ([Tests](../.claude/skills/coding-standards/SKILL.md#tests)) hold the logic; the entities and the hub only call them:
 
 | Seam | Holds |
 |---|---|
@@ -289,6 +304,8 @@ Ships in **v1.5.0** with the sniffer goals and experiments. The work for this se
 - That the fan entity still shows on in Automatik Zeit.
 - The bulk-action copy block, the HA call, and HA's 30 s response timeout.
 - The measured RAM cost.
+- IDs 1 and 2 are also polled with any live-state entity (readme "Panel Clock" and the `GLOBAL_SETTING_IDS` note say only with `clock_drift`).
+- "Not in `protocol_ids.h` yet: #85 decides" under Time programs: point at this spec's [catalogue](#known-property-catalogue).
 
 **Device check** (maintainer's controller): one heap check with 6 pairs × all switch times + every live-state entity + the sniffer, plus one write per field kind and one bulk call, each checked on the panel.
 
@@ -306,14 +323,15 @@ Ships in **v1.5.0** with the sniffer goals and experiments. The work for this se
 
 ## Acceptance criteria
 
-1. `protocol_ids.h` is the only definition of IDs 101–166, as three pair-major arrays with a stride `static_assert`. No C++, JS or Python code computes a time-program ID.
+1. `protocol_ids.h` is the only definition of IDs 101–166, as in [Known-property catalogue](#known-property-catalogue). No C++, JS or Python code computes a time-program ID.
 2. Check queries and shows IDs 101–166; discover and write probes skip them. Each fan card shows the time-program table with meanings; level 10, mask `20` and time `24:00:00` show as `unexpected value x`.
-3. A pair not in `time_programs:` gets no entities and no polling. A listed pair gets 3 entities per listed switch time, named by the rules in [Configuration](#configuration) and [Entities](#entities). A duplicate `fan_number`, a switch time outside 1–5, or `next_change` without a time source is a config error. A pair's `device_id` lands on every entity of that pair before entity validation, so a name repeated on two pairs' devices is valid and repeated on one device is an error; without it the names carry the pair prefix. A config with the example package validates and compiles.
-4. Time-program IDs are polled every `time_programs_update_interval`, plus once after boot, and never on the fan or global-settings poll. With a live-state entity, the whole block and IDs 1 and 2 are polled.
-5. An HA write publishes at once, queues one SET per ID (a newer value replaces the queued one), and after the SET ends, one GET whose value is published. No SET is retried.
-6. A switch write GETs the mask, changes only the requested bits and SETs it. A failed GET writes nothing and fires `mask_unreadable`. NAK, timeout and a differing read-back fire `refused`, `timeout` and `not_kept`.
-7. Time writes send `HH:MM:00`. A level outside 0–9 read from the panel leaves the select with no state.
-8. Live state follows the model and every row of the cases table, and publishes only on change. `not running` appears whenever the level ID isn't 10.
-9. `sec_touch.set_time_program` validates everything first, writes times, levels, then the mask, reports `invalid_argument`, `busy` or the failed-field list in `error`, and fires `on_success` only when every read-back matches.
-10. No heap use beyond the [Memory](#memory) table.
-11. The device check is recorded with the heap numbers, and the readme states them.
+3. A pair not in `time_programs:` gets no entities and no polling. A listed pair gets 3 entities per listed switch time, named by the rules in [Configuration](#configuration), [Sub-device](#sub-device) and [Entities](#entities). A config the [Configuration](#configuration) table calls an error fails validation: a duplicate `fan_number`, a switch time outside 1–5 or listed twice, `next_change` without a time source, a `time_programs_update_interval` that isn't a positive time period. A config with the example package validates and compiles.
+4. A pair's `device_id` lands on every entity of that pair before entity validation, so a name repeated on two pairs' devices is valid and repeated on one device is an error. A `device_id` on an optional entity entry wins for that entity; the 15 field entities always follow the pair. Every entity has the `entity_category` of [Entities](#entities).
+5. Time-program IDs are polled as in [Reading](#reading), and never on the fan or global-settings poll. A `refresh` press queues one poll of its pair and leaves the schedule as it was.
+6. An HA write follows [Writing](#writing): published at once, one queued SET per ID (a newer value replaces the queued one), after the SET ends one GET whose value is published. No SET is retried.
+7. A switch write GETs the mask, changes only the requested bits and SETs it. A failed GET writes nothing. `write_failed` fires each type of the [event table](#writing) in its case.
+8. Time writes send `HH:MM:00`. A level outside 0–9 read from the panel leaves the select with no state, and nothing is written.
+9. Live state follows the [model](#live-state) and every row of its cases table, and publishes only on change. Tests cover: exactly one enabled switch time, a failed or unexpected input before and after a good read, a switch time exactly at the panel time (in effect) and the next change strictly after it. `not running` appears whenever the level ID isn't 10.
+10. `sec_touch.set_time_program` follows [Bulk-set action](#bulk-set-action): validates everything first, writes times, levels, then the mask, reports `invalid_argument`, `busy` or the failed-field list in `error`, and fires `on_success` only when every read-back matches.
+11. No heap use beyond the [Memory](#memory) table.
+12. The device check is recorded with the heap numbers, and the readme states them.

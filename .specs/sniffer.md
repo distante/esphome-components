@@ -216,7 +216,7 @@ Decided in [What should the sniffer HTML page look like and do?](https://github.
 
 ### Check
 
-**Panel-style cards**, no ID map, no filters, no change feed.
+**Panel-style cards**, no ID map, no filters, no change feed: one card per pair keeps it readable.
 - **One card per fan**: the level meaning in large type, the raw `id = value` under it, then the label meaning and its raw value, then the pair's time-program table ([Time programs](time-programs.md#known-property-catalogue)). A `registered` badge marks fans this YAML uses (`reg`).
 - **One Global card**: summer ventilation, date and clock, each with meaning and raw value.
 - An unexpected value shows in red as `unexpected value x`. A known property with no value yet shows as not seen.
@@ -486,9 +486,9 @@ Captured data lives in RAM and is lost on restart or flash. The page keeps a cop
 
 ## Docs and migration
 
-Ships as **v1.5.0** (minor: fans and HA entities are untouched; the hub gains the sniffer's tap and an unchecked SET).
+Ships as **v1.5.0** (minor: existing fans and HA entities are untouched; the hub gains the sniffer's tap and an unchecked SET). Time programs ship in the same release.
 
-**Changelog (v1.5.0):**
+**Changelog (v1.5.0), sniffer** (the time-program lines are in [Time programs](time-programs.md#docs-and-release)):
 - **Breaking, YAML:** the `text_sensor` platform is gone and is a hard config error with a migration message. Use the top-level `sec_touch_sniffer:` block. `scan_switch`, `scan_start`/`scan_end` and `web_page` are removed; `web_server_base:` (or `web_server:`) is required.
 - **Scans start only from the page**, which picks the goal (discover or check) and the discover range.
 - **Discover skips every known property**, not only registered ones.
@@ -516,7 +516,7 @@ Ships as **v1.5.0** (minor: fans and HA entities are untouched; the hub gains th
 - Persisting captured data to flash/NVS.
 - A rich sniffer on ESP8266.
 - Home Assistant integration of the page (cards, panels).
-- Pass/fail validation in check, and decode rules beyond the catalogue's meaning tables and the two time-program rules.
+- Pass/fail validation in check, and decode rules beyond the [catalogue](#known-property-catalogue).
 - Storing the goal or the open experiment in the browser.
 - Write probes for known properties or in the check goal: the component's own entities already write them.
 - Generating catalogue entries (C++ snippets) from an experiment.

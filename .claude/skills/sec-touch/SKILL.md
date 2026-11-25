@@ -13,15 +13,12 @@ Reads are fine: GET `/sniffer/data`, the page, the logs, and discover scans (the
 
 ### Driving it over REST
 
-The device runs ESPHome's `web_server`. Entity URLs use the entity **name**, URL-encoded, and every POST needs `-H 'Content-Length: 0'`.
+URLs come from ESPHome's `web_server` and the sniffer's paths (`sniffer_data.h`); look them up there. What they don't tell you:
 
-| To | Request | Gotcha |
-|---|---|---|
-| Set a pair's mode (Normal, Automatic Time, …) | `POST /select/<mode select name>/set?option=Automatic%20Time` | The fan's `turn_on` ignores `preset_mode` and still answers 200; it reads only `speed_level` and `oscillation`. The mode select exists only where the YAML adds one ([readme](../../../components/sec_touch/readme.md), `split_special_modes`). |
-| Set a pair's level 1–6 | `POST /fan/<fan name>/turn_on?speed_level=2` | A speed also switches the pair to Normal, ending Automatik Zeit. |
-| Scan every ID | `POST /sniffer/scan/start?goal=discover&from=1&to=208`, then poll `/sniffer/data` until `scan.done` | IDs 209–255 time out, so 1–208 is the whole range: about 2 min, versus 5½ min for 1–255. |
-
-Check a write landed by reading its ID in `/sniffer/data`: a fan's level is the pair's level ID (173–178), and its `hist` shows when it changed.
+- **A pair's mode goes through its mode select**, not the fan: web_server's fan `turn_on` ignores `preset_mode` and still answers 200. The select exists only where the YAML adds one ([readme](../../../components/sec_touch/readme.md), `split_special_modes`).
+- **A fan speed also switches the pair to Normal**, ending Automatik Zeit.
+- **IDs 209–255 time out**: a discover scan of 1–208 covers everything in about 2 min; 1–255 takes 5½.
+- **Check a write landed** by reading the pair's level ID in `/sniffer/data`; its `hist` shows when it changed.
 
 ## Protocol (both components)
 

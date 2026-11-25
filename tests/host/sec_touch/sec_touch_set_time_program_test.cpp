@@ -187,7 +187,12 @@ class SetTimeProgramTest : public ::testing::Test {
   int successes_{0};
   Automation<> on_success_{this->action_.get_success_trigger()};
   Automation<std::string> on_error_{this->action_.get_error_trigger()};
-  LambdaAction<> count_success_{[this]() { this->successes_++; }};
+  /// The panel's mask when on_success fired.
+  std::string mask_at_success_;
+  LambdaAction<> count_success_{[this]() {
+    this->successes_++;
+    this->mask_at_success_ = this->panel_[MASK_ID];
+  }};
   LambdaAction<std::string> keep_error_{[this](std::string error) { this->errors_.push_back(error); }};
 };
 
@@ -279,6 +284,30 @@ TEST_F(SetTimeProgramTest, AnEntityWriteThatReplacesABulkValueIsNotKept) {
 
   EXPECT_EQ(this->errors_, std::vector<std::string>{failed_prefix(1) + "switch time 3 level not_kept"});
   EXPECT_TRUE(this->events_.empty());  // the entity's own write landed
+}
+
+// An entity write's mask SET still in flight when the call starts is not the call's mask SET: the call waits for its
+// own and confirms it.
+TEST_F(SetTimeProgramTest, AnEntityMaskSetInFlightIsNotTheCallsMaskSet) {
+  this->enabled_.turn_on();
+  this->hub_.loop();  // the fresh mask GET goes out
+  this->uart_.tx.clear();
+  this->uart_.push_rx(concat(ack_frame(), data_frame(MASK_ID, this->panel_[MASK_ID])));
+  this->loop_times(3);  // its answer queues the entity's mask SET, which goes out
+  std::vector<uint8_t> out = this->uart_.tx;
+  const std::vector<uint8_t> ack = ack_frame();
+  ASSERT_TRUE(out.size() > ack.size() && std::equal(ack.begin(), ack.end(), out.begin()));
+  out.erase(out.begin(), out.begin() + ack.size());
+  ASSERT_EQ(parse_request(out), set_of(MASK_ID, mask_text(MASK_BEFORE | switch_time_bit(SWITCH_TIME))));
+  this->panel_[MASK_ID] = mask_text(MASK_BEFORE | switch_time_bit(SWITCH_TIME));
+
+  this->action_.play_complex();
+  this->uart_.push_rx(ack_frame());  // the entity's mask SET ends after the call started
+  this->run_panel();
+
+  EXPECT_EQ(this->successes_, 1);
+  EXPECT_EQ(this->mask_at_success_, mask_text(MASK_AFTER));
+  EXPECT_TRUE(this->errors_.empty());
 }
 
 // Decisions: a scan drops the queue; the running call ends with on_error naming the unwritten fields, and frees

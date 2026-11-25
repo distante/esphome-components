@@ -245,6 +245,8 @@ void TimeProgram::write_mask_(uint8_t fresh) {
   EnabledMaskText text = format_enabled_mask(mask);
   ESP_LOGI(TAG, "Fan pair %d enabled mask -> %s", this->pair_, text.data());
   this->queue_set_(time_program_enabled_id(this->pair_), text.data(), mask);
+  // A running bulk write requested its bits before this fresh mask: this SET is its mask SET.
+  this->bulk_.mask_set_queued();
   this->publish_switches_(mask);
 }
 

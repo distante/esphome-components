@@ -155,6 +155,7 @@ void every_write_lands(BulkWrite &bulk) {
     bulk.set_ended(level_slot(n), true);
     bulk.read_back(level_slot(n), MATCHED);
   }
+  bulk.mask_set_queued();
   bulk.set_ended(mask_slot(), true);
   bulk.read_back(mask_slot(), MATCHED);
 }
@@ -178,6 +179,7 @@ TEST(BulkWriteReport, WaitsForEachReadBack) {
   bulk.finish();
   bulk.begin();
 
+  bulk.mask_set_queued();
   bulk.set_ended(mask_slot(), true);
   bulk.read_back(mask_slot(), MATCHED);
   for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
@@ -232,6 +234,7 @@ TEST(BulkWriteReport, AReadBackThatDiffersIsNotKept) {
     bulk.set_ended(level_slot(n), true);
     bulk.read_back(level_slot(n), MATCHED);
   }
+  bulk.mask_set_queued();
   bulk.set_ended(mask_slot(), true);
   bulk.read_back(mask_slot(), DIFFERS);
 
@@ -281,6 +284,7 @@ TEST(BulkWriteReport, AReadBackAnsweredButNotComparedIsNotKept) {
       bulk.read_back(level_slot(n), MATCHED);
     }
   }
+  bulk.mask_set_queued();
   bulk.set_ended(mask_slot(), true);
   bulk.read_back(mask_slot(), MATCHED);
 
@@ -295,6 +299,35 @@ TEST(BulkWriteReport, TheFreshMaskGetIsNoReadBack) {
 
   every_write_lands(bulk);
 
+  EXPECT_EQ(bulk.finish(), std::nullopt);
+}
+
+/// Ends the times' and levels' writes with matching read-backs.
+void every_field_write_lands(BulkWrite &bulk) {
+  for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
+    bulk.set_ended(time_slot(n), true);
+    bulk.read_back(time_slot(n), MATCHED);
+    bulk.set_ended(level_slot(n), true);
+    bulk.read_back(level_slot(n), MATCHED);
+  }
+}
+
+// An entity write's mask SET that ends while the bulk mask waits for its fresh GET is not the bulk's SET: neither its
+// failure nor its read-back counts for the bulk's mask.
+TEST(BulkWriteReport, OnlyTheMaskSetQueuedForTheBulkCounts) {
+  BulkWrite bulk;
+  bulk.begin();
+  every_field_write_lands(bulk);
+
+  bulk.fail(mask_slot(), WriteFailure::REFUSED);
+  bulk.set_ended(mask_slot(), true);
+  bulk.read_back(mask_slot(), DIFFERS);
+  EXPECT_FALSE(bulk.done());
+
+  bulk.mask_set_queued();
+  bulk.set_ended(mask_slot(), true);
+  bulk.read_back(mask_slot(), MATCHED);
+  ASSERT_TRUE(bulk.done());
   EXPECT_EQ(bulk.finish(), std::nullopt);
 }
 

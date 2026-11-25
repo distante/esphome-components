@@ -120,9 +120,11 @@ inline std::string bulk_unlisted_pair_error(int pair) {
 
 /**
  * Tracks one pair's bulk write, from its start until each of its writes has ended, and builds its report. Each write
- * goes SENDING (its SET queued, or for the mask its fresh GET) -> READ_BACK (the SET ended) -> DONE (its read-back
- * compared, or it failed with nothing more to wait for). The first failure of a write is the one reported. What each
- * write sent is the entity path's to compare (TimeProgram): a read-back comes here as matched or not.
+ * goes SENDING (its SET queued) -> READ_BACK (the SET ended) -> DONE (its read-back compared, or it failed with nothing
+ * more to wait for). The mask write starts READING its fresh GET: until its own SET is queued, a mask SET that ends
+ * (an entity write's, already in flight) and its read-back aren't the bulk's. The first failure of a write is the one
+ * reported. What each write sent is the entity path's to compare (TimeProgram): a read-back comes here as matched or
+ * not.
  */
 class BulkWrite {
  public:
@@ -132,6 +134,15 @@ class BulkWrite {
   void begin() {
     this->active_ = true;
     this->writes_.fill(Write{});
+    this->mask_write_().state = State::READING;
+  }
+
+  /// The mask SET built from the fresh GET was queued.
+  void mask_set_queued() {
+    if (!this->active_ || this->mask_write_().state != State::READING) {
+      return;
+    }
+    this->mask_write_().state = State::SENDING;
   }
 
   /// A SET of `slot` ended; `read_back_follows` when its read-back GET was queued.
@@ -180,6 +191,10 @@ class BulkWrite {
   void fail(const TimeProgramSlot &slot, WriteFailure failure) {
     Write *write = this->write_(slot);
     if (write == nullptr || write->state == State::DONE) {
+      return;
+    }
+    // Until the bulk's mask SET is queued, a failed mask SET is an earlier write's.
+    if (write->state == State::READING && failure != WriteFailure::MASK_UNREADABLE) {
       return;
     }
     record_(*write, failure);
@@ -240,7 +255,7 @@ class BulkWrite {
   }
 
  protected:
-  enum class State : uint8_t { SENDING, READ_BACK, DONE };
+  enum class State : uint8_t { READING, SENDING, READ_BACK, DONE };
 
   struct Write {
     State state{State::SENDING};
@@ -256,6 +271,8 @@ class BulkWrite {
     }
     return &this->writes_[time_program_block_index(slot)];
   }
+
+  Write &mask_write_() { return this->writes_[time_program_block_index(TimeProgramField::ENABLED, 0)]; }
 
   Write *in_state_(const TimeProgramSlot &slot, State state) {
     Write *write = this->write_(slot);

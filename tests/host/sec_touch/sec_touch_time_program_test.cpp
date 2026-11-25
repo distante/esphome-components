@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -141,6 +142,20 @@ TEST_F(TimeProgramTest, TheNextPollComesAfterItsInterval) {
   EXPECT_EQ(this->drain(), one_poll());
 }
 
+// millis() is 32 bits and wraps: a poll that last ran just before the wrap is due after its interval, not at once.
+// The longest interval makes this hold at any uptime of the host clock.
+TEST_F(TimeProgramTest, APollThatRanBeforeTheMillisWrapIsDueOnlyAfterItsInterval) {
+  this->hub_.set_time_programs_update_interval_ms(std::numeric_limits<uint32_t>::max());
+  this->hub_.setup();
+  this->drain();
+
+  // Ran when millis() last read its highest value; millis() has since wrapped to its current value.
+  this->hub_.last_time_programs_update_ms_ = std::numeric_limits<uint32_t>::max();
+  this->hub_.loop();  // an idle loop queues the poll only when due
+
+  EXPECT_TRUE(this->send_next_task().empty());
+}
+
 // AC 5: the global-settings poll sends its own IDs only.
 TEST_F(TimeProgramTest, TheGlobalSettingsPollSendsNoTimeProgramId) {
   this->hub_.register_global_setting_string_listener(CLOCK_PROPERTY_ID, [](int, const std::string &) {});
@@ -159,7 +174,7 @@ TEST_F(TimeProgramTest, RefreshQueuesOnePollAndKeepsTheSchedule) {
   this->drain();
   // Halfway through the interval, so a refresh that restarted it would show.
   this->hub_.last_time_programs_update_ms_ = millis() - INTERVAL_MS / 2;
-  const unsigned long scheduled = this->hub_.last_time_programs_update_ms_;
+  const uint32_t scheduled = this->hub_.last_time_programs_update_ms_;
 
   this->program_.refresh();
 

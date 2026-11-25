@@ -313,6 +313,36 @@ sensor:
   seconds on write, so the write waits for the next full minute (up to 60 s after the press). There is no automatic sync: trigger the button from a Home Assistant
   automation, e.g. when the drift sensor exceeds a threshold or after a daylight saving change.
 
+## Time program live state
+
+Optional entities under a pair's `time_programs:` entry ([spec](../../.specs/time-programs.md#live-state)):
+
+```yaml
+sec_touch:
+  time_programs:
+    - fan_number: 1
+      switch_time_in_effect:   # text_sensor: "switch time N" or a state word
+        name: "Switch time in effect"
+      running_level:           # text_sensor: a level name or a state word
+        name: "Running level"
+      next_level:              # text_sensor: a level name or a state word
+        name: "Next level"
+      next_change:             # timestamp sensor, needs a time: source
+        name: "Next change"
+```
+
+| State word | When |
+|---|---|
+| `not running` | The pair's level isn't Automatic Time (10) |
+| `none` | Automatic Time, but no switch time enabled |
+| `conflict` | Two enabled switch times share that time |
+
+- **Computed, not read.** The panel never says which switch time it runs. sec_touch computes it from the program, the pair's level and the panel clock (IDs 1 and 2, read on the global settings poll). The model is an assumption the panel can't confirm.
+- **Needs the pair's `fan:` entry**, which polls the pair's level. Without it the config fails.
+- **Polling:** with any live-state entity, the pair's whole block of 11 IDs is polled, whatever `switch_times` lists.
+- **`next_change` precision:** rounded to the minute, but HA gets it as a float, so it can be off by up to ±64 s.
+- The fan entity isn't changed: in Automatik Zeit it still shows on, preset Automatic Time.
+
 ## Logging
 
 Each component uses a distinct log tag. You can suppress noisy tags without hiding everything by adding a `logger` block to your YAML:
@@ -821,7 +851,7 @@ Stored on `GLOBAL_SETTING_IDS` array as:
 48, 1, 2
 ```
 
-`1` and `2` are the panel date and clock, see [Panel Clock](#panel-clock). They are only polled when `clock_drift` is configured.
+`1` and `2` are the panel date and clock, see [Panel Clock](#panel-clock). They are only polled when `clock_drift` or a [time-program live-state](#time-program-live-state) entity is configured.
 
 | ID | Description | ON value | OFF value |
 |----|-------------|----------|-----------|

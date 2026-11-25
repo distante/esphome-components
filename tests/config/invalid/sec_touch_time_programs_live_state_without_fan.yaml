@@ -1,0 +1,35 @@
+# expect-error: running_level needs this hub's sec_touch fan entry with fan_number 2
+# Live state reads the pair's level ID, which only the pair's fan entry polls. Pair 1 has a fan entry, pair 2 not.
+
+esphome:
+  name: tp-live-state-no-fan
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+  time_programs:
+    - fan_number: 1
+      running_level:
+        name: "Pair 1 running level"
+    - fan_number: 2
+      running_level:
+        name: "Pair 2 running level"
+
+fan:
+  - platform: sec_touch
+    fan_number: 1
+    name: "Kellerraum"

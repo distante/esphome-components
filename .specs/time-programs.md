@@ -78,6 +78,7 @@ sec_touch:
 | `name` | The pair name ([where it shows](#sub-device)). Without it, the pair's `fan:` entry name; without a fan entry, `Fan pair N`. |
 | `switch_times` | Only listed switch times get the 3 field entities. A switch time enabled on the panel but not listed stays hidden in HA. 1–5, no duplicates. |
 | `next_change` | Needs a `time:` source; none is a config error. |
+| Live-state entries | Need this hub's `fan:` entry for that pair, which polls the pair's level ID; none is a config error. |
 | `time_programs_update_interval` | Positive time period. |
 
 ### Sub-device
@@ -203,7 +204,7 @@ Decided in [Should sec_touch compute which switch time is in effect, and how is 
 | Switch time in effect | text_sensor | `switch time N` (N 1–5), or a state word from the cases table |
 | Running level | text_sensor | a level name ([meaning rule](#known-property-catalogue)), or a state word from the cases table |
 | Next level | text_sensor | a level name ([meaning rule](#known-property-catalogue)), or a state word from the cases table |
-| Next change | timestamp sensor | time source now + (next switch time − panel now); no value (NaN) when there is none |
+| Next change | timestamp sensor | time source now + (next switch time − panel now), rounded to the minute; no value (NaN) when there is none. HA gets a float, so it can be off by up to ±64 s (readme). While the time source isn't synced, it waits. |
 
 The state words live in the live-state model's header ([Implementation notes](#implementation-notes)), the one definition code and tests use ([Reuse existing definitions](../.claude/skills/coding-standards/SKILL.md#reuse-existing-definitions)). `not running` is used, not `off`, because `off` is level 0's name.
 
@@ -220,7 +221,8 @@ The state words live in the live-state model's header ([Implementation notes](#i
 | … and that input never read well yet | as boot | as boot | as boot |
 
 - **Inputs:** the pair's enabled mask, its 5 times and 5 levels, its level ID, and the panel clock.
-- **Recompute:** on every input read, plus one timeout set for the next change. An entity publishes only when its value changes.
+- **Recompute:** on every input read, plus one timeout set for the next change: a deadline the live state's `loop()` checks, so the scheduler allocates nothing. An entity publishes only when its value changes.
+- A GET answer for an input ID while a SET of that ID is queued is skipped, as the fan and the field entities skip it.
 - The HA fan entity isn't changed: in Automatik Zeit it still shows on, preset Automatic Time. Whether it should follow the running level is [sec_touch: in Automatik Zeit the fan shows on even when the program runs level 0](https://github.com/distante/esphome-components/issues/124).
 
 ---
@@ -274,9 +276,9 @@ The [readme copy block and HA call](https://github.com/distante/esphome-componen
 | GET and SET tasks | the hub's existing heap queue (`std::deque<std::unique_ptr<BaseTask>>`) | It's the hub's task design. A static queue would be a hub refactor outside this spec. |
 | Latest wins per ID | none new | It overwrites the queued `SetDataTask`'s fixed `value` buffer in place. |
 | Requested mask bits | static, 6 pairs × (set, clear) `uint8_t` | |
-| Panel clock anchor | static | |
+| Panel clock anchor, live-state inputs and deadline | static: members of the live-state object, which codegen places statically | |
 | Bulk `error` text | `std::string`, built only when a bulk call fails | ESPHome's `api.respond` takes a `std::string` anyway ([Memory rule](../.claude/skills/coding-standards/SKILL.md#memory)). |
-| Listener registrations | the hub's listener maps (`std::multimap` entries holding `std::function`s) and its task-end listener list (one entry per pair) | One entry per registered ID, at most 6 pairs × 11. Allocated while the entities are built, never freed. |
+| Listener registrations | the hub's listener maps (`std::multimap` entries holding `std::function`s) and its task-end listener list (one entry per pair) | One entry per registered ID: per pair 11 for the time program's block (every listed pair, for the bulk read-backs) and 12 for the live state (its block and level ID), plus IDs 1 and 2 once per live-state pair. Allocated while the entities are built, never freed. |
 | Bulk action list arguments | `std::vector`, ESPHome's action argument type; the action keeps a copy of each running call's arguments (one static slot per pair) until it fires `on_success` / `on_error` | HA's `string[]`, `int[]` and `bool[]` arrive as vectors. |
 | Bulk write state | static, per pair: what each of the 11 writes sent and how it ended | |
 | Per-pair poll ID lists | static, 6 pairs × 11 IDs | |

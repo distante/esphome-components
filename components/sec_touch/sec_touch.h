@@ -65,7 +65,8 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
 
   /**
    * Hands the raw value of every time-program data message for `property_id` to `listener`. Puts the ID on no poll:
-   * add_time_program_poll_id() does that. Several listeners may share one ID.
+   * add_time_program_poll_id() does that. Several listeners may share one ID. The live state also uses it for the
+   * pair's level ID, which the pair's fan polls.
    */
   void register_time_program_listener(int property_id, StringUpdateCallbackListener listener);
   /// Puts `property_id` on fan pair `pair`'s time-program poll, once. Returns false for an ID outside that pair's

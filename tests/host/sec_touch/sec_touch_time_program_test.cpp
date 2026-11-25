@@ -308,6 +308,23 @@ TEST_F(TimeProgramTest, AFailedMaskGetWritesNothing) {
   EXPECT_TRUE(this->first_enabled_.state);
 }
 
+// Decisions: only the switch write's own fresh mask GET decides mask_unreadable. A poll's mask GET in flight when the
+// switch is written that fails leaves the bits to the write's own GET.
+TEST_F(TimeProgramTest, AFailedPollMaskGetLeavesTheWriteToItsOwnGet) {
+  this->program_.refresh();
+  EXPECT_EQ(this->send_next_task(), get_frame(FIRST_TIME_ID));
+  this->panel_answers_get(FIRST_TIME_ID, "06:00:00");
+  EXPECT_EQ(this->panel_answers_get(FIRST_LEVEL_ID, "2"), concat(ack_frame(), get_frame(MASK_ID)));
+  this->enabled_.turn_on();
+
+  EXPECT_EQ(this->panel_stays_silent(), get_frame(MASK_ID));
+  EXPECT_TRUE(this->events_.empty());
+
+  EXPECT_EQ(this->panel_answers_get(MASK_ID, mask_text(0)),
+            concat(ack_frame(), set_frame(MASK_ID, mask_text(switch_time_bit(SWITCH_TIME)))));
+  EXPECT_TRUE(this->enabled_.state);
+}
+
 // Entities: an unexpected mask leaves the switches as they were and writes nothing.
 TEST_F(TimeProgramTest, AnUnexpectedFreshMaskWritesNothing) {
   this->enabled_.turn_on();

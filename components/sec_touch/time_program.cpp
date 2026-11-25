@@ -109,8 +109,9 @@ void TimeProgram::request_enabled_(int switch_time, bool enabled) {
     return;
   }
   // Read the mask fresh right before writing it, so bits changed on the panel since the last poll stay as they are.
-  this->mask_read_pending_ =
+  this->mask_get_ticket_ =
       this->hub_->add_priority_get_task(TaskTargetType::TIME_PROGRAM, time_program_enabled_id(this->pair_));
+  this->mask_read_pending_ = this->mask_get_ticket_ != 0;
 }
 
 void TimeProgram::queue_set_(int id, const char *value, int expected) {
@@ -295,14 +296,16 @@ void TimeProgram::on_task_end_(const BaseTask &task, TaskEnd end) {
       return;
     }
     read_back->armed = true;
-    this->bulk_.set_ended(*slot, this->hub_->add_priority_get_task(TaskTargetType::TIME_PROGRAM, task.property_id));
+    this->bulk_.set_ended(*slot,
+                          this->hub_->add_priority_get_task(TaskTargetType::TIME_PROGRAM, task.property_id) != 0);
     return;
   }
 
   // A GET of this ID ended. A delivered answer already took the read-back; a failed GET leaves nothing to compare.
   read_back->armed = false;
   this->bulk_.get_ended(*slot, end);
-  if (slot->field != TimeProgramField::ENABLED || !this->mask_read_pending_) {
+  // Only the switch write's own fresh GET decides that the mask is unreadable, not a poll's GET of it.
+  if (slot->field != TimeProgramField::ENABLED || !this->mask_read_pending_ || task.ticket != this->mask_get_ticket_) {
     return;
   }
   if (end != TaskEnd::TASK_END_ANSWERED) {

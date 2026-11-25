@@ -106,9 +106,9 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
    * accept.
    */
   bool add_set_task_latest_wins(TaskTargetType target, int property_id, const char *value);
-  /// Queues a GET of `property_id` ahead of every other GET, after the queued SETs. Returns false for an ID `target`
-  /// doesn't accept.
-  bool add_priority_get_task(TaskTargetType target, int property_id);
+  /// Queues a GET of `property_id` ahead of every other GET, after the queued SETs. Returns the GET's ticket (never 0),
+  /// which its task carries to the task-end listeners, or 0 for an ID `target` doesn't accept.
+  uint32_t add_priority_get_task(TaskTargetType target, int property_id);
   void add_recursive_tasks_to_get_queue();
   void add_manual_tasks_to_queue();
   void add_global_setting_tasks_to_queue();
@@ -156,6 +156,8 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   MessageRouter message_router_;
   std::vector<QueueEmptyListener> queue_empty_listeners;
   bool scan_mode_active_{false};
+  /// The ticket of the last priority GET.
+  uint32_t last_ticket_{0};
   bool queue_was_idle_{false};
 
   std::map<int, text_sensor::TextSensor *> text_sensors;

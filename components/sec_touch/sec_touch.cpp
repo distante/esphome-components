@@ -453,18 +453,23 @@ bool SECTouchComponent::add_set_task_latest_wins(TaskTargetType target, int prop
   return true;
 }
 
-bool SECTouchComponent::add_priority_get_task(TaskTargetType target, int property_id) {
+uint32_t SECTouchComponent::add_priority_get_task(TaskTargetType target, int property_id) {
   auto task = GetDataTask::create(target, property_id);
   if (task == nullptr) {
     ESP_LOGE(TAG, "No GET of property_id %d as %s", property_id, EnumToString::TaskTargetType(target));
-    return false;
+    return 0;
   }
+  this->last_ticket_++;
+  if (this->last_ticket_ == 0) {
+    this->last_ticket_ = 1;  // 0 means no GET
+  }
+  task->ticket = this->last_ticket_;
   auto it = this->data_task_queue.begin();
   while (it != this->data_task_queue.end() && (*it)->get_task_type() == TaskType::SET_DATA) {
     ++it;
   }
   this->data_task_queue.insert(it, std::move(task));
-  return true;
+  return this->last_ticket_;
 }
 
 void SECTouchComponent::add_set_task(std::unique_ptr<SetDataTask> task) {

@@ -481,12 +481,16 @@ How sure:
 
 | Part | Status | How |
 |---|---|---|
-| Aktiv, switch times 1 and 2 | ✅ tested | experiments: 101 `02` ↔ `03` (switch time 1), `03` ↔ `01` (switch time 2); write probe and set and keep `03` (the only write) |
-| Aktiv, switch times 3, 4 and 5 | ✅ panel | 112 = `18` matches pair 2's screen (4 and 5 ticked); `0C` matches the screens of pairs 3–5 (3 and 4 ticked) |
+| Aktiv, switch times 1 and 2 | ✅ tested | experiments: 101 `02` ↔ `03` (switch time 1), `03` ↔ `01` (switch time 2); write probe and set and keep `03` |
+| Aktiv, switch times 3, 4 and 5 | ✅ tested | 112 = `18` matches pair 2's screen (4 and 5 ticked); `0C` matches the screens of pairs 3–5 (3 and 4 ticked); panel edit 145 `00` → `0C` (3 and 4); write probe 145 `1C`; set and keep 145 `1F` and `00`, checked on the panel |
 | Modus `0` `5` `6` `7` `8` `9` | ✅ tested | experiments on 111 |
 | Modus `0`–`4` `7` | ✅ panel | Manuell bars and Stoßlüften on the screens of pairs 1–5 |
+| Modus writes | ✅ tested | write probe 153 `5`; set and keep `1`–`5` on 151–155, checked on the panel |
 | Times, block = pair | ✅ panel | discover scan 95–172 matched the screens of pairs 1–5 |
+| Time writes | ✅ tested | write probe 148 `08:30:00`; set and keep 13:00–17:00 on 146–150, in both orders, checked on the panel. Write `HH:MM:SS` with `:00` seconds: every time the panel stored reads `:00`. It keeps switch times in the order written, unsorted. |
 | Block 6 | ⚠️ assumed | position; pair 6 has no fan, so no screen to check |
+
+The writes are on pair 5 (Dachboden), recorded in [#115](https://github.com/distante/esphome-components/issues/115).
 
 #### Earlier full scan: IDs 1–208
 

@@ -38,6 +38,11 @@ const uint8_t MASK_AFTER = switch_time_bit(1) | switch_time_bit(2) | switch_time
 
 std::string mask_text(uint8_t mask) { return std::string(format_enabled_mask(mask).data()); }
 
+/// How the `error` of a bulk write with `count` failed writes starts.
+std::string failed_prefix(size_t count) {
+  return std::to_string(count) + " of " + std::to_string(BULK_WRITE_COUNT) + " writes failed: ";
+}
+
 std::vector<uint8_t> concat(const std::vector<uint8_t> &a, const std::vector<uint8_t> &b) {
   std::vector<uint8_t> out = a;
   out.insert(out.end(), b.begin(), b.end());
@@ -254,8 +259,8 @@ TEST_F(SetTimeProgramTest, WritingGoesOnPastFailuresAndReportsThem) {
   std::vector<Request> expected = this->expected_sets(MASK_AFTER);
   expected.pop_back();  // the mask GET failed: no mask SET
   EXPECT_EQ(this->sets(sent), expected);
-  EXPECT_EQ(this->errors_, std::vector<std::string>{"2 of 11 writes failed: switch time 3 level refused; enabled mask "
-                                                    "mask_unreadable"});
+  EXPECT_EQ(this->errors_, std::vector<std::string>{failed_prefix(2) + "switch time 3 level refused" +
+                                                    BULK_FAILURE_SEPARATOR + "enabled mask mask_unreadable"});
   EXPECT_EQ(this->successes_, 0);
   // The refused level's read-back differs too: the entity path reports that as well; the bulk report keeps the first.
   EXPECT_EQ(this->events_, (std::vector<std::string>{write_failure_name(WriteFailure::REFUSED),
@@ -272,7 +277,7 @@ TEST_F(SetTimeProgramTest, AnEntityWriteThatReplacesABulkValueIsNotKept) {
 
   this->run_panel();
 
-  EXPECT_EQ(this->errors_, std::vector<std::string>{"1 of 11 writes failed: switch time 3 level not_kept"});
+  EXPECT_EQ(this->errors_, std::vector<std::string>{failed_prefix(1) + "switch time 3 level not_kept"});
   EXPECT_TRUE(this->events_.empty());  // the entity's own write landed
 }
 
@@ -284,7 +289,9 @@ TEST_F(SetTimeProgramTest, AScanEndsTheRunningCall) {
   this->hub_.enter_scan_mode();
 
   ASSERT_EQ(this->errors_.size(), 1u);
-  EXPECT_EQ(this->errors_[0].rfind("11 of 11 writes failed: switch time 1 time timeout; ", 0), 0u);
+  EXPECT_EQ(this->errors_[0].rfind(
+                failed_prefix(BULK_WRITE_COUNT) + "switch time 1 time timeout" + BULK_FAILURE_SEPARATOR, 0),
+            0u);
   EXPECT_FALSE(this->program_.is_bulk_write_running());
 }
 

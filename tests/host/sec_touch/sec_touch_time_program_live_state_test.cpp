@@ -23,8 +23,8 @@ namespace {
 constexpr int PAIR = 1;
 const int PAIR_LEVEL_ID = FAN_LEVEL_IDS[PAIR - 1];
 
-constexpr uint32_t GLOBAL_INTERVAL_MS = 30000;
-constexpr uint32_t INTERVAL_MS = 300000;
+constexpr uint32_t GLOBAL_INTERVAL_MS = DEFAULT_GLOBAL_SETTINGS_UPDATE_INTERVAL_MS;
+constexpr uint32_t INTERVAL_MS = DEFAULT_TIME_PROGRAMS_UPDATE_INTERVAL_MS;
 
 using known_property_detail::level_name;
 

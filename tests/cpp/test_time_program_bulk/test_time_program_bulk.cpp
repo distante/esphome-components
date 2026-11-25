@@ -7,8 +7,9 @@
 
 #include "sec_touch/time_program_bulk.h"
 
-using esphome::sec_touch::BULK_BUSY;
+using esphome::sec_touch::BULK_FAILURE_SEPARATOR;
 using esphome::sec_touch::BULK_INVALID_ARGUMENT;
+using esphome::sec_touch::BULK_WRITE_COUNT;
 using esphome::sec_touch::bulk_unlisted_pair_error;
 using esphome::sec_touch::BulkProgram;
 using esphome::sec_touch::BulkWrite;
@@ -34,6 +35,20 @@ std::vector<int32_t> good_levels() { return {4, 2, 4, 1, 0}; }
 std::vector<bool> good_enabled() { return {true, true, true, true, false}; }
 
 std::string invalid(const std::string &detail) { return std::string(BULK_INVALID_ARGUMENT) + ": " + detail; }
+
+/// The `error` of list `name` with `count` values.
+std::string wrong_count(const std::string &name, size_t count) {
+  return invalid(name + " has " + std::to_string(count) + " values, not " + std::to_string(SWITCH_TIME_COUNT));
+}
+
+/// The `error` of a bulk write whose listed writes failed, each "<field> <failure>", in write order.
+std::string failed(const std::vector<std::string> &writes) {
+  std::string error = std::to_string(writes.size()) + " of " + std::to_string(BULK_WRITE_COUNT) + " writes failed: ";
+  for (size_t i = 0; i < writes.size(); i++) {
+    error += (i == 0 ? "" : BULK_FAILURE_SEPARATOR) + writes[i];
+  }
+  return error;
+}
 
 TimeProgramSlot time_slot(int n) { return TimeProgramSlot{PAIR, n, TimeProgramField::TIME}; }
 TimeProgramSlot level_slot(int n) { return TimeProgramSlot{PAIR, n, TimeProgramField::LEVEL}; }
@@ -117,13 +132,13 @@ TEST(BulkProgramArguments, EachListNeedsOneValuePerSwitchTime) {
   BulkProgram program;
   std::vector<std::string> times = good_times();
   times.pop_back();
-  EXPECT_EQ(read_bulk_program(times, good_levels(), good_enabled(), program), invalid("times has 4 values, not 5"));
+  EXPECT_EQ(read_bulk_program(times, good_levels(), good_enabled(), program), wrong_count("times", times.size()));
 
   std::vector<int32_t> levels = good_levels();
   levels.push_back(0);
-  EXPECT_EQ(read_bulk_program(good_times(), levels, good_enabled(), program), invalid("levels has 6 values, not 5"));
+  EXPECT_EQ(read_bulk_program(good_times(), levels, good_enabled(), program), wrong_count("levels", levels.size()));
 
-  EXPECT_EQ(read_bulk_program(good_times(), good_levels(), {}, program), invalid("enabled has 0 values, not 5"));
+  EXPECT_EQ(read_bulk_program(good_times(), good_levels(), {}, program), wrong_count("enabled", 0));
 }
 
 TEST(BulkProgramArguments, AnUnlistedPairIsAnInvalidArgument) {
@@ -209,7 +224,7 @@ TEST(BulkWriteReport, ListsEachFailedWriteWithItsFirstReason) {
   }
 
   ASSERT_TRUE(bulk.done());
-  EXPECT_EQ(bulk.finish(), "2 of 11 writes failed: switch time 3 level refused; enabled mask mask_unreadable");
+  EXPECT_EQ(bulk.finish(), failed({"switch time 3 level refused", "enabled mask mask_unreadable"}));
 }
 
 TEST(BulkWriteReport, AReadBackThatDiffersIsNotKept) {
@@ -229,7 +244,7 @@ TEST(BulkWriteReport, AReadBackThatDiffersIsNotKept) {
   bulk.set_ended(mask_slot(), true);
   bulk.read_back(mask_slot(), program.enabled ^ switch_time_bit(5));
 
-  EXPECT_EQ(bulk.finish(), "2 of 11 writes failed: switch time 2 time not_kept; enabled mask not_kept");
+  EXPECT_EQ(bulk.finish(), failed({"switch time 2 time not_kept", "enabled mask not_kept"}));
 }
 
 // A SET that ends with no read-back to follow (scan mode) ends its write; a read-back GET that fails leaves the
@@ -248,12 +263,14 @@ TEST(BulkWriteReport, AWriteWithoutReadBackFails) {
   bulk.fail(mask_slot(), WriteFailure::MASK_UNREADABLE);
 
   ASSERT_TRUE(bulk.done());
-  EXPECT_EQ(
-      bulk.finish(),
-      "11 of 11 writes failed: switch time 1 time timeout; switch time 2 time timeout; switch time 3 time timeout; "
-      "switch time 4 time timeout; switch time 5 time timeout; switch time 1 level timeout; switch time 2 level "
-      "timeout; switch time 3 level timeout; switch time 4 level timeout; switch time 5 level timeout; enabled "
-      "mask mask_unreadable");
+  std::vector<std::string> writes;
+  for (const char *field : {"time", "level"}) {
+    for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
+      writes.push_back("switch time " + std::to_string(n) + " " + field + " timeout");
+    }
+  }
+  writes.push_back("enabled mask mask_unreadable");
+  EXPECT_EQ(bulk.finish(), failed(writes));
 }
 
 // A GET answered but not compared (a newer SET was queued) can't confirm the bulk value.
@@ -278,7 +295,7 @@ TEST(BulkWriteReport, AReadBackAnsweredButNotComparedIsNotKept) {
   bulk.set_ended(mask_slot(), true);
   bulk.read_back(mask_slot(), program.enabled);
 
-  EXPECT_EQ(bulk.finish(), "1 of 11 writes failed: switch time 5 level not_kept");
+  EXPECT_EQ(bulk.finish(), failed({"switch time 5 level not_kept"}));
 }
 
 // The mask's fresh GET ends before its SET is queued: no read-back is due yet.
@@ -292,8 +309,6 @@ TEST(BulkWriteReport, TheFreshMaskGetIsNoReadBack) {
 
   EXPECT_EQ(bulk.finish(), std::nullopt);
 }
-
-TEST(BulkWriteReport, BusyIsItsOwnError) { EXPECT_EQ(std::string(BULK_BUSY), "busy"); }
 
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);

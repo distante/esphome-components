@@ -5,11 +5,13 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string_view>
 
 #include "fan_level.h"
 #include "protocol_ids.h"
+#include "time_units.h"
 
 namespace esphome {
 namespace sec_touch {
@@ -59,6 +61,9 @@ constexpr int max_known_property_id() {
   }
   return max;
 }
+
+/// The bit of switch time `switch_time` (1-based) in a pair's enabled mask.
+constexpr uint8_t switch_time_bit(int switch_time) { return static_cast<uint8_t>(1 << (switch_time - 1)); }
 
 namespace known_property_detail {
 
@@ -217,7 +222,7 @@ constexpr EnabledName enabled_name(int mask) {
     return name;
   }
   for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
-    if ((mask & (1 << (n - 1))) == 0) {
+    if ((mask & switch_time_bit(n)) == 0) {
       continue;
     }
     if (name.length > 0) {
@@ -270,19 +275,21 @@ constexpr int two_digits(std::string_view text, std::size_t at) {
   return (text[at] - '0') * 10 + (text[at + 1] - '0');
 }
 
-constexpr int MAX_HOUR = 23;
-constexpr int MAX_MINUTE_OR_SECOND = 59;
+constexpr int MAX_HOUR = HOURS_PER_DAY - 1;
+constexpr int MAX_MINUTE = MINUTES_PER_HOUR - 1;
+constexpr int MAX_SECOND = SECONDS_PER_MINUTE - 1;
+/// `HH:MM:SS`
+constexpr std::size_t SWITCH_TIME_TIME_LENGTH = 8;
 
-/// Whether `trimmed` is exactly `HH:MM:SS`, HH 00-23, MM and SS 00-59.
+/// Whether `trimmed` is exactly `HH:MM:SS`, HH 00-MAX_HOUR, MM 00-MAX_MINUTE and SS 00-MAX_SECOND.
 constexpr bool is_switch_time_time(std::string_view trimmed) {
-  if (trimmed.size() != 8 || trimmed[2] != ':' || trimmed[5] != ':') {
+  if (trimmed.size() != SWITCH_TIME_TIME_LENGTH || trimmed[2] != ':' || trimmed[5] != ':') {
     return false;
   }
   const int hour = two_digits(trimmed, 0);
   const int minute = two_digits(trimmed, 3);
   const int second = two_digits(trimmed, 6);
-  return hour >= 0 && hour <= MAX_HOUR && minute >= 0 && minute <= MAX_MINUTE_OR_SECOND && second >= 0 &&
-         second <= MAX_MINUTE_OR_SECOND;
+  return hour >= 0 && hour <= MAX_HOUR && minute >= 0 && minute <= MAX_MINUTE && second >= 0 && second <= MAX_SECOND;
 }
 
 }  // namespace known_property_detail

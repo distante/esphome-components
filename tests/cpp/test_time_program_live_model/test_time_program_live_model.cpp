@@ -15,8 +15,9 @@ using esphome::sec_touch::LIVE_STATE_NONE;
 using esphome::sec_touch::LIVE_STATE_NOT_RUNNING;
 using esphome::sec_touch::LiveState;
 using esphome::sec_touch::LiveStateModel;
-using esphome::sec_touch::MINUTES_PER_HOUR;
 using esphome::sec_touch::MS_PER_DAY;
+using esphome::sec_touch::MS_PER_HOUR;
+using esphome::sec_touch::MS_PER_MINUTE;
 using esphome::sec_touch::MS_PER_S;
 using esphome::sec_touch::next_change_timestamp;
 using esphome::sec_touch::PanelClock;
@@ -32,9 +33,6 @@ using esphome::sec_touch::time_program_time_id;
 using esphome::sec_touch::known_property_detail::level_name;
 
 namespace {
-
-constexpr uint32_t MS_PER_MINUTE = SECONDS_PER_MINUTE * MS_PER_S;
-constexpr uint32_t MS_PER_HOUR = MINUTES_PER_HOUR * MS_PER_MINUTE;
 
 constexpr uint32_t hours(uint32_t n) { return n * MS_PER_HOUR; }
 constexpr uint32_t minutes(uint32_t n) { return n * MS_PER_MINUTE; }

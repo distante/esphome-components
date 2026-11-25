@@ -6,7 +6,7 @@
 #include "sec_touch/time_program_mask.h"
 
 using esphome::sec_touch::MaskMerge;
-using esphome::sec_touch::SWITCH_TIME_COUNT;
+using esphome::sec_touch::known_property_detail::MAX_ENABLED_MASK;
 using esphome::sec_touch::switch_time_bit;
 
 namespace {
@@ -15,7 +15,7 @@ constexpr bool ENABLE = true;
 constexpr bool DISABLE = false;
 constexpr uint8_t NONE = 0;
 /// Every switch time's bit.
-constexpr uint8_t ALL = static_cast<uint8_t>(switch_time_bit(SWITCH_TIME_COUNT + 1) - 1);
+constexpr uint8_t ALL = static_cast<uint8_t>(MAX_ENABLED_MASK);
 
 constexpr uint8_t bit(int switch_time) { return switch_time_bit(switch_time); }
 

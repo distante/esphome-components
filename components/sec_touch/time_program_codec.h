@@ -40,20 +40,28 @@ constexpr std::optional<SwitchTimeTime> parse_switch_time_time(std::string_view 
 }
 
 /// `HH:MM:00` and its NUL.
-constexpr std::size_t SWITCH_TIME_TIME_BUFFER_SIZE = 9;
+constexpr std::size_t SWITCH_TIME_TIME_BUFFER_SIZE = known_property_detail::SWITCH_TIME_TIME_LENGTH + 1;
 using SwitchTimeTimeText = std::array<char, SWITCH_TIME_TIME_BUFFER_SIZE>;
+/// `HH:MM`
+constexpr std::size_t HH_MM_LENGTH = 5;
+
+/// `hh_mm` (`HH:MM`, not checked) as a time is written: `HH:MM:00`, the panel's seconds always 00.
+constexpr SwitchTimeTimeText with_written_seconds(std::string_view hh_mm) {
+  SwitchTimeTimeText text{};
+  for (std::size_t i = 0; i < HH_MM_LENGTH && i < hh_mm.size(); i++) {
+    text[i] = hh_mm[i];
+  }
+  text[HH_MM_LENGTH] = ':';
+  text[HH_MM_LENGTH + 1] = '0';
+  text[HH_MM_LENGTH + 2] = '0';
+  return text;
+}
 
 /// The raw value a time is written as: `HH:MM:00`. Seconds are dropped, never rounded.
 constexpr SwitchTimeTimeText format_switch_time_time(uint8_t hour, uint8_t minute) {
-  return SwitchTimeTimeText{static_cast<char>('0' + hour / 10),
-                            static_cast<char>('0' + hour % 10),
-                            ':',
-                            static_cast<char>('0' + minute / 10),
-                            static_cast<char>('0' + minute % 10),
-                            ':',
-                            '0',
-                            '0',
-                            '\0'};
+  const char hh_mm[HH_MM_LENGTH] = {static_cast<char>('0' + hour / 10), static_cast<char>('0' + hour % 10), ':',
+                                    static_cast<char>('0' + minute / 10), static_cast<char>('0' + minute % 10)};
+  return with_written_seconds(std::string_view(hh_mm, HH_MM_LENGTH));
 }
 
 /// A level's raw value read by the level meaning rule (OFF_LEVEL..MAX_SWITCH_TIME_LEVEL), or -1 when the rule marks
@@ -90,9 +98,6 @@ constexpr EnabledMaskText format_enabled_mask(uint8_t mask) {
   constexpr const char *HEX_DIGITS = "0123456789ABCDEF";
   return EnabledMaskText{HEX_DIGITS[mask >> 4], HEX_DIGITS[mask & 0x0F], '\0'};
 }
-
-/// The bit of switch time `switch_time` (1-based) in a pair's enabled mask.
-constexpr uint8_t switch_time_bit(int switch_time) { return static_cast<uint8_t>(1 << (switch_time - 1)); }
 
 /// How many options a switch time's level select has: one per level OFF_LEVEL..MAX_SWITCH_TIME_LEVEL.
 constexpr std::size_t SWITCH_TIME_LEVEL_OPTION_COUNT = MAX_SWITCH_TIME_LEVEL - OFF_LEVEL + 1;

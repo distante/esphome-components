@@ -29,6 +29,7 @@ using esphome::sec_touch::SWITCH_TIME_LEVEL_OPTIONS;
 using esphome::sec_touch::TaskEnd;
 using esphome::sec_touch::write_failure_name;
 using esphome::sec_touch::WriteFailure;
+using esphome::sec_touch::known_property_detail::MAX_ENABLED_MASK;
 
 namespace {
 
@@ -101,7 +102,7 @@ TEST(SwitchTimeLevel, SelectOptionsAreTheLevelNamesByLevel) {
 
 TEST(EnabledMask, ReadsTwoHexDigitsInEitherCase) {
   EXPECT_EQ(parse_enabled_mask("00"), 0);
-  EXPECT_EQ(parse_enabled_mask("1f"), switch_time_bit(LAST_SWITCH_TIME + 1) - 1);
+  EXPECT_EQ(parse_enabled_mask("1f"), MAX_ENABLED_MASK);
   EXPECT_EQ(parse_enabled_mask(" 0B "), switch_time_bit(1) | switch_time_bit(2) | switch_time_bit(4));
 }
 
@@ -115,7 +116,7 @@ TEST(EnabledMask, AMaskWithABitAboveTheSwitchTimesIsUnexpected) {
 TEST(EnabledMask, IsWrittenAsTwoUppercaseHexDigits) {
   EXPECT_EQ(text(format_enabled_mask(0).data()), "00");
   EXPECT_EQ(text(format_enabled_mask(switch_time_bit(1) | switch_time_bit(2) | switch_time_bit(4)).data()), "0B");
-  EXPECT_EQ(text(format_enabled_mask(switch_time_bit(LAST_SWITCH_TIME + 1) - 1).data()), "1F");
+  EXPECT_EQ(text(format_enabled_mask(MAX_ENABLED_MASK).data()), "1F");
 }
 
 TEST(EnabledMask, SwitchTimeNHasBitNMinus1) {

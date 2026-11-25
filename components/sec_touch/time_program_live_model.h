@@ -262,7 +262,6 @@ class LiveStateModel {
 
 /// The `next_change` timestamp: the time source's `now_s` plus `ms_to_next_change`, rounded to the minute.
 constexpr int64_t next_change_timestamp(int64_t now_s, uint32_t ms_to_next_change) {
-  constexpr int64_t MS_PER_MINUTE = static_cast<int64_t>(SECONDS_PER_MINUTE) * MS_PER_S;
   const int64_t at_ms = now_s * MS_PER_S + ms_to_next_change;
   return (at_ms + MS_PER_MINUTE / 2) / MS_PER_MINUTE * SECONDS_PER_MINUTE;
 }

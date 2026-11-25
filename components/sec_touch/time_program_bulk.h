@@ -43,15 +43,13 @@ struct BulkProgram {
 
 /// A time argument: `HH:MM`, or `HH:MM:SS` whose seconds the write drops. nullopt when it is neither.
 inline std::optional<SwitchTimeTime> parse_bulk_time(std::string_view raw) {
-  constexpr std::size_t HH_MM_SIZE = 5;
   const std::string_view trimmed = known_property_detail::trim_ascii(raw);
-  if (trimmed.size() != HH_MM_SIZE) {
+  if (trimmed.size() != HH_MM_LENGTH) {
     return parse_switch_time_time(trimmed);
   }
-  // HH:MM is HH:MM:00 to the time meaning rule, the one parser of a time.
-  const SwitchTimeTimeText with_seconds{trimmed[0], trimmed[1], trimmed[2], trimmed[3], trimmed[4],
-                                        ':',        '0',        '0',        '\0'};
-  return parse_switch_time_time(std::string_view(with_seconds.data(), with_seconds.size() - 1));
+  // HH:MM is read as it would be written, by the time meaning rule, the one parser of a time.
+  const SwitchTimeTimeText written = with_written_seconds(trimmed);
+  return parse_switch_time_time(std::string_view(written.data(), written.size() - 1));
 }
 
 namespace bulk_detail {

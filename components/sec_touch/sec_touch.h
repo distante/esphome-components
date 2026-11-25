@@ -20,6 +20,10 @@ namespace sec_touch {
 class SecTouchFan;
 class TimeProgram;
 
+/// The poll intervals until codegen sets the configured ones.
+constexpr uint32_t DEFAULT_GLOBAL_SETTINGS_UPDATE_INTERVAL_MS = 30000;
+constexpr uint32_t DEFAULT_TIME_PROGRAMS_UPDATE_INTERVAL_MS = 300000;
+
 class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
  public:
   SECTouchComponent();
@@ -181,9 +185,9 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   uint32_t task_start_time_ = 0;
   uint32_t task_ready_at_ms_ = 0;
   uint32_t inter_task_delay_ms_ = 30;
-  uint32_t global_settings_update_interval_ms_ = 30000;
+  uint32_t global_settings_update_interval_ms_ = DEFAULT_GLOBAL_SETTINGS_UPDATE_INTERVAL_MS;
   uint32_t last_global_settings_update_ms_ = 0;
-  uint32_t time_programs_update_interval_ms_ = 300000;
+  uint32_t time_programs_update_interval_ms_ = DEFAULT_TIME_PROGRAMS_UPDATE_INTERVAL_MS;
   uint32_t last_time_programs_update_ms_ = 0;
   int current_running_task_property_id_ = -1;
   ScanOutcomeTracker scan_outcome_;

@@ -13,6 +13,7 @@
 #include "fan_level.h"
 #include "known_property_meaning.h"
 #include "protocol_ids.h"
+#include "time_units.h"
 
 namespace esphome {
 namespace sec_touch {
@@ -23,8 +24,6 @@ struct SwitchTimeTime {
   uint8_t minute;
   uint8_t second;
 };
-
-constexpr int MINUTES_PER_HOUR = 60;
 
 /// Minutes since midnight: what a written time is compared by, since seconds are never written.
 constexpr int minute_of_day(int hour, int minute) { return hour * MINUTES_PER_HOUR + minute; }

@@ -30,7 +30,7 @@ inline constexpr const char *BULK_INVALID_ARGUMENT = "invalid_argument";
 inline constexpr const char *RANGE_DASH = "–";
 /// Between the failed writes in an `error`.
 inline constexpr const char *BULK_FAILURE_SEPARATOR = "; ";
-/// A bulk write's writes: the 5 times, the 5 levels, then the mask.
+/// A bulk write's writes: one per ID of the pair's block, so the 5 times, the 5 levels and the mask.
 constexpr std::size_t BULK_WRITE_COUNT = TIME_PROGRAM_IDS_PER_PAIR;
 
 /// A whole program, checked: position i is switch time i + 1.
@@ -121,21 +121,17 @@ inline std::string bulk_unlisted_pair_error(int pair) {
 /**
  * Tracks one pair's bulk write, from its start until each of its writes has ended, and builds its report. Each write
  * goes SENDING (its SET queued, or for the mask its fresh GET) -> READ_BACK (the SET ended) -> DONE (its read-back
- * compared, or it failed with nothing more to wait for). The first failure of a write is the one reported.
+ * compared, or it failed with nothing more to wait for). The first failure of a write is the one reported. What each
+ * write sent is the entity path's to compare (TimeProgram): a read-back comes here as matched or not.
  */
 class BulkWrite {
  public:
   bool active() const { return this->active_; }
 
-  /// Starts tracking the writes of `program`.
-  void begin(const BulkProgram &program) {
+  /// Starts tracking the writes of a program.
+  void begin() {
     this->active_ = true;
-    for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
-      const std::size_t i = static_cast<std::size_t>(n - 1);
-      this->writes_[i] = Write{minute_of_day(program.times[i].hour, program.times[i].minute)};
-      this->writes_[SWITCH_TIME_COUNT + i] = Write{program.levels[i]};
-    }
-    this->writes_[MASK_WRITE] = Write{program.enabled};
+    this->writes_.fill(Write{});
   }
 
   /// A SET of `slot` ended; `read_back_follows` when its read-back GET was queued.
@@ -147,13 +143,13 @@ class BulkWrite {
     write->state = read_back_follows ? State::READ_BACK : State::DONE;
   }
 
-  /// A delivered read-back of `slot`: the time's minute_of_day, the level, or the mask; -1 for an unexpected value.
-  void read_back(const TimeProgramSlot &slot, int actual) {
+  /// A delivered read-back of `slot`; `matched` when it equals what was sent.
+  void read_back(const TimeProgramSlot &slot, bool matched) {
     Write *write = this->in_state_(slot, State::READ_BACK);
     if (write == nullptr) {
       return;
     }
-    if (actual != write->expected) {
+    if (!matched) {
       record_(*write, WriteFailure::NOT_KEPT);
     }
     write->state = State::DONE;
@@ -168,6 +164,16 @@ class BulkWrite {
     }
     record_(*write, end == TaskEnd::TASK_END_ANSWERED ? WriteFailure::NOT_KEPT : WriteFailure::TIMEOUT);
     write->state = State::DONE;
+  }
+
+  /// An entity write replaced the bulk value of `slot` before it was confirmed: it isn't kept. The write still waits
+  /// for its SET and read-back.
+  void replaced(const TimeProgramSlot &slot) {
+    Write *write = this->write_(slot);
+    if (write == nullptr || write->state == State::DONE) {
+      return;
+    }
+    record_(*write, WriteFailure::NOT_KEPT);
   }
 
   /// A write of `slot` failed. MASK_UNREADABLE ends the mask write: nothing was sent.
@@ -209,19 +215,27 @@ class BulkWrite {
     }
     std::string error = std::to_string(failed) + " of " + std::to_string(BULK_WRITE_COUNT) + " writes failed: ";
     bool first = true;
-    for (std::size_t i = 0; i < BULK_WRITE_COUNT; i++) {
-      const Write &write = this->writes_[i];
+    auto add = [this, &error, &first](TimeProgramField field, int switch_time) {
+      const Write &write = this->writes_[time_program_block_index(field, switch_time)];
       if (!write.failure.has_value()) {
-        continue;
+        return;
       }
       if (!first) {
         error += BULK_FAILURE_SEPARATOR;
       }
       first = false;
-      error += write_name_(i);
+      error += field == TimeProgramField::ENABLED ? std::string(time_program_field_name(field))
+                                                  : bulk_detail::switch_time_field(switch_time, field);
       error += " ";
       error += write_failure_name(*write.failure);
+    };
+    // In write order: the times, the levels, then the mask.
+    for (TimeProgramField field : {TimeProgramField::TIME, TimeProgramField::LEVEL}) {
+      for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
+        add(field, n);
+      }
     }
+    add(TimeProgramField::ENABLED, 0);
     return error;
   }
 
@@ -229,36 +243,18 @@ class BulkWrite {
   enum class State : uint8_t { SENDING, READ_BACK, DONE };
 
   struct Write {
-    int expected{-1};
     State state{State::SENDING};
     std::optional<WriteFailure> failure{};
   };
-
-  /// writes_ is in write order: the times, the levels, then the mask.
-  static constexpr std::size_t MASK_WRITE = BULK_WRITE_COUNT - 1;
-
-  static std::string write_name_(std::size_t index) {
-    if (index == MASK_WRITE) {
-      return time_program_field_name(TimeProgramField::ENABLED);
-    }
-    const int n = static_cast<int>(index % SWITCH_TIME_COUNT) + 1;
-    const TimeProgramField field =
-        index < static_cast<std::size_t>(SWITCH_TIME_COUNT) ? TimeProgramField::TIME : TimeProgramField::LEVEL;
-    return bulk_detail::switch_time_field(n, field);
-  }
 
   Write *write_(const TimeProgramSlot &slot) {
     if (!this->active_) {
       return nullptr;
     }
-    if (slot.field == TimeProgramField::ENABLED) {
-      return &this->writes_[MASK_WRITE];
-    }
-    if (!is_switch_time(slot.switch_time)) {
+    if (slot.field != TimeProgramField::ENABLED && !is_switch_time(slot.switch_time)) {
       return nullptr;
     }
-    const std::size_t i = static_cast<std::size_t>(slot.switch_time - 1);
-    return slot.field == TimeProgramField::TIME ? &this->writes_[i] : &this->writes_[SWITCH_TIME_COUNT + i];
+    return &this->writes_[time_program_block_index(slot)];
   }
 
   Write *in_state_(const TimeProgramSlot &slot, State state) {
@@ -273,6 +269,7 @@ class BulkWrite {
   }
 
   bool active_{false};
+  /// By time_program_block_index().
   std::array<Write, BULK_WRITE_COUNT> writes_{};
 };
 

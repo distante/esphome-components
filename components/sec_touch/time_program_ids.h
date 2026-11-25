@@ -48,6 +48,24 @@ struct TimeProgramSlot {
 constexpr bool is_time_program_pair(int pair) { return pair >= 1 && pair <= TIME_PROGRAM_PAIR_COUNT; }
 constexpr bool is_switch_time(int switch_time) { return switch_time >= 1 && switch_time <= SWITCH_TIME_COUNT; }
 
+/// Where a field sits in its pair's block, from 0, as in protocol_ids.h: the enabled mask, then the times of switch
+/// times 1 to SWITCH_TIME_COUNT, then their levels. `switch_time` must be one, except for the enabled mask.
+constexpr std::size_t time_program_block_index(TimeProgramField field, int switch_time) {
+  switch (field) {
+    case TimeProgramField::ENABLED:
+      return 0;
+    case TimeProgramField::TIME:
+      return static_cast<std::size_t>(switch_time);
+    case TimeProgramField::LEVEL:
+      return static_cast<std::size_t>(SWITCH_TIME_COUNT + switch_time);
+  }
+  return 0;
+}
+
+constexpr std::size_t time_program_block_index(const TimeProgramSlot &slot) {
+  return time_program_block_index(slot.field, slot.switch_time);
+}
+
 /// The enabled-mask ID of `pair`, or -1 when `pair` has no time program.
 constexpr int time_program_enabled_id(int pair) {
   if (!is_time_program_pair(pair)) {

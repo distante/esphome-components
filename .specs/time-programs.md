@@ -280,7 +280,7 @@ The [readme copy block and HA call](https://github.com/distante/esphome-componen
 | Bulk `error` text | `std::string`, built only when a bulk call fails | ESPHome's `api.respond` takes a `std::string` anyway ([Memory rule](../.claude/skills/coding-standards/SKILL.md#memory)). |
 | Listener registrations | the hub's listener maps (`std::multimap` entries holding `std::function`s) and its task-end listener list (one entry per pair) | One entry per registered ID: per pair 11 for the time program's block (every listed pair, for the bulk read-backs) and 12 for the live state (its block and level ID), plus IDs 1 and 2 once per live-state pair. Allocated while the entities are built, never freed. |
 | Bulk action list arguments | `std::vector`, ESPHome's action argument type; the action keeps a copy of each running call's arguments (one static slot per pair) until it fires `on_success` / `on_error` | HA's `string[]`, `int[]` and `bool[]` arrive as vectors. |
-| Bulk write state | static, per pair: what each of the 11 writes sent and how it ended | |
+| Bulk write state | static, per pair: how each of the 11 writes ended; what each sent is in the per-field write path's read-back slot, which compares for both | |
 | Per-pair poll ID lists | static, 6 pairs × 11 IDs | |
 | Entities | static: ESPHome codegen builds each with placement new into a `static` buffer (`esphome/esphome/cpp_generator.py`, `Pvariable`) | Worst case 6 pairs × (15 + 4 + 2) = 126. Estimated 30–60 B each ([research](https://github.com/distante/esphome-components/blob/research/time-program-entities/.specs/research/time-program-entities.md#cost-of-90-extra-entities)), measured in the device check. No cap until then. |
 

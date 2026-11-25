@@ -10,23 +10,6 @@ namespace sec_touch {
 
 static const char *const TAG = "sec_touch.time_program";
 
-namespace {
-
-/// Where `slot` sits in its pair's block: the enabled mask, then the times, then the levels.
-std::size_t block_index(const TimeProgramSlot &slot) {
-  switch (slot.field) {
-    case TimeProgramField::ENABLED:
-      return 0;
-    case TimeProgramField::TIME:
-      return slot.switch_time;
-    case TimeProgramField::LEVEL:
-      return SWITCH_TIME_COUNT + slot.switch_time;
-  }
-  return 0;
-}
-
-}  // namespace
-
 TimeProgram::TimeProgram(SECTouchComponent *hub, int pair) : hub_(hub), pair_(pair) {
   this->hub_->register_time_program(pair, this);
   // The whole block's data messages come here, listed switch time or not: a bulk write reads back every field. Only
@@ -77,7 +60,7 @@ void TimeProgram::watch_(int id) {
     ESP_LOGE(TAG, "Property ID %d is not part of fan pair %d's time program", id, this->pair_);
     return;
   }
-  bool &watched = this->watched_[block_index(*slot)];
+  bool &watched = this->watched_[time_program_block_index(*slot)];
   if (watched) {
     return;
   }
@@ -91,20 +74,35 @@ void TimeProgram::refresh() {
 }
 
 void TimeProgram::write_time(int switch_time, uint8_t hour, uint8_t minute) {
+  this->bulk_.replaced(TimeProgramSlot{this->pair_, switch_time, TimeProgramField::TIME});
+  this->queue_time_(switch_time, hour, minute);
+}
+
+void TimeProgram::write_level(int switch_time, int level) {
+  this->bulk_.replaced(TimeProgramSlot{this->pair_, switch_time, TimeProgramField::LEVEL});
+  this->queue_level_(switch_time, level);
+}
+
+void TimeProgram::write_enabled(int switch_time, bool enabled) {
+  this->bulk_.replaced(TimeProgramSlot{this->pair_, 0, TimeProgramField::ENABLED});
+  this->request_enabled_(switch_time, enabled);
+}
+
+void TimeProgram::queue_time_(int switch_time, uint8_t hour, uint8_t minute) {
   const int id = time_program_time_id(this->pair_, switch_time);
   SwitchTimeTimeText text = format_switch_time_time(hour, minute);
   ESP_LOGI(TAG, "Fan pair %d switch time %d time -> %s", this->pair_, switch_time, text.data());
   this->queue_set_(id, text.data(), minute_of_day(hour, minute));
 }
 
-void TimeProgram::write_level(int switch_time, int level) {
+void TimeProgram::queue_level_(int switch_time, int level) {
   const int id = time_program_level_id(this->pair_, switch_time);
   SwitchTimeLevelText text = format_switch_time_level(level);
   ESP_LOGI(TAG, "Fan pair %d switch time %d level -> %s", this->pair_, switch_time, text.data());
   this->queue_set_(id, text.data(), level);
 }
 
-void TimeProgram::write_enabled(int switch_time, bool enabled) {
+void TimeProgram::request_enabled_(int switch_time, bool enabled) {
   ESP_LOGI(TAG, "Fan pair %d switch time %d enabled -> %s", this->pair_, switch_time, enabled ? "on" : "off");
   this->mask_merge_.request(switch_time, enabled);
   if (this->mask_read_pending_) {
@@ -129,28 +127,23 @@ TimeProgram::ReadBack *TimeProgram::read_back_(int id) {
   if (!slot.has_value() || slot->pair != this->pair_) {
     return nullptr;
   }
-  switch (slot->field) {
-    case TimeProgramField::ENABLED:
-      return &this->mask_read_back_;
-    case TimeProgramField::TIME:
-      return &this->time_read_backs_[slot->switch_time - 1];
-    case TimeProgramField::LEVEL:
-      return &this->level_read_backs_[slot->switch_time - 1];
-  }
-  return nullptr;
+  return &this->read_backs_[time_program_block_index(*slot)];
 }
 
 void TimeProgram::check_read_back_(int id, int actual) {
   auto slot = time_program_slot(id);
-  if (slot.has_value()) {
-    this->bulk_.read_back(*slot, actual);
-  }
   ReadBack *read_back = this->read_back_(id);
-  if (read_back == nullptr || !read_back->armed) {
+  if (!slot.has_value() || read_back == nullptr) {
+    return;
+  }
+  // The one comparison of a read-back with what was sent, for the entity write and the bulk write alike.
+  const bool matched = actual == read_back->expected;
+  this->bulk_.read_back(*slot, matched);
+  if (!read_back->armed) {
     return;
   }
   read_back->armed = false;
-  if (actual != read_back->expected) {
+  if (!matched) {
     this->report_(id, WriteFailure::NOT_KEPT);
   }
 }
@@ -325,18 +318,18 @@ void log_bulk_write_refused(int pair, const std::string &error) {
 
 void TimeProgram::write_program(const BulkProgram &program, BulkWriteListener *listener) {
   ESP_LOGI(TAG, "Fan pair %d: set_time_program writes the whole program", this->pair_);
-  this->bulk_.begin(program);
+  this->bulk_.begin();
   this->bulk_listener_ = listener;
   for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
     const SwitchTimeTime &time = program.times[n - 1];
-    this->write_time(n, time.hour, time.minute);
+    this->queue_time_(n, time.hour, time.minute);
   }
   for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
-    this->write_level(n, program.levels[n - 1]);
+    this->queue_level_(n, program.levels[n - 1]);
   }
   // Each switch time's bit goes through the mask merge: one mask SET built from a fresh GET.
   for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
-    this->write_enabled(n, (program.enabled & switch_time_bit(n)) != 0);
+    this->request_enabled_(n, (program.enabled & switch_time_bit(n)) != 0);
   }
 }
 

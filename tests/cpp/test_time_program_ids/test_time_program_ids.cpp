@@ -7,6 +7,7 @@
 using esphome::sec_touch::FAN_LEVEL_IDS;
 using esphome::sec_touch::SWITCH_TIME_COUNT;
 using esphome::sec_touch::TIME_PROGRAM_ENABLED_IDS;
+using esphome::sec_touch::time_program_block_index;
 using esphome::sec_touch::time_program_enabled_id;
 using esphome::sec_touch::TIME_PROGRAM_IDS_PER_PAIR;
 using esphome::sec_touch::TIME_PROGRAM_LEVEL_IDS;
@@ -74,6 +75,23 @@ TEST(TimeProgramIds, EveryIdLeadsBackToItsSlot) {
       EXPECT_EQ(level->pair, pair);
       EXPECT_EQ(level->switch_time, n);
       EXPECT_EQ(level->field, TimeProgramField::LEVEL);
+    }
+  }
+}
+
+// The block index of each ID is its place in its pair's block of protocol_ids.h, each index used once.
+TEST(TimeProgramIds, EachIdsBlockIndexIsItsPlaceInTheBlock) {
+  for (int pair = FIRST_PAIR; pair <= LAST_PAIR; pair++) {
+    std::vector<bool> used(TIME_PROGRAM_IDS_PER_PAIR, false);
+    for (int id = time_program_enabled_id(pair); id < time_program_enabled_id(pair) + (int) TIME_PROGRAM_IDS_PER_PAIR;
+         id++) {
+      auto slot = time_program_slot(id);
+      ASSERT_TRUE(slot.has_value()) << id;
+      const size_t index = time_program_block_index(*slot);
+      EXPECT_EQ(index, (size_t) (id - time_program_enabled_id(pair))) << id;
+      ASSERT_LT(index, used.size()) << id;
+      EXPECT_FALSE(used[index]) << id;
+      used[index] = true;
     }
   }
 }

@@ -14,7 +14,6 @@ using esphome::sec_touch::bulk_unlisted_pair_error;
 using esphome::sec_touch::BulkProgram;
 using esphome::sec_touch::BulkWrite;
 using esphome::sec_touch::MAX_SWITCH_TIME_LEVEL;
-using esphome::sec_touch::minute_of_day;
 using esphome::sec_touch::OFF_LEVEL;
 using esphome::sec_touch::parse_bulk_time;
 using esphome::sec_touch::read_bulk_program;
@@ -53,12 +52,6 @@ std::string failed(const std::vector<std::string> &writes) {
 TimeProgramSlot time_slot(int n) { return TimeProgramSlot{PAIR, n, TimeProgramField::TIME}; }
 TimeProgramSlot level_slot(int n) { return TimeProgramSlot{PAIR, n, TimeProgramField::LEVEL}; }
 TimeProgramSlot mask_slot() { return TimeProgramSlot{PAIR, 0, TimeProgramField::ENABLED}; }
-
-BulkProgram good_program() {
-  BulkProgram program;
-  EXPECT_FALSE(read_bulk_program(good_times(), good_levels(), good_enabled(), program).has_value());
-  return program;
-}
 
 }  // namespace
 
@@ -151,25 +144,27 @@ TEST(BulkWriteReport, IsIdleUntilBegun) {
   EXPECT_FALSE(bulk.done());
 }
 
-/// Ends every write of `bulk` with a read-back equal to what `program` sent.
-void every_write_lands(BulkWrite &bulk, const BulkProgram &program) {
+constexpr bool MATCHED = true;
+constexpr bool DIFFERS = false;
+
+/// Ends every write of `bulk` with a read-back equal to what was sent.
+void every_write_lands(BulkWrite &bulk) {
   for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
     bulk.set_ended(time_slot(n), true);
-    bulk.read_back(time_slot(n), minute_of_day(program.times[n - 1].hour, program.times[n - 1].minute));
+    bulk.read_back(time_slot(n), MATCHED);
     bulk.set_ended(level_slot(n), true);
-    bulk.read_back(level_slot(n), program.levels[n - 1]);
+    bulk.read_back(level_slot(n), MATCHED);
   }
   bulk.set_ended(mask_slot(), true);
-  bulk.read_back(mask_slot(), program.enabled);
+  bulk.read_back(mask_slot(), MATCHED);
 }
 
 TEST(BulkWriteReport, SucceedsWhenEveryReadBackMatches) {
   BulkWrite bulk;
-  const BulkProgram program = good_program();
-  bulk.begin(program);
+  bulk.begin();
   EXPECT_TRUE(bulk.active());
 
-  every_write_lands(bulk, program);
+  every_write_lands(bulk);
 
   EXPECT_TRUE(bulk.done());
   EXPECT_EQ(bulk.finish(), std::nullopt);
@@ -178,17 +173,16 @@ TEST(BulkWriteReport, SucceedsWhenEveryReadBackMatches) {
 
 TEST(BulkWriteReport, WaitsForEachReadBack) {
   BulkWrite bulk;
-  const BulkProgram program = good_program();
-  bulk.begin(program);
-  every_write_lands(bulk, program);
+  bulk.begin();
+  every_write_lands(bulk);
   bulk.finish();
-  bulk.begin(program);
+  bulk.begin();
 
   bulk.set_ended(mask_slot(), true);
-  bulk.read_back(mask_slot(), program.enabled);
+  bulk.read_back(mask_slot(), MATCHED);
   for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
     bulk.set_ended(time_slot(n), true);
-    bulk.read_back(time_slot(n), minute_of_day(program.times[n - 1].hour, program.times[n - 1].minute));
+    bulk.read_back(time_slot(n), MATCHED);
     bulk.set_ended(level_slot(n), true);
   }
 
@@ -198,11 +192,10 @@ TEST(BulkWriteReport, WaitsForEachReadBack) {
 // A read-back before the SET ended (a poll answer) doesn't count.
 TEST(BulkWriteReport, AnAnswerBeforeTheSetEndedIsNoReadBack) {
   BulkWrite bulk;
-  const BulkProgram program = good_program();
-  bulk.begin(program);
-  bulk.read_back(level_slot(1), program.levels[0] + 1);
+  bulk.begin();
+  bulk.read_back(level_slot(1), DIFFERS);
 
-  every_write_lands(bulk, program);
+  every_write_lands(bulk);
 
   EXPECT_EQ(bulk.finish(), std::nullopt);
 }
@@ -210,17 +203,16 @@ TEST(BulkWriteReport, AnAnswerBeforeTheSetEndedIsNoReadBack) {
 // The spec's example, verbatim; the failures in write order, each named once with its first reason.
 TEST(BulkWriteReport, ListsEachFailedWriteWithItsFirstReason) {
   BulkWrite bulk;
-  const BulkProgram program = good_program();
-  bulk.begin(program);
+  bulk.begin();
 
   bulk.fail(mask_slot(), WriteFailure::MASK_UNREADABLE);
   bulk.fail(level_slot(3), WriteFailure::REFUSED);
   for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
     bulk.set_ended(time_slot(n), true);
-    bulk.read_back(time_slot(n), minute_of_day(program.times[n - 1].hour, program.times[n - 1].minute));
+    bulk.read_back(time_slot(n), MATCHED);
     bulk.set_ended(level_slot(n), true);
     // Switch time 3's read-back differs too: still one failure, refused.
-    bulk.read_back(level_slot(n), n == 3 ? program.levels[n - 1] + 1 : program.levels[n - 1]);
+    bulk.read_back(level_slot(n), n == 3 ? DIFFERS : MATCHED);
   }
 
   ASSERT_TRUE(bulk.done());
@@ -229,20 +221,19 @@ TEST(BulkWriteReport, ListsEachFailedWriteWithItsFirstReason) {
 
 TEST(BulkWriteReport, AReadBackThatDiffersIsNotKept) {
   BulkWrite bulk;
-  const BulkProgram program = good_program();
-  bulk.begin(program);
-  every_write_lands(bulk, program);
+  bulk.begin();
+  every_write_lands(bulk);
   bulk.finish();
-  bulk.begin(program);
+  bulk.begin();
 
   for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
     bulk.set_ended(time_slot(n), true);
-    bulk.read_back(time_slot(n), n == 2 ? -1 : minute_of_day(program.times[n - 1].hour, program.times[n - 1].minute));
+    bulk.read_back(time_slot(n), n == 2 ? DIFFERS : MATCHED);
     bulk.set_ended(level_slot(n), true);
-    bulk.read_back(level_slot(n), program.levels[n - 1]);
+    bulk.read_back(level_slot(n), MATCHED);
   }
   bulk.set_ended(mask_slot(), true);
-  bulk.read_back(mask_slot(), program.enabled ^ switch_time_bit(5));
+  bulk.read_back(mask_slot(), DIFFERS);
 
   EXPECT_EQ(bulk.finish(), failed({"switch time 2 time not_kept", "enabled mask not_kept"}));
 }
@@ -251,8 +242,7 @@ TEST(BulkWriteReport, AReadBackThatDiffersIsNotKept) {
 // write unconfirmed: a timeout.
 TEST(BulkWriteReport, AWriteWithoutReadBackFails) {
   BulkWrite bulk;
-  const BulkProgram program = good_program();
-  bulk.begin(program);
+  bulk.begin();
 
   for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
     bulk.fail(time_slot(n), WriteFailure::TIMEOUT);
@@ -276,24 +266,23 @@ TEST(BulkWriteReport, AWriteWithoutReadBackFails) {
 // A GET answered but not compared (a newer SET was queued) can't confirm the bulk value.
 TEST(BulkWriteReport, AReadBackAnsweredButNotComparedIsNotKept) {
   BulkWrite bulk;
-  const BulkProgram program = good_program();
-  bulk.begin(program);
-  every_write_lands(bulk, program);
+  bulk.begin();
+  every_write_lands(bulk);
   bulk.finish();
-  bulk.begin(program);
+  bulk.begin();
 
   for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
     bulk.set_ended(time_slot(n), true);
-    bulk.read_back(time_slot(n), minute_of_day(program.times[n - 1].hour, program.times[n - 1].minute));
+    bulk.read_back(time_slot(n), MATCHED);
     bulk.set_ended(level_slot(n), true);
     if (n == 5) {
       bulk.get_ended(level_slot(n), TaskEnd::TASK_END_ANSWERED);
     } else {
-      bulk.read_back(level_slot(n), program.levels[n - 1]);
+      bulk.read_back(level_slot(n), MATCHED);
     }
   }
   bulk.set_ended(mask_slot(), true);
-  bulk.read_back(mask_slot(), program.enabled);
+  bulk.read_back(mask_slot(), MATCHED);
 
   EXPECT_EQ(bulk.finish(), failed({"switch time 5 level not_kept"}));
 }
@@ -301,13 +290,23 @@ TEST(BulkWriteReport, AReadBackAnsweredButNotComparedIsNotKept) {
 // The mask's fresh GET ends before its SET is queued: no read-back is due yet.
 TEST(BulkWriteReport, TheFreshMaskGetIsNoReadBack) {
   BulkWrite bulk;
-  const BulkProgram program = good_program();
-  bulk.begin(program);
+  bulk.begin();
   bulk.get_ended(mask_slot(), TaskEnd::TASK_END_ANSWERED);
 
-  every_write_lands(bulk, program);
+  every_write_lands(bulk);
 
   EXPECT_EQ(bulk.finish(), std::nullopt);
+}
+
+// Spec: an entity write that replaces a bulk value shows up as not_kept, even when its read-back matches.
+TEST(BulkWriteReport, AReplacedValueIsNotKept) {
+  BulkWrite bulk;
+  bulk.begin();
+
+  bulk.replaced(level_slot(2));
+  every_write_lands(bulk);
+
+  EXPECT_EQ(bulk.finish(), failed({"switch time 2 level not_kept"}));
 }
 
 int main(int argc, char **argv) {

@@ -68,6 +68,7 @@ class TimeProgram {
   void set_write_failed_event(event::Event *event) { this->write_failed_ = event; }
 #endif
 
+  /// The entity writes. Each one replaces the field's value of a running bulk write.
   void write_time(int switch_time, uint8_t hour, uint8_t minute);
   void write_level(int switch_time, int level);
   void write_enabled(int switch_time, bool enabled);
@@ -100,6 +101,10 @@ class TimeProgram {
   ReadBack *read_back_(int id);
   /// Compares a read-back with what was sent; `actual` is -1 for a value the meaning rule marks unexpected.
   void check_read_back_(int id, int actual);
+  void queue_time_(int switch_time, uint8_t hour, uint8_t minute);
+  void queue_level_(int switch_time, int level);
+  /// Requests switch time `switch_time`'s bit; the mask is written from a fresh GET.
+  void request_enabled_(int switch_time, bool enabled);
   void queue_set_(int id, const char *value, int expected);
   void write_mask_(uint8_t fresh);
   void fail_mask_write_(const char *why);
@@ -118,10 +123,9 @@ class TimeProgram {
   event::Event *write_failed_{nullptr};
 #endif
 
-  std::array<ReadBack, SWITCH_TIME_COUNT> time_read_backs_{};
-  std::array<ReadBack, SWITCH_TIME_COUNT> level_read_backs_{};
-  ReadBack mask_read_back_{};
-  /// Which IDs watch_() has put on the poll, by offset in the pair's block (enabled, times, levels).
+  /// By time_program_block_index().
+  std::array<ReadBack, TIME_PROGRAM_IDS_PER_PAIR> read_backs_{};
+  /// Which IDs watch_() has put on the poll, by time_program_block_index().
   std::array<bool, TIME_PROGRAM_IDS_PER_PAIR> watched_{};
 
   MaskMerge mask_merge_;

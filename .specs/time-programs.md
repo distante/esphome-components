@@ -96,8 +96,8 @@ sec_touch:
 
 | Key | Rule |
 |---|---|
-| `device_id` | Optional. The ID of a device the user declares in `esphome: devices:`, ideally with `relation: child`. sec_touch copies it into the config of every entity of that pair **before** the entity schemas are validated, so ESPHome's per-device duplicate-name check, the API and MQTT see it. |
-| Without `device_id` | The pair's entities sit on the node's device, and each default name gets the pair name in front: `Kellerraum switch time 1 time`. |
+| `device_id` | Optional. The ID of a device the user declares in `esphome: devices:`. ESPHome 2026.11.0 requires `relation:` on each device (`esphome/esphome/core/config.py`, `DEVICE_SCHEMA`); `relation: child` fits. sec_touch copies it into the config of every entity of that pair **before** the entity schemas are validated, so ESPHome's per-device duplicate-name check, the API and MQTT see it. |
+| Without `device_id` | The pair's entities sit on the node's device, and each default name gets the pair name in front: `Kellerraum Switch time 1 time`. |
 | Package | `components/sec_touch/examples/time-program-devices.yaml` declares 6 devices, `sec_touch_pair_N_time_program`, named `Fan pair N time program`, `relation: child`. A user who wants other names or fewer devices copies its block into their own `esphome: devices:` instead. |
 | `device_id` on an optional entity entry (`refresh`, `write_failed`, live-state entries) | Wins over the pair's `device_id` for that entity. The 15 field entities always follow the pair. |
 
@@ -112,7 +112,7 @@ Per listed switch time *N*, always created:
 | Field | Entity | Default name | Value |
 |---|---|---|---|
 | Time | `datetime`, `type: time` | `Switch time N time` | `HH:MM`; HA keeps seconds, the panel's are always `00` |
-| Level | `select`, options = `LEVEL_NAMES` 0–9 | `Switch time N level` | option index = level |
+| Level | `select`, options = the `LEVEL_NAMES` names the [meaning rule](#known-property-catalogue) accepts | `Switch time N level` | option index = level |
 | Enabled | `switch` | `Switch time N enabled` | bit *N−1* of the pair's enabled mask |
 
 - Names are English. With a `device_id` they are the same on every pair, and the sub-device tells them apart; without one they get the pair-name prefix ([Sub-device](#sub-device)). Every name is overridable.
@@ -120,7 +120,7 @@ Per listed switch time *N*, always created:
 
   | Entities | Category |
   |---|---|
-  | 15 field entities | `config`, so HA lists each switch time as time · level · enabled on the device page |
+  | 15 field entities | `config`, so HA lists them in the device page's Configuration section |
   | `refresh` | `config` |
   | `write_failed` | `diagnostic` |
   | live-state entities | none |
@@ -166,7 +166,7 @@ flowchart LR
 | One queued SET per ID | A newer write to an ID with a SET still queued replaces that task's value in place. A SET already in flight isn't touched; the newer write queues behind it. |
 | Time | Written as `HH:MM:00`. Seconds from HA are dropped, never rounded. |
 | Level | The select's index, 0–9, as a decimal string. |
-| Enabled mask | Per pair, the hub keeps the requested bit changes (bits to set, bits to clear). When the write is due: GET the mask fresh, apply only those bits, SET. Bits of switch times outside `switch_times` and any bit above 5 stay as they are. Changes merge; per bit, the later request wins. |
+| Enabled mask | Per pair, the hub keeps the requested bit changes (bits to set, bits to clear). When the write is due: GET the mask fresh, apply only those bits, SET. Bits of switch times outside `switch_times` and any bit above switch time 5's (value `20` and up) stay as they are. Changes merge; per bit, the later request wins. |
 | Mask GET fails | The hub retries a GET only after a dropped reply (`get_retry.h`), not after a timeout or NAK. When the GET fails: write nothing, fire `mask_unreadable`, log a warning, republish the switches from the last good mask. |
 | Read-back | A `not_kept` is a read-back that differs from what was sent; seconds are ignored when comparing times. Live-state entities recompute from the read-back. |
 
@@ -199,12 +199,12 @@ Decided in [Should sec_touch compute which switch time is in effect, and how is 
 
 | Entity | Type | States |
 |---|---|---|
-| Switch time in effect | text_sensor | `switch time 1`…`switch time 5` · `none` · `not running` · `conflict` |
-| Running level | text_sensor | `LEVEL_NAMES` name (0–9) · `none` · `not running` · `conflict` |
-| Next level | text_sensor | `LEVEL_NAMES` name (0–9) · `none` · `not running` · `conflict` |
+| Switch time in effect | text_sensor | `switch time N` (N 1–5), or a state word from the cases table |
+| Running level | text_sensor | a level name ([meaning rule](#known-property-catalogue)), or a state word from the cases table |
+| Next level | text_sensor | a level name ([meaning rule](#known-property-catalogue)), or a state word from the cases table |
 | Next change | timestamp sensor | time source now + (next switch time − panel now); no value (NaN) when there is none |
 
-The state words are defined once in a C++ header the tests share. `not running` is used, not `off`, because `off` is level 0's name.
+The state words live in the live-state model's header ([Implementation notes](#implementation-notes)), the one definition code and tests use ([Reuse existing definitions](../.claude/skills/coding-standards/SKILL.md#reuse-existing-definitions)). `not running` is used, not `off`, because `off` is level 0's name.
 
 | Case | Switch time in effect | Running level | Next change / Next level |
 |---|---|---|---|
@@ -228,7 +228,7 @@ The state words are defined once in a C++ header the tests share. `not running` 
 
 Decided in [What does the bulk-set action for a pair's time program look like?](https://github.com/distante/esphome-components/issues/119).
 
-`sec_touch.set_time_program` is an ESPHome automation action with `on_success:` and `on_error:`. It sets a pair's whole program. To call it from HA, the user wraps it in their own `api: actions:` with `api.respond`; the readme has the block to copy. It also works on the device (template button, `on_time`).
+`sec_touch.set_time_program` is an ESPHome automation action with `on_success:` and `on_error:`. It sets a pair's whole program. To call it from HA, the user wraps it in their own `api: actions:` with `api.respond`; the readme will have the block to copy ([Docs and release](#docs-and-release)). It also works on the device (template button, `on_time`).
 
 | Argument | Type | Rule |
 |---|---|---|
@@ -244,7 +244,7 @@ Position *i* is switch time *i*. HA's `string[]`, `int[]` and `bool[]` pass stra
 | Scope | Always all 5 switch times. The `switch_times` filter is ignored; it only hides entities. |
 | Validation | Every argument is checked before any write. One bad value → `invalid_argument`, nothing written. |
 | Order | The 5 times and 5 levels, then one mask SET built from a fresh mask GET. Only the 5 switch-time bits are replaced. |
-| Writes | All 15 fields plus the mask, even when the cache shows the same value (it can be 5 min old). Same per-field path as [Writing](#writing). |
+| Writes | 11 writes: all 5 times, 5 levels and the mask, even when the cache shows the same value (it can be 5 min old). Same per-field path as [Writing](#writing). |
 | Failure | Writing continues after a failed field. `on_success` fires only when every read-back matches; otherwise `on_error` gets `error`, and the pair's `write_failed` fires per failed field. |
 | Overlap | A second call for the same pair while one runs → `busy`, nothing written. An entity write that replaces a bulk value shows up as `not_kept` in the bulk report. |
 | Deadline | None. HA waits 30 s for a response by default (aioesphomeapi); past it the writes still finish and the entities show the truth. The readme notes it. |
@@ -252,7 +252,7 @@ Position *i* is switch time *i*. HA's `string[]`, `int[]` and `bool[]` pass stra
 | Case | `error` |
 |---|---|
 | Bad argument | `invalid_argument: switch time 4 level 12 not in 0–9` |
-| Write failures | `2 of 16 writes failed: switch time 3 level refused; enabled mask mask_unreadable` |
+| Write failures | `2 of 11 writes failed: switch time 3 level refused; enabled mask mask_unreadable` |
 | Overlap | `busy` |
 
 The [readme copy block and HA call](https://github.com/distante/esphome-components/issues/119#issuecomment-7168530664) are in the deciding ticket; the readme takes them over.
@@ -305,6 +305,7 @@ Ships in **v1.5.0** with the sniffer goals and experiments. The work for this se
 - The bulk-action copy block, the HA call, and HA's 30 s response timeout.
 - The measured RAM cost.
 - IDs 1 and 2 are also polled with any live-state entity (readme "Panel Clock" and the `GLOBAL_SETTING_IDS` note say only with `clock_drift`).
+- The known-property list under "Sniffer page" and the "Known Ids" section gain the three time-program arrays.
 - "Not in `protocol_ids.h` yet: #85 decides" under Time programs: point at this spec's [catalogue](#known-property-catalogue).
 
 **Device check** (maintainer's controller): one heap check with 6 pairs × all switch times + every live-state entity + the sniffer, plus one write per field kind and one bulk call, each checked on the panel.
@@ -323,14 +324,14 @@ Ships in **v1.5.0** with the sniffer goals and experiments. The work for this se
 
 ## Acceptance criteria
 
-1. `protocol_ids.h` is the only definition of IDs 101–166, as in [Known-property catalogue](#known-property-catalogue). No C++, JS or Python code computes a time-program ID.
+1. IDs 101–166 are defined as in [Known-property catalogue](#known-property-catalogue).
 2. Check queries and shows IDs 101–166; discover and write probes skip them. Each fan card shows the time-program table with meanings; level 10, mask `20` and time `24:00:00` show as `unexpected value x`.
 3. A pair not in `time_programs:` gets no entities and no polling. A listed pair gets 3 entities per listed switch time, named by the rules in [Configuration](#configuration), [Sub-device](#sub-device) and [Entities](#entities). A config the [Configuration](#configuration) table calls an error fails validation: a duplicate `fan_number`, a switch time outside 1–5 or listed twice, `next_change` without a time source, a `time_programs_update_interval` that isn't a positive time period. A config with the example package validates and compiles.
 4. A pair's `device_id` lands on every entity of that pair before entity validation, so a name repeated on two pairs' devices is valid and repeated on one device is an error. A `device_id` on an optional entity entry wins for that entity; the 15 field entities always follow the pair. Every entity has the `entity_category` of [Entities](#entities).
 5. Time-program IDs are polled as in [Reading](#reading), and never on the fan or global-settings poll. A `refresh` press queues one poll of its pair and leaves the schedule as it was.
 6. An HA write follows [Writing](#writing): published at once, one queued SET per ID (a newer value replaces the queued one), after the SET ends one GET whose value is published. No SET is retried.
 7. A switch write GETs the mask, changes only the requested bits and SETs it. A failed GET writes nothing. `write_failed` fires each type of the [event table](#writing) in its case.
-8. Time writes send `HH:MM:00`. A level outside 0–9 read from the panel leaves the select with no state, and nothing is written.
+8. Time writes send `HH:MM:00`. A level the [meaning rule](#known-property-catalogue) marks unexpected, read from the panel, leaves the select with no state, and nothing is written.
 9. Live state follows the [model](#live-state) and every row of its cases table, and publishes only on change. Tests cover: exactly one enabled switch time, a failed or unexpected input before and after a good read, a switch time exactly at the panel time (in effect) and the next change strictly after it. `not running` appears whenever the level ID isn't 10.
 10. `sec_touch.set_time_program` follows [Bulk-set action](#bulk-set-action): validates everything first, writes times, levels, then the mask, reports `invalid_argument`, `busy` or the failed-field list in `error`, and fires `on_success` only when every read-back matches.
 11. No heap use beyond the [Memory](#memory) table.

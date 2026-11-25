@@ -122,11 +122,12 @@ Decided in [Where does the known-property catalogue live, and how does the page 
 | Summer ventilation | 48 | `0A00` → on, `0800` → off |
 | Date | 1 | the value as sent |
 | Clock | 2 | the value as sent |
+| Time program | 101–166 (6 pairs × enabled, 5 times, 5 levels) | see [Time programs](time-programs.md#known-property-catalogue) |
 
 - **Moves into the headers:** `GLOBAL_SETTING_IDS`, the 48/1/2 ID constants and `NAME_MAPPING` out of `_definitions.h` into `protocol_ids.h`, and the six preset names of `FanModeList` (`fan/_fan_mode.cpp`, behind an ESPHome include) into `components/sec_touch/fan_level.h` (moved out of `fan/`, which ESPHome copies only into builds that load the fan platform), beside the level constants they are keyed by. `fan_level.h` also names levels 1–6 and 0 (off) and 255 (not connected), which have no names today. The component keeps using them from there.
 - **Left as is:** the Python copy of the fan IDs in `sec_touch/__init__.py`.
 - **Matching.** Levels and labels match the trimmed raw value read as a whole decimal integer. Property 48 matches the raw string `0A00`/`0800`, not the `0`/`800` the component's `atoi` parse yields. Date and clock always match and show the trimmed value.
-- **Unexpected value.** A known property whose value matches no entry shows as `unexpected value x` (`x` the trimmed raw value). That also covers corrupted values. There are no further decode rules.
+- **Unexpected value.** A known property whose value matches no entry shows as `unexpected value x` (`x` the trimmed raw value). That also covers corrupted values. Beyond the tables, there are two decode rules, both for time programs: the enabled mask and `HH:MM:SS` times ([Time programs](time-programs.md#known-property-catalogue)).
 - **Device:** the sniffer uses the known-ID list to pick what a scan queries.
 - **Page:** `page_bundle.py` parses both headers at every build and generates a **virtual** module, `catalogue.mjs`, with the IDs and meanings. The resolver serves that name from memory instead of `web/`; no file is written. Only `sniffer_page.html` imports it. Tested modules (export, check cards, discover filtering) take the catalogue as an argument, so their `node --test` suites pass a fixture. A Python test covers the header parse.
 
@@ -215,8 +216,8 @@ Decided in [What should the sniffer HTML page look like and do?](https://github.
 
 ### Check
 
-**Panel-style cards**, no ID map, no filters, no change feed: 15 IDs fit on one screen.
-- **One card per fan**: the level meaning in large type, the raw `id = value` under it, then the label meaning and its raw value. A `registered` badge marks fans this YAML uses (`reg`).
+**Panel-style cards**, no ID map, no filters, no change feed.
+- **One card per fan**: the level meaning in large type, the raw `id = value` under it, then the label meaning and its raw value, then the pair's time-program table ([Time programs](time-programs.md#known-property-catalogue)). A `registered` badge marks fans this YAML uses (`reg`).
 - **One Global card**: summer ventilation, date and clock, each with meaning and raw value.
 - An unexpected value shows in red as `unexpected value x`. A known property with no value yet shows as not seen.
 
@@ -515,7 +516,7 @@ Ships as **v1.5.0** (minor: fans and HA entities are untouched; the hub gains th
 - Persisting captured data to flash/NVS.
 - A rich sniffer on ESP8266.
 - Home Assistant integration of the page (cards, panels).
-- Pass/fail validation in check, and decode rules beyond the catalogue's meaning tables.
+- Pass/fail validation in check, and decode rules beyond the catalogue's meaning tables and the two time-program rules.
 - Storing the goal or the open experiment in the browser.
 - Write probes for known properties or in the check goal: the component's own entities already write them.
 - Generating catalogue entries (C++ snippets) from an experiment.
@@ -528,7 +529,7 @@ Ships as **v1.5.0** (minor: fans and HA entities are untouched; the hub gains th
 
 1. In passive mode every data message is recorded, known and registered IDs included; existing controls are unaffected.
 2. A discover start with `from`/`to` stops polling and listener updates and queries that range minus every known ID, from `from`; each queried record gets `ok`, `nak` or `timeout`. Without `from`/`to` or `ids` the range is 1–255.
-3. A check start queries exactly the known IDs (1, 2, 48, 78–83, 173–178) in ascending order, registered ones included, and ignores `from`/`to`.
+3. A check start queries exactly the known IDs (1, 2, 48, 78–83, 101–166, 173–178) in ascending order, registered ones included, and ignores `from`/`to`.
 4. Stopping mid-scan resumes polling immediately; the next start begins at the goal's first ID. A completed scan resumes polling automatically and sets `done`.
 5. A scan, probe or restore start while any of them runs is a 409 that starts nothing; two simultaneous starts never both get 200. A stop while idle, or during a probe or restore, is a 200 no-op. A bad, partial or non-numeric range, one above 255, a malformed, over-cap or over-255 `ids` list, or `ids` together with `from`/`to` is a 400 that starts nothing. `scan` is always present with `goal`, `from`, `to`, `ids`, `next` and `done` as specified.
 6. A raw value change bumps `change_count`, `last_changed` and `seq`, and the previous value enters the history; a repeated identical message only updates `last_seen`.

@@ -75,3 +75,23 @@ _Avoid_: Pass/fail, result
 **Restore**:
 Writing a property's original raw value back after a write probe and reading it back to check.
 _Avoid_: Undo, rollback
+
+**Time program**:
+A fan pair's daily schedule on the panel: 5 switch times that set the pair's level while the pair is in Automatik Zeit.
+_Avoid_: Zeitprogramm (panel word), schedule, timer
+
+**Switch time**:
+One of the 5 entries of a time program: a time of day, a level and whether it is enabled.
+_Avoid_: Schaltzeit (panel word), slot, entry
+
+**Enabled**:
+Whether a switch time takes part in its time program. A switch time that isn't enabled never takes effect.
+_Avoid_: Aktiv (panel word), active
+
+**Level** (of a switch time):
+The fan level a switch time sets when it takes effect: one of the fan's levels 0 to 9.
+_Avoid_: Modus (panel word), mode (a pair's mode is Normal, Automatik Zeit and so on)
+
+**Switch time in effect**:
+The enabled switch time whose level the time program runs now: the latest one at or before the panel's time, counting from yesterday's last one before today's first.
+_Avoid_: Current switch time, active switch time

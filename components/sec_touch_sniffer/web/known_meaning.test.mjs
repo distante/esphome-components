@@ -1,7 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { isKnownId, knownCellTitle, knownIds, knownMeaning, meaningText, NOT_SEEN } from "./known_meaning.mjs";
+import {
+  isKnownId,
+  knownCellTitle,
+  knownIds,
+  knownMeaning,
+  meaningText,
+  NOT_SEEN,
+  SWITCH_TIME_ENABLED,
+  SWITCH_TIME_NOT_ENABLED,
+  switchTimeEnabled,
+} from "./known_meaning.mjs";
 import { escapeControlBytes } from "./control_bytes.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
 
@@ -161,6 +171,28 @@ test("a switch time's time out of range or not exactly HH:MM:SS is unexpected", 
     "08:30:0", "08-30-00", "0830:00", "ab:cd:ef", "08:3a:00", "+8:30:00", "08:30 00", "16.11.26", "٠٨:٣٠:٠٠"]) {
     assert.deepEqual(knownMeaning(CATALOGUE, TIME, raw), unexpected(raw), JSON.stringify(raw));
   }
+});
+
+test("a switch time is enabled when its bit, N-1, of the pair's enabled mask is set", () => {
+  assert.deepEqual(switchTimeEnabled(CATALOGUE, "01", 1), named(SWITCH_TIME_ENABLED));
+  assert.deepEqual(switchTimeEnabled(CATALOGUE, "01", 2), named(SWITCH_TIME_NOT_ENABLED));
+  assert.deepEqual(switchTimeEnabled(CATALOGUE, " 02 ", 1), named(SWITCH_TIME_NOT_ENABLED));
+  assert.deepEqual(switchTimeEnabled(CATALOGUE, "02", 2), named(SWITCH_TIME_ENABLED));
+  assert.deepEqual(switchTimeEnabled(CATALOGUE, "00", 1), named(SWITCH_TIME_NOT_ENABLED));
+  const fiveSwitchTimes = { ...CATALOGUE, switchTimeCount: 5 };
+  assert.deepEqual(switchTimeEnabled(fiveSwitchTimes, "1f", 5), named(SWITCH_TIME_ENABLED));
+  assert.deepEqual(switchTimeEnabled(fiveSwitchTimes, "0F", 5), named(SWITCH_TIME_NOT_ENABLED));
+});
+
+// The mask rule decides: a mask it rejects gives no bit, so every switch time shows the mask as unexpected.
+test("a switch time's enabled bit of an unexpected mask is unexpected", () => {
+  for (const raw of ["04", "20", "3", "zz", ""]) {
+    assert.deepEqual(switchTimeEnabled(CATALOGUE, raw, 1), unexpected(raw.trim()), JSON.stringify(raw));
+  }
+});
+
+test("a switch time's enabled bit of a mask not read yet is unexpected and not seen", () => {
+  assert.deepEqual(switchTimeEnabled(CATALOGUE, null, 1), { text: NOT_SEEN, unexpected: true });
 });
 
 test("a known cell's tooltip is its ID, its shown value and its meaning", () => {

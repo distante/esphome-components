@@ -3,7 +3,7 @@
  * value and expected meaning. DOM-free: the page renders the cards.
  */
 
-import { knownMeaning } from "./known_meaning.mjs";
+import { knownMeaning, switchTimeEnabled } from "./known_meaning.mjs";
 
 /**
  * @param {object} catalogue the CATALOGUE of catalogue.mjs
@@ -22,10 +22,12 @@ function knownProperty(catalogue, rowsById, id) {
  * @param {Map<number, object>} rowsById the rows by ID
  * @param {number} pair the pair's index, 0 for fan pair 1
  * @returns {{enabled: object, switchTimes: object[]}} the pair's time program: its enabled mask, and per switch time
- *   in order `{switchTime, time, level}`, `switchTime` counted from 1. Each property is `{id, raw, meaning}`.
+ *   in order `{switchTime, time, level, enabled}`, `switchTime` counted from 1, `enabled` as switchTimeEnabled()
+ *   gives it. Each other property is `{id, raw, meaning}`.
  */
 function timeProgram(catalogue, rowsById, pair) {
   const count = catalogue.switchTimeCount;
+  const enabled = knownProperty(catalogue, rowsById, catalogue.timeProgramEnabledIds[pair]);
   const switchTimes = [];
   for (let n = 1; n <= count; n++) {
     const index = pair * count + n - 1;
@@ -33,9 +35,10 @@ function timeProgram(catalogue, rowsById, pair) {
       switchTime: n,
       time: knownProperty(catalogue, rowsById, catalogue.timeProgramTimeIds[index]),
       level: knownProperty(catalogue, rowsById, catalogue.timeProgramLevelIds[index]),
+      enabled: switchTimeEnabled(catalogue, enabled.raw, n),
     });
   }
-  return { enabled: knownProperty(catalogue, rowsById, catalogue.timeProgramEnabledIds[pair]), switchTimes };
+  return { enabled, switchTimes };
 }
 
 /**

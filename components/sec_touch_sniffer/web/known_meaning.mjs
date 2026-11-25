@@ -53,16 +53,25 @@ function switchTimeLevelName(catalogue, trimmed) {
 
 const TWO_HEX_DIGITS = /^[0-9A-Fa-f]{2}$/;
 
-/**
- * @returns {string | undefined} the name of an enabled mask (2 hex digits, a bit per switch time and none above):
- *   the enabled switch times' numbers, ascending and separated, then the suffix, or the none name for no bit
- */
-function enabledMaskName(catalogue, trimmed) {
+/** @returns {number | null} the trimmed raw as an enabled mask: 2 hex digits, a bit per switch time and none above */
+function enabledMask(catalogue, trimmed) {
   if (!TWO_HEX_DIGITS.test(trimmed)) {
-    return undefined;
+    return null;
   }
   const mask = parseInt(trimmed, 16);
-  if (mask >= 2 ** catalogue.switchTimeCount) {
+  return mask < 2 ** catalogue.switchTimeCount ? mask : null;
+}
+
+/** @returns {boolean} whether switch time `switchTime` (from 1) has its bit, N-1, set in `mask` */
+const hasSwitchTimeBit = (mask, switchTime) => (mask & (1 << (switchTime - 1))) !== 0;
+
+/**
+ * @returns {string | undefined} the name of an enabled mask: the enabled switch times' numbers, ascending and
+ *   separated, then the suffix, or the none name for no bit
+ */
+function enabledMaskName(catalogue, trimmed) {
+  const mask = enabledMask(catalogue, trimmed);
+  if (mask === null) {
     return undefined;
   }
   const names = catalogue.enabledMaskNames;
@@ -71,7 +80,7 @@ function enabledMaskName(catalogue, trimmed) {
   }
   const enabled = [];
   for (let n = 1; n <= catalogue.switchTimeCount; n++) {
-    if (mask & (1 << (n - 1))) {
+    if (hasSwitchTimeBit(mask, n)) {
       enabled.push(n);
     }
   }
@@ -137,6 +146,29 @@ export function knownMeaning(catalogue, id, raw) {
 
 /** What a known property shows while it has no value. */
 export const NOT_SEEN = "not seen";
+
+/** What a switch time's enabled cell shows for its bit of the pair's enabled mask. */
+export const SWITCH_TIME_ENABLED = "yes";
+export const SWITCH_TIME_NOT_ENABLED = "no";
+
+/**
+ * @param {object} catalogue the CATALOGUE of catalogue.mjs
+ * @param {string | null} raw the pair's enabled mask as received, null when never seen
+ * @param {number} switchTime the switch time, counted from 1
+ * @returns {{ text: string, unexpected: boolean }} whether the switch time is enabled; unexpected while the mask is
+ *   not seen (NOT_SEEN) or the mask rule rejects it (`unexpected value x`)
+ */
+export function switchTimeEnabled(catalogue, raw, switchTime) {
+  if (raw === null) {
+    return { text: NOT_SEEN, unexpected: true };
+  }
+  const trimmed = raw.replace(ASCII_SPACE_AT_ENDS, "");
+  const mask = enabledMask(catalogue, trimmed);
+  if (mask === null) {
+    return nameOrUnexpected(undefined, trimmed);
+  }
+  return nameOrUnexpected(hasSwitchTimeBit(mask, switchTime) ? SWITCH_TIME_ENABLED : SWITCH_TIME_NOT_ENABLED, trimmed);
+}
 
 /**
  * @param {{ text: string, unexpected: boolean } | null} meaning a meaning of knownMeaning(), null for none

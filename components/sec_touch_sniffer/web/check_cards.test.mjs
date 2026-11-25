@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { checkCards } from "./check_cards.mjs";
 import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
+import { NOT_SEEN, SWITCH_TIME_ENABLED, SWITCH_TIME_NOT_ENABLED } from "./known_meaning.mjs";
 
 const CATALOGUE = FIXTURE_CATALOGUE;
 const [LEVEL_1, LEVEL_2] = CATALOGUE.levelIds;
@@ -57,11 +58,13 @@ test("each fan card has its pair's time program: the enabled mask and switch tim
           switchTime: 1,
           time: { id: TIME_1_1, raw: "08:30:00", meaning: named("08:30:00") },
           level: { id: LEVEL_1_1, raw: "3", meaning: named(CATALOGUE.levelNames[3]) },
+          enabled: named(SWITCH_TIME_ENABLED),
         },
         {
           switchTime: 2,
           time: { id: TIME_1_2, raw: "22:00:00  ", meaning: named("22:00:00") },
           level: { id: LEVEL_1_2, raw: "0", meaning: named(CATALOGUE.levelNames[0]) },
+          enabled: named(SWITCH_TIME_ENABLED),
         },
       ],
     },
@@ -72,11 +75,13 @@ test("each fan card has its pair's time program: the enabled mask and switch tim
           switchTime: 1,
           time: { id: TIME_2_1, raw: "06:00:00", meaning: named("06:00:00") },
           level: NOT_SEEN_AT(LEVEL_2_1),
+          enabled: named(SWITCH_TIME_NOT_ENABLED),
         },
         {
           switchTime: 2,
           time: NOT_SEEN_AT(TIME_2_2),
           level: { id: LEVEL_2_2, raw: "7", meaning: named(CATALOGUE.levelNames[7]) },
+          enabled: named(SWITCH_TIME_NOT_ENABLED),
         },
       ],
     },
@@ -93,6 +98,15 @@ test("a time-program value its rule does not match is unexpected", () => {
   assert.deepEqual(cards.fans[0].timeProgram.enabled.meaning, { text: "unexpected value 20", unexpected: true });
   assert.deepEqual(first.time.meaning, { text: "unexpected value 24:00:00", unexpected: true });
   assert.deepEqual(first.level.meaning, { text: `unexpected value ${overLevel}`, unexpected: true });
+  assert.deepEqual(first.enabled, { text: "unexpected value 20", unexpected: true });
+});
+
+test("a switch time's enabled cell is unexpected while the pair's mask is not read yet", () => {
+  const cards = checkCards(CATALOGUE, []);
+
+  for (const entry of cards.fans[0].timeProgram.switchTimes) {
+    assert.deepEqual(entry.enabled, { text: NOT_SEEN, unexpected: true }, `switch time ${entry.switchTime}`);
+  }
 });
 
 test("a fan is registered when the hub registered its level or its label", () => {

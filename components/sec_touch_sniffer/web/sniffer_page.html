@@ -913,17 +913,20 @@ const rawView = (property) => el("span", { class: "mute" }, `${property.id} = `,
 const timeProgramCell = (property) =>
   el("td", { title: `${property.id} = ${shown(property.raw)}` }, meaningView(property.meaning));
 
-/** A fan card's time-program table: the enabled mask, then per switch time its time and level. */
+/** A fan card's time-program table: the enabled mask, then per switch time its time, level and enabled bit. */
 function timeProgramView(program) {
   return el("div", { class: "gap" },
     el("div", {}, "time program: ", meaningView(program.enabled.meaning), " (", rawView(program.enabled), ")"),
     el("table", { class: "lr" },
-      el("tr", {}, el("th", {}, "switch time"), el("th", {}, "time"), el("th", {}, "level")),
+      el("tr", {}, el("th", {}, "switch time"), el("th", {}, "time"), el("th", {}, "level"),
+        el("th", {}, "enabled")),
       ...program.switchTimes.map((entry) =>
         el("tr", {},
           el("td", { class: "mute" }, String(entry.switchTime)),
           timeProgramCell(entry.time),
-          timeProgramCell(entry.level)))));
+          timeProgramCell(entry.level),
+          el("td", { title: `${program.enabled.id} = ${shown(program.enabled.raw)}` },
+            meaningView(entry.enabled))))));
 }
 
 function renderCheck(rows) {

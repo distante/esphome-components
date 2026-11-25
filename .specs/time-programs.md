@@ -268,7 +268,7 @@ The [readme copy block and HA call](https://github.com/distante/esphome-componen
 | Requested mask bits | static, 6 pairs × (set, clear) `uint8_t` | |
 | Panel clock anchor | static | |
 | Bulk `error` text | `std::string`, built only when a bulk call fails | ESPHome's `api.respond` takes a `std::string` anyway. This is the one stated heap use ([Memory rule](../.claude/skills/coding-standards/SKILL.md#memory)). |
-| Entities | created once by codegen | Worst case 6 pairs × (15 + 4 + 2) = 126. Estimated 30–60 B each ([research](https://github.com/distante/esphome-components/blob/research/time-program-entities/.specs/research/time-program-entities.md#cost-of-90-extra-entities)), measured in the device check. No cap until then. |
+| Entities | static: ESPHome codegen builds each with placement new into a `static` buffer (`esphome/esphome/cpp_generator.py`, `Pvariable`) | Worst case 6 pairs × (15 + 4 + 2) = 126. Estimated 30–60 B each ([research](https://github.com/distante/esphome-components/blob/research/time-program-entities/.specs/research/time-program-entities.md#cost-of-90-extra-entities)), measured in the device check. No cap until then. |
 
 ---
 

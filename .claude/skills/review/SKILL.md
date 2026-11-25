@@ -67,3 +67,12 @@ Enforces [Docs and PR text](../coding-standards/SKILL.md#docs-and-pr-text) on th
 2. For a rewrite, set the old text beside the new and check that every fact of the old text survives.
 
 Done when each hit is reported with its `file:line`, the bullet it breaks and its fix (for structure: the table or Mermaid diagram that replaces it).
+
+## Stated facts match their source
+
+Enforces the "Facts match their source" bullet of [Docs and PR text](../coding-standards/SKILL.md#docs-and-pr-text) on every `.md`, PR body and issue comment the diff adds or changes.
+
+1. Recount every count, total and size the text states (writes per call, entities per pair, IDs per block) from the parts it lists elsewhere. Example: a spec's "2 of 16 writes failed" while its own write order sends 5 times, 5 levels and one mask: 11 SETs.
+2. Look up every config key the text calls optional, recommended or required in its schema: the component's `__init__.py`, or the vendored ESPHome under `esphome/`. Example: "ideally with `relation: child`" while ESPHome 2026.11.0 has `relation` as `cv.Required`.
+
+Done when each stated number has its recount and each key its schema line, and each mismatch is reported with its `file:line` and the source it contradicts.

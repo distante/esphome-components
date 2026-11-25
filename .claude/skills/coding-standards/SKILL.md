@@ -107,3 +107,4 @@ Readmes, reports, PR bodies and issue comments are read by a skimming human and 
 - **Short sentences**, one idea per bullet.
 - **Keep every fact.** Shortening drops words, never data.
 - **Raw dumps stay out of the repo.** An export or a full log becomes a table of the values that matter.
+- **Facts match their source.** A count or total adds up from the parts the text itself lists. A config key the text calls optional, recommended or required is that in its schema (`cv.Optional` / `cv.Required`).

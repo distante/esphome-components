@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from esphome import automation
 import esphome.codegen as cg
 import esphome.config_validation as cv
@@ -29,6 +31,8 @@ from esphome.const import (
     ENTITY_CATEGORY_DIAGNOSTIC,
 )
 from esphome.core import CORE
+
+from .header_reader import HeaderReader
 
 DEPENDENCIES = ["uart"]
 
@@ -68,8 +72,17 @@ LIVE_STATE_KEYS = LIVE_STATE_TEXT_KEYS + (CONF_NEXT_CHANGE,)
 CONF_LIVE_STATE_ID = "live_state_id"
 
 FAN_PAIR_COUNT = len(FAN_LEVEL_IDS)
-# SWITCH_TIME_COUNT in protocol_ids.h; the generated code static_asserts that both agree.
-SWITCH_TIME_COUNT = 5
+
+
+def _protocol_ids() -> HeaderReader:
+    """protocol_ids.h, read at config time: the C++ header stays the one source of the values taken from it."""
+    reader = HeaderReader()
+    reader.read(Path(__file__).parent / "protocol_ids.h")
+    return reader
+
+
+_PROTOCOL_IDS = _protocol_ids()
+SWITCH_TIME_COUNT = _PROTOCOL_IDS.get(_PROTOCOL_IDS.ints, "SWITCH_TIME_COUNT")
 
 TimeProgram = sec_touch_ns.class_("TimeProgram")
 TimeProgramTime = sec_touch_ns.class_("TimeProgramTime", datetime.TimeEntity)
@@ -480,13 +493,5 @@ async def to_code(config):
             config[CONF_TIME_PROGRAMS_UPDATE_INTERVAL]
         )
     )
-    entries = config.get(CONF_TIME_PROGRAMS, [])
-    if entries:
-        cg.add_global(
-            cg.RawStatement(
-                f"static_assert(esphome::sec_touch::SWITCH_TIME_COUNT == {SWITCH_TIME_COUNT}, "
-                '"sec_touch/__init__.py SWITCH_TIME_COUNT must match protocol_ids.h");'
-            )
-        )
-    for entry in entries:
+    for entry in config.get(CONF_TIME_PROGRAMS, []):
         await _time_program_to_code(var, entry)

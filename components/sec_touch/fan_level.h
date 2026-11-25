@@ -3,8 +3,8 @@
 // Plain C++, no ESPHome includes: the values of a fan's level property and their names, shared by the fan component,
 // FanModeEnum, protocol_ids.h and tests/cpp. It sits in the component root, not in fan/, because ESPHome copies fan/
 // only into builds that load the fan platform.
-// ../sec_touch_sniffer/page_bundle.py parses this header at every build: keep its declarations in the forms that
-// file's docstring lists.
+// header_reader.py parses this header for ../sec_touch_sniffer/page_bundle.py at every build: keep its declarations
+// in the forms that file's docstring lists.
 
 #include <array>
 

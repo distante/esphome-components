@@ -1,8 +1,8 @@
 #pragma once
 
 // Plain C++, no ESPHome includes: shared by the property store and the history pool.
-// page_bundle.py (beside this header) parses it at every build: keep its declarations in the forms that file's
-// docstring lists.
+// ../sec_touch/header_reader.py parses it for page_bundle.py at every build: keep its declarations in the forms that
+// file's docstring lists.
 
 #include <cstddef>
 #include <cstdint>

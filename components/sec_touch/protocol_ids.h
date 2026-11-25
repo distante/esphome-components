@@ -3,8 +3,8 @@
 // Plain C++, no ESPHome includes: the command and property ids of the SEC-Touch protocol and the label and summer
 // ventilation meaning tables, shared by _definitions.h, the host-built tests in tests/cpp and the sniffer page. The
 // level and preset names live in fan_level.h, beside the level constants they are keyed by.
-// ../sec_touch_sniffer/page_bundle.py parses this header at every build: keep its declarations in the forms that
-// file's docstring lists.
+// header_reader.py parses this header at every build (for __init__.py and ../sec_touch_sniffer/page_bundle.py): keep
+// its declarations in the forms that file's docstring lists.
 
 #include <array>
 #include <cstddef>

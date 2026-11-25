@@ -8,9 +8,17 @@ import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
 const CATALOGUE = FIXTURE_CATALOGUE;
 const [LEVEL, OTHER_LEVEL] = CATALOGUE.levelIds;
 const [LABEL] = CATALOGUE.labelIds;
+const [ENABLED, OTHER_ENABLED] = CATALOGUE.timeProgramEnabledIds;
+const [TIME] = CATALOGUE.timeProgramTimeIds;
+const OTHER_TIME = CATALOGUE.timeProgramTimeIds.at(-1);
+const [SWITCH_LEVEL] = CATALOGUE.timeProgramLevelIds;
+const OTHER_SWITCH_LEVEL = CATALOGUE.timeProgramLevelIds.at(-1);
+const MASK_NAMES = CATALOGUE.enabledMaskNames;
 
 const named = (text) => ({ text, unexpected: false });
 const unexpected = (trimmed) => ({ text: `unexpected value ${trimmed}`, unexpected: true });
+/** An enabled mask's name: the switch times' numbers joined by the separator, then the suffix. */
+const enabledName = (...switchTimes) => named(switchTimes.join(MASK_NAMES.separator) + MASK_NAMES.suffix);
 
 test("every ID of the catalogue is known, and only those", () => {
   for (const id of [...CATALOGUE.levelIds, ...CATALOGUE.labelIds]) {
@@ -19,15 +27,21 @@ test("every ID of the catalogue is known, and only those", () => {
   assert.equal(isKnownId(CATALOGUE, CATALOGUE.summerVentilationId), true);
   assert.equal(isKnownId(CATALOGUE, CATALOGUE.dateId), true);
   assert.equal(isKnownId(CATALOGUE, CATALOGUE.clockId), true);
-  for (const id of [0, 1, 12, 19, 22, 33, 255]) {
+  const timeProgramIds = [...CATALOGUE.timeProgramEnabledIds, ...CATALOGUE.timeProgramTimeIds,
+    ...CATALOGUE.timeProgramLevelIds];
+  for (const id of timeProgramIds) {
+    assert.equal(isKnownId(CATALOGUE, id), true, `ID ${id}`);
+  }
+  for (const id of [0, 1, 12, 19, 22, 33, 59, 70, 255]) {
     assert.equal(isKnownId(CATALOGUE, id), false, `ID ${id}`);
   }
 });
 
 test("the known IDs are every ID of the catalogue, once each, in ascending order", () => {
-  assert.deepEqual(knownIds(CATALOGUE), [10, 11, 20, 21, 30, 31, 32]);
-  const unsorted = { ...CATALOGUE, levelIds: [40, 12], dateId: 5, clockId: 1 };
-  assert.deepEqual(knownIds(unsorted), [1, 5, 12, 20, 21, 30, 40]);
+  assert.deepEqual(knownIds(CATALOGUE), [10, 11, 20, 21, 30, 31, 32, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69]);
+  const unsorted = { ...CATALOGUE, levelIds: [40, 12], dateId: 5, clockId: 1, timeProgramEnabledIds: [3],
+    timeProgramTimeIds: [70, 2], timeProgramLevelIds: [4] };
+  assert.deepEqual(knownIds(unsorted), [1, 2, 3, 4, 5, 12, 20, 21, 30, 40, 70]);
 });
 
 test("an unknown ID or a never-seen value has no meaning", () => {
@@ -86,6 +100,67 @@ test("date and clock mean their trimmed value as sent", () => {
 test("only ASCII whitespace is trimmed, as on the device", () => {
   assert.deepEqual(knownMeaning(CATALOGUE, LEVEL, " 7"), unexpected(" 7"));
   assert.deepEqual(knownMeaning(CATALOGUE, CATALOGUE.dateId, "\v16.11.26\f"), named("16.11.26"));
+});
+
+test("a switch time's level up to the highest switch-time level has its level name", () => {
+  assert.deepEqual(knownMeaning(CATALOGUE, SWITCH_LEVEL, "0"), named(CATALOGUE.levelNames[0]));
+  assert.deepEqual(knownMeaning(CATALOGUE, OTHER_SWITCH_LEVEL, "03  "), named(CATALOGUE.levelNames[3]));
+  assert.deepEqual(knownMeaning(CATALOGUE, SWITCH_LEVEL, String(CATALOGUE.maxSwitchTimeLevel)),
+    named(CATALOGUE.levelNames[CATALOGUE.maxSwitchTimeLevel]));
+});
+
+// The fixture's 255 has a level name, as on the device, yet no switch time takes it.
+test("a switch time's level above the highest switch-time level or not a whole decimal is unexpected", () => {
+  for (const raw of [String(CATALOGUE.maxSwitchTimeLevel + 1), "255", "1", "", "3a", "-3", "constructor"]) {
+    assert.deepEqual(knownMeaning(CATALOGUE, SWITCH_LEVEL, raw), unexpected(raw), JSON.stringify(raw));
+  }
+});
+
+test("an enabled mask names the switch times of its bits", () => {
+  assert.deepEqual(knownMeaning(CATALOGUE, ENABLED, "01"), enabledName(1));
+  assert.deepEqual(knownMeaning(CATALOGUE, ENABLED, "02"), enabledName(2));
+  assert.deepEqual(knownMeaning(CATALOGUE, OTHER_ENABLED, "03"), enabledName(1, 2));
+});
+
+test("an enabled mask of zero is none enabled", () => {
+  assert.deepEqual(knownMeaning(CATALOGUE, ENABLED, "00"), named(MASK_NAMES.none));
+});
+
+test("an enabled mask is two trimmed hex digits in either case", () => {
+  const fiveSwitchTimes = { ...CATALOGUE, switchTimeCount: 5 };
+  assert.deepEqual(knownMeaning(fiveSwitchTimes, ENABLED, "1F"), enabledName(1, 2, 3, 4, 5));
+  assert.deepEqual(knownMeaning(fiveSwitchTimes, ENABLED, " 1f "), enabledName(1, 2, 3, 4, 5));
+  assert.deepEqual(knownMeaning(fiveSwitchTimes, ENABLED, "0c"), enabledName(3, 4));
+  assert.deepEqual(knownMeaning(fiveSwitchTimes, ENABLED, "18"), enabledName(4, 5));
+});
+
+// The spec's unexpected example is 20 with 5 switch times: the bit after switch time 5's.
+test("an enabled mask with a bit above the switch times is unexpected", () => {
+  const fiveSwitchTimes = { ...CATALOGUE, switchTimeCount: 5 };
+  for (const raw of ["20", "3F", "FF", "ff"]) {
+    assert.deepEqual(knownMeaning(fiveSwitchTimes, ENABLED, raw), unexpected(raw), raw);
+  }
+  assert.deepEqual(knownMeaning(CATALOGUE, ENABLED, "04"), unexpected("04"));
+});
+
+test("an enabled mask that is not two hex digits is unexpected", () => {
+  for (const raw of ["", "3", "003", "0x3", "G0", "0g", "-1", "+3", "0 3"]) {
+    assert.deepEqual(knownMeaning(CATALOGUE, ENABLED, raw), unexpected(raw), JSON.stringify(raw));
+  }
+});
+
+test("a switch time's time is the trimmed HH:MM:SS as sent", () => {
+  assert.deepEqual(knownMeaning(CATALOGUE, TIME, "08:30:00"), named("08:30:00"));
+  assert.deepEqual(knownMeaning(CATALOGUE, OTHER_TIME, " 00:00:00   "), named("00:00:00"));
+  assert.deepEqual(knownMeaning(CATALOGUE, TIME, "23:59:59"), named("23:59:59"));
+});
+
+// The spec's unexpected example is 24:00:00.
+test("a switch time's time out of range or not exactly HH:MM:SS is unexpected", () => {
+  for (const raw of ["24:00:00", "12:60:00", "12:00:60", "99:99:99", "", "8:30:00", "08:30", "08:30:00:00",
+    "08:30:0", "08-30-00", "0830:00", "ab:cd:ef", "08:3a:00", "+8:30:00", "08:30 00", "16.11.26", "٠٨:٣٠:٠٠"]) {
+    assert.deepEqual(knownMeaning(CATALOGUE, TIME, raw), unexpected(raw), JSON.stringify(raw));
+  }
 });
 
 test("a known cell's tooltip is its ID, its shown value and its meaning", () => {

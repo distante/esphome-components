@@ -19,13 +19,17 @@ namespace esphome::sec_touch::testing {
 
 namespace {
 
-/// An ID no entity registers.
-constexpr int UNREGISTERED_ID = 133;
+/// An ID no entity registers, and unknown: the one after the time programs.
+constexpr int UNREGISTERED_ID = TIME_PROGRAM_LEVEL_IDS.back() + 1;
 /// An ID an entity registers: fan pair 1's level.
 constexpr int REGISTERED_ID = FAN_LEVEL_IDS[0];
 
 /// Another ID no entity registers, scanned right after UNREGISTERED_ID.
 constexpr int NEXT_UNREGISTERED_ID = UNREGISTERED_ID + 1;
+// Tests scan UNREGISTERED_ID up to NEXT_UNREGISTERED_ID + 1 as three unknown IDs in a row.
+static_assert(!is_known_property(UNREGISTERED_ID) && !is_known_property(NEXT_UNREGISTERED_ID) &&
+                  !is_known_property(NEXT_UNREGISTERED_ID + 1),
+              "the unregistered test IDs must be unknown properties");
 
 /// What the panel holds before a probe (probe_fixture.h's ORIGINAL).
 const std::string PROBE_ORIGINAL = "01";
@@ -41,6 +45,9 @@ std::vector<int> known_ids_ascending() {
   std::vector<int> ids(FAN_LEVEL_IDS.begin(), FAN_LEVEL_IDS.end());
   ids.insert(ids.end(), FAN_LABEL_IDS.begin(), FAN_LABEL_IDS.end());
   ids.insert(ids.end(), GLOBAL_SETTING_IDS.begin(), GLOBAL_SETTING_IDS.end());
+  ids.insert(ids.end(), TIME_PROGRAM_ENABLED_IDS.begin(), TIME_PROGRAM_ENABLED_IDS.end());
+  ids.insert(ids.end(), TIME_PROGRAM_TIME_IDS.begin(), TIME_PROGRAM_TIME_IDS.end());
+  ids.insert(ids.end(), TIME_PROGRAM_LEVEL_IDS.begin(), TIME_PROGRAM_LEVEL_IDS.end());
   std::sort(ids.begin(), ids.end());
   return ids;
 }

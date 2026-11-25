@@ -376,7 +376,7 @@ The sniffer serves, at `http://<device>/sniffer`, a page for working out what th
   <img src="images/sniffer-overview.png" alt="Sniffer page: ID map, drawer and change feed" width="900" />
 </p>
 
-For a known property, the Check tab shows what its value means. Known properties are the fan levels (173–178), fan labels (78–83), summer ventilation (48), date (1) and clock (2). Levels and labels show their name ("level 3", "Burst", "Bad"), summer ventilation shows `0A00` as "on" and `0800` as "off", and date and clock show the value as sent. A value that matches none of these shows as `unexpected value x` in red. The names come from [`fan_level.h`](fan_level.h) (levels) and [`protocol_ids.h`](protocol_ids.h) (labels and summer ventilation), the same tables the component uses.
+For a known property, the Check tab shows what its value means. Known properties are the fan levels (173–178), fan labels (78–83), summer ventilation (48), date (1), clock (2) and the [time programs](#time-programs-zeitprogramm-ids-101166) (101–166). Levels and labels show their name ("level 3", "Burst", "Bad"), summer ventilation shows `0A00` as "on" and `0800` as "off", and date and clock show the value as sent. Each fan card also gets its pair's time program: the enabled mask as "1, 2 enabled" or "none enabled", and per switch time its time as sent and its level name (0–9 only). A value that matches none of these shows as `unexpected value x` in red. The names come from [`fan_level.h`](fan_level.h) (levels) and [`protocol_ids.h`](protocol_ids.h) (labels and summer ventilation), the same tables the component uses.
 
 | Fan level (173) and label (78) | Summer ventilation (48), date (1) and clock (2) |
 |---|---|
@@ -475,7 +475,7 @@ Fan pair 1, read and checked against its screen:
 - The screen title shows the pair's label, not its number. Here: pair 1 = "Kellerraum" (`35`), pair 2 = "Küche" (`21`).
 - Pair 6 has label `0`, no fan (level 178 = 255 in the [earlier scan](#earlier-full-scan-ids-1208)). Its block holds defaults: `00`, 06:00 · 09:00 · 15:00 · 20:00 · 22:00, all `0`.
 - The pattern ends at 166. 168 (`4.153.07:36`) is the Betriebszeit (`years.days.HH:MM`); 167 and 55 share its format.
-- Not in `protocol_ids.h` yet: [#85](https://github.com/distante/esphome-components/issues/85) decides whether they become known IDs.
+- Known properties: `TIME_PROGRAM_ENABLED_IDS`, `TIME_PROGRAM_TIME_IDS` and `TIME_PROGRAM_LEVEL_IDS` in [`protocol_ids.h`](protocol_ids.h), as the [time-programs spec](../../.specs/time-programs.md#known-property-catalogue) decides. The sniffer's discover and write probes skip them; check shows them on each fan card.
 
 How sure:
 

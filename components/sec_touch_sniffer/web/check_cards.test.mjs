@@ -7,6 +7,10 @@ import { FIXTURE_CATALOGUE } from "./fixture_catalogue.mjs";
 const CATALOGUE = FIXTURE_CATALOGUE;
 const [LEVEL_1, LEVEL_2] = CATALOGUE.levelIds;
 const [LABEL_1, LABEL_2] = CATALOGUE.labelIds;
+const [ENABLED_1, ENABLED_2] = CATALOGUE.timeProgramEnabledIds;
+const [TIME_1_1, TIME_1_2, TIME_2_1, TIME_2_2] = CATALOGUE.timeProgramTimeIds;
+const [LEVEL_1_1, LEVEL_1_2, LEVEL_2_1, LEVEL_2_2] = CATALOGUE.timeProgramLevelIds;
+const NOT_SEEN_AT = (id) => ({ id, raw: null, meaning: null });
 
 /** A row as rowsOf() gives it, only the fields the cards read. */
 const row = (id, raw, registered = false) => ({ id, raw, registered });
@@ -16,7 +20,7 @@ const named = (text) => ({ text, unexpected: false });
 test("one card per fan, in fan order, with its level and label", () => {
   const cards = checkCards(CATALOGUE, [row(LEVEL_1, "7"), row(LABEL_1, "02  "), row(LEVEL_2, "0"), row(LABEL_2, "1")]);
 
-  assert.deepEqual(cards.fans, [
+  assert.deepEqual(cards.fans.map(({ timeProgram, ...card }) => card), [
     {
       fan: 1,
       registered: false,
@@ -30,6 +34,65 @@ test("one card per fan, in fan order, with its level and label", () => {
       label: { id: LABEL_2, raw: "1", meaning: named("Bad") },
     },
   ]);
+});
+
+test("each fan card has its pair's time program: the enabled mask and switch times in order", () => {
+  const cards = checkCards(CATALOGUE, [
+    row(ENABLED_1, "03"),
+    row(TIME_1_1, "08:30:00"),
+    row(TIME_1_2, "22:00:00  "),
+    row(LEVEL_1_1, "3"),
+    row(LEVEL_1_2, "0"),
+    row(ENABLED_2, "00"),
+    row(TIME_2_1, "06:00:00"),
+    row(LEVEL_2_2, "7"),
+  ]);
+  const names = CATALOGUE.enabledMaskNames;
+
+  assert.deepEqual(cards.fans.map((card) => card.timeProgram), [
+    {
+      enabled: { id: ENABLED_1, raw: "03", meaning: named(`1${names.separator}2${names.suffix}`) },
+      switchTimes: [
+        {
+          switchTime: 1,
+          time: { id: TIME_1_1, raw: "08:30:00", meaning: named("08:30:00") },
+          level: { id: LEVEL_1_1, raw: "3", meaning: named(CATALOGUE.levelNames[3]) },
+        },
+        {
+          switchTime: 2,
+          time: { id: TIME_1_2, raw: "22:00:00  ", meaning: named("22:00:00") },
+          level: { id: LEVEL_1_2, raw: "0", meaning: named(CATALOGUE.levelNames[0]) },
+        },
+      ],
+    },
+    {
+      enabled: { id: ENABLED_2, raw: "00", meaning: named(names.none) },
+      switchTimes: [
+        {
+          switchTime: 1,
+          time: { id: TIME_2_1, raw: "06:00:00", meaning: named("06:00:00") },
+          level: NOT_SEEN_AT(LEVEL_2_1),
+        },
+        {
+          switchTime: 2,
+          time: NOT_SEEN_AT(TIME_2_2),
+          level: { id: LEVEL_2_2, raw: "7", meaning: named(CATALOGUE.levelNames[7]) },
+        },
+      ],
+    },
+  ]);
+});
+
+// The spec's examples: a level above the highest switch-time level, a mask with a bit above the switch times (20),
+// hour 24.
+test("a time-program value its rule does not match is unexpected", () => {
+  const overLevel = String(CATALOGUE.maxSwitchTimeLevel + 1);
+  const cards = checkCards(CATALOGUE, [row(ENABLED_1, "20"), row(TIME_1_1, "24:00:00"), row(LEVEL_1_1, overLevel)]);
+  const [first] = cards.fans[0].timeProgram.switchTimes;
+
+  assert.deepEqual(cards.fans[0].timeProgram.enabled.meaning, { text: "unexpected value 20", unexpected: true });
+  assert.deepEqual(first.time.meaning, { text: "unexpected value 24:00:00", unexpected: true });
+  assert.deepEqual(first.level.meaning, { text: `unexpected value ${overLevel}`, unexpected: true });
 });
 
 test("a fan is registered when the hub registered its level or its label", () => {

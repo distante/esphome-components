@@ -909,6 +909,23 @@ const registeredBadge = () => el("span", { class: "badge", title: REGISTERED_TIT
 
 const rawView = (property) => el("span", { class: "mute" }, `${property.id} = `, el("code", {}, shown(property.raw)));
 
+/** A time-program cell: the property's meaning, with its ID and raw value as the tooltip. */
+const timeProgramCell = (property) =>
+  el("td", { title: `${property.id} = ${shown(property.raw)}` }, meaningView(property.meaning));
+
+/** A fan card's time-program table: the enabled mask, then per switch time its time and level. */
+function timeProgramView(program) {
+  return el("div", { class: "gap" },
+    el("div", {}, "time program: ", meaningView(program.enabled.meaning), " (", rawView(program.enabled), ")"),
+    el("table", { class: "lr" },
+      el("tr", {}, el("th", {}, "switch time"), el("th", {}, "time"), el("th", {}, "level")),
+      ...program.switchTimes.map((entry) =>
+        el("tr", {},
+          el("td", { class: "mute" }, String(entry.switchTime)),
+          timeProgramCell(entry.time),
+          timeProgramCell(entry.level)))));
+}
+
 function renderCheck(rows) {
   const { fans, global } = checkCards(CATALOGUE, rows);
   const fanCards = fans.map((card) =>
@@ -918,7 +935,8 @@ function renderCheck(rows) {
       el("div", {}, meaningView(card.level.meaning, "big")),
       el("div", {}, rawView(card.level)),
       el("div", { class: "gap" }, "label: ", meaningView(card.label.meaning)),
-      el("div", {}, rawView(card.label))));
+      el("div", {}, rawView(card.label)),
+      timeProgramView(card.timeProgram)));
   const globalCard = el("div", { class: "card" }, el("h3", {}, "Global"),
     ...global.map((property) =>
       el("div", {}, `${property.name}: `, meaningView(property.meaning), " (", rawView(property), ")")));

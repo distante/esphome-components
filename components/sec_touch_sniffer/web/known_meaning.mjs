@@ -14,7 +14,8 @@ import { escapeControlBytes, shown } from "./control_bytes.mjs";
  */
 export function knownIds(catalogue) {
   const ids = [...catalogue.levelIds, ...catalogue.labelIds, catalogue.summerVentilationId, catalogue.dateId,
-    catalogue.clockId];
+    catalogue.clockId, ...catalogue.timeProgramEnabledIds, ...catalogue.timeProgramTimeIds,
+    ...catalogue.timeProgramLevelIds];
   return [...new Set(ids)].sort(ascending);
 }
 
@@ -39,6 +40,56 @@ function nameAtWholeDecimal(names, trimmed) {
   }
   const key = String(value);
   return Object.hasOwn(names, key) ? names[key] : undefined;
+}
+
+/** @returns {string | undefined} a switch time's level name: a level name up to the highest switch-time level */
+function switchTimeLevelName(catalogue, trimmed) {
+  const level = wholeDecimal(trimmed);
+  if (level === null || level > catalogue.maxSwitchTimeLevel) {
+    return undefined;
+  }
+  return nameAtWholeDecimal(catalogue.levelNames, trimmed);
+}
+
+const TWO_HEX_DIGITS = /^[0-9A-Fa-f]{2}$/;
+
+/**
+ * @returns {string | undefined} the name of an enabled mask (2 hex digits, a bit per switch time and none above):
+ *   the enabled switch times' numbers, ascending and separated, then the suffix, or the none name for no bit
+ */
+function enabledMaskName(catalogue, trimmed) {
+  if (!TWO_HEX_DIGITS.test(trimmed)) {
+    return undefined;
+  }
+  const mask = parseInt(trimmed, 16);
+  if (mask >= 2 ** catalogue.switchTimeCount) {
+    return undefined;
+  }
+  const names = catalogue.enabledMaskNames;
+  if (mask === 0) {
+    return names.none;
+  }
+  const enabled = [];
+  for (let n = 1; n <= catalogue.switchTimeCount; n++) {
+    if (mask & (1 << (n - 1))) {
+      enabled.push(n);
+    }
+  }
+  return enabled.join(names.separator) + names.suffix;
+}
+
+const HH_MM_SS = /^([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
+const MAX_HOUR = 23;
+const MAX_MINUTE_OR_SECOND = 59;
+
+/** @returns {boolean} whether the trimmed raw is exactly HH:MM:SS, HH 00–23, MM and SS 00–59 */
+function isSwitchTimeTime(trimmed) {
+  const match = HH_MM_SS.exec(trimmed);
+  if (match === null) {
+    return false;
+  }
+  const [hour, minute, second] = match.slice(1).map(Number);
+  return hour <= MAX_HOUR && minute <= MAX_MINUTE_OR_SECOND && second <= MAX_MINUTE_OR_SECOND;
 }
 
 function nameOrUnexpected(name, trimmed) {
@@ -70,6 +121,15 @@ export function knownMeaning(catalogue, id, raw) {
   }
   if (id === catalogue.dateId || id === catalogue.clockId) {
     return { text: trimmed, unexpected: false };
+  }
+  if (catalogue.timeProgramLevelIds.includes(id)) {
+    return nameOrUnexpected(switchTimeLevelName(catalogue, trimmed), trimmed);
+  }
+  if (catalogue.timeProgramEnabledIds.includes(id)) {
+    return nameOrUnexpected(enabledMaskName(catalogue, trimmed), trimmed);
+  }
+  if (catalogue.timeProgramTimeIds.includes(id)) {
+    return nameOrUnexpected(isSwitchTimeTime(trimmed) ? trimmed : undefined, trimmed);
   }
   // Unreachable: isKnownId() lists exactly the IDs that have a branch above.
   return null;

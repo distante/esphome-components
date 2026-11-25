@@ -37,6 +37,9 @@ using esphome::sec_touch::ScanStart;
 using esphome::sec_touch::ScanStartError;
 using esphome::sec_touch::SNIFFER_SCAN_START_PATH;
 using esphome::sec_touch::SUMMER_VENTILATION_PROPERTY_ID;
+using esphome::sec_touch::TIME_PROGRAM_ENABLED_IDS;
+using esphome::sec_touch::TIME_PROGRAM_LEVEL_IDS;
+using esphome::sec_touch::TIME_PROGRAM_TIME_IDS;
 
 namespace {
 
@@ -58,6 +61,9 @@ std::vector<int> known_ids_ascending() {
   std::vector<int> ids(FAN_LEVEL_IDS.begin(), FAN_LEVEL_IDS.end());
   ids.insert(ids.end(), FAN_LABEL_IDS.begin(), FAN_LABEL_IDS.end());
   ids.insert(ids.end(), GLOBAL_SETTING_IDS.begin(), GLOBAL_SETTING_IDS.end());
+  ids.insert(ids.end(), TIME_PROGRAM_ENABLED_IDS.begin(), TIME_PROGRAM_ENABLED_IDS.end());
+  ids.insert(ids.end(), TIME_PROGRAM_TIME_IDS.begin(), TIME_PROGRAM_TIME_IDS.end());
+  ids.insert(ids.end(), TIME_PROGRAM_LEVEL_IDS.begin(), TIME_PROGRAM_LEVEL_IDS.end());
   std::sort(ids.begin(), ids.end());
   return ids;
 }
@@ -146,6 +152,13 @@ TEST(ScanGoal, DiscoverCoversBothEndsOfItsRange) {
 
 TEST(ScanGoal, ADiscoverOfOnlyKnownIdsQueriesNothing) {
   const ScanRun run = discover(FAN_LABEL_IDS.front(), FAN_LABEL_IDS.back());
+  EXPECT_EQ(first_scan_id(run), NO_SCAN_ID);
+  EXPECT_EQ(last_scan_id(run), NO_SCAN_ID);
+}
+
+// The time programs are one run of known IDs, from pair 1's enabled mask to pair 6's last level.
+TEST(ScanGoal, ADiscoverOfTheTimeProgramsQueriesNothing) {
+  const ScanRun run = discover(TIME_PROGRAM_ENABLED_IDS.front(), TIME_PROGRAM_LEVEL_IDS.back());
   EXPECT_EQ(first_scan_id(run), NO_SCAN_ID);
   EXPECT_EQ(last_scan_id(run), NO_SCAN_ID);
 }

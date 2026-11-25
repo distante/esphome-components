@@ -9,10 +9,14 @@
 
 using esphome::sec_touch::AUTOMATIC_CO2_LEVEL;
 using esphome::sec_touch::AUTOMATIC_CO2_NAME;
+using esphome::sec_touch::AUTOMATIC_TIME_LEVEL;
 using esphome::sec_touch::BURST_LEVEL;
 using esphome::sec_touch::BURST_NAME;
 using esphome::sec_touch::CLOCK_PROPERTY_ID;
 using esphome::sec_touch::DATE_PROPERTY_ID;
+using esphome::sec_touch::ENABLED_MASK_NONE_NAME;
+using esphome::sec_touch::ENABLED_MASK_SEPARATOR;
+using esphome::sec_touch::ENABLED_MASK_SUFFIX;
 using esphome::sec_touch::FAN_LABEL_IDS;
 using esphome::sec_touch::FAN_LEVEL_IDS;
 using esphome::sec_touch::is_known_property;
@@ -22,6 +26,7 @@ using esphome::sec_touch::label_name;
 using esphome::sec_touch::MAX_LEVEL;
 using esphome::sec_touch::max_known_property_id;
 using esphome::sec_touch::MAX_NORMAL_LEVEL;
+using esphome::sec_touch::MAX_SWITCH_TIME_LEVEL;
 using esphome::sec_touch::MeaningKind;
 using esphome::sec_touch::MIN_NORMAL_LEVEL;
 using esphome::sec_touch::NAME_MAPPING;
@@ -36,6 +41,10 @@ using esphome::sec_touch::SUMMER_VENTILATION_NAMES;
 using esphome::sec_touch::SUMMER_VENTILATION_OFF;
 using esphome::sec_touch::SUMMER_VENTILATION_ON;
 using esphome::sec_touch::SUMMER_VENTILATION_PROPERTY_ID;
+using esphome::sec_touch::SWITCH_TIME_COUNT;
+using esphome::sec_touch::TIME_PROGRAM_ENABLED_IDS;
+using esphome::sec_touch::TIME_PROGRAM_LEVEL_IDS;
+using esphome::sec_touch::TIME_PROGRAM_TIME_IDS;
 
 namespace {
 
@@ -84,6 +93,21 @@ const int FAN_1_LEVEL_ID = FAN_LEVEL_IDS.front();
 const int FAN_6_LEVEL_ID = FAN_LEVEL_IDS.back();
 const int FAN_1_LABEL_ID = FAN_LABEL_IDS.front();
 const int FAN_6_LABEL_ID = FAN_LABEL_IDS.back();
+const int PAIR_1_ENABLED_ID = TIME_PROGRAM_ENABLED_IDS.front();
+const int PAIR_6_ENABLED_ID = TIME_PROGRAM_ENABLED_IDS.back();
+const int PAIR_1_SWITCH_TIME_1_TIME_ID = TIME_PROGRAM_TIME_IDS.front();
+const int PAIR_6_SWITCH_TIME_5_TIME_ID = TIME_PROGRAM_TIME_IDS.back();
+const int PAIR_1_SWITCH_TIME_1_LEVEL_ID = TIME_PROGRAM_LEVEL_IDS.front();
+const int PAIR_6_SWITCH_TIME_5_LEVEL_ID = TIME_PROGRAM_LEVEL_IDS.back();
+
+/// An enabled mask's name: the switch times' numbers joined by ENABLED_MASK_SEPARATOR, then ENABLED_MASK_SUFFIX.
+std::string enabled_name(std::initializer_list<int> switch_times) {
+  std::string name;
+  for (int n : switch_times) {
+    name += (name.empty() ? "" : ENABLED_MASK_SEPARATOR) + std::to_string(n);
+  }
+  return name + ENABLED_MASK_SUFFIX;
+}
 
 }  // namespace
 
@@ -117,6 +141,18 @@ TEST(IsKnownProperty, KnowsSummerVentilationDateAndClock) {
   EXPECT_TRUE(is_known_property(CLOCK_PROPERTY_ID));
 }
 
+TEST(IsKnownProperty, KnowsEveryTimeProgramId) {
+  for (int id : TIME_PROGRAM_ENABLED_IDS) {
+    EXPECT_TRUE(is_known_property(id)) << id;
+  }
+  for (int id : TIME_PROGRAM_TIME_IDS) {
+    EXPECT_TRUE(is_known_property(id)) << id;
+  }
+  for (int id : TIME_PROGRAM_LEVEL_IDS) {
+    EXPECT_TRUE(is_known_property(id)) << id;
+  }
+}
+
 TEST(IsKnownProperty, DoesNotKnowTheIdsAroundThem) {
   EXPECT_FALSE(is_known_property(0));
   EXPECT_FALSE(is_known_property(FAN_1_LEVEL_ID - 1));
@@ -124,6 +160,8 @@ TEST(IsKnownProperty, DoesNotKnowTheIdsAroundThem) {
   EXPECT_FALSE(is_known_property(FAN_1_LABEL_ID - 1));
   EXPECT_FALSE(is_known_property(FAN_6_LABEL_ID + 1));
   EXPECT_FALSE(is_known_property(SUMMER_VENTILATION_PROPERTY_ID + 1));
+  EXPECT_FALSE(is_known_property(TIME_PROGRAM_ENABLED_IDS.front() - 1));
+  EXPECT_FALSE(is_known_property(TIME_PROGRAM_LEVEL_IDS.back() + 1));
   EXPECT_FALSE(is_known_property(255));
 }
 
@@ -134,6 +172,15 @@ TEST(MaxKnownPropertyId, IsKnownAndNoKnownIdIsAboveIt) {
     EXPECT_LE(id, max);
   }
   for (int id : FAN_LABEL_IDS) {
+    EXPECT_LE(id, max);
+  }
+  for (int id : TIME_PROGRAM_ENABLED_IDS) {
+    EXPECT_LE(id, max);
+  }
+  for (int id : TIME_PROGRAM_TIME_IDS) {
+    EXPECT_LE(id, max);
+  }
+  for (int id : TIME_PROGRAM_LEVEL_IDS) {
     EXPECT_LE(id, max);
   }
   EXPECT_LE(SUMMER_VENTILATION_PROPERTY_ID, max);
@@ -261,6 +308,108 @@ TEST(KnownPropertyMeaning, ANameIsTheStaticTableEntry) {
   auto meaning = known_property_meaning(FAN_1_LEVEL_ID, std::to_string(BURST_LEVEL));
   ASSERT_TRUE(meaning.has_value());
   EXPECT_EQ(meaning->text.data(), BURST_NAME);
+}
+
+// ── time-program levels ──
+
+// A switch time takes the fan levels 0 to Automatic CO2, named as the fan level property names them.
+TEST(KnownPropertyMeaning, ASwitchTimeLevelUpToAutomaticCo2HasTheFanLevelName) {
+  for (int level = OFF_LEVEL; level <= MAX_SWITCH_TIME_LEVEL; level++) {
+    const std::string raw = std::to_string(level);
+    const auto fan_level_meaning = known_property_meaning(FAN_1_LEVEL_ID, raw);
+    ASSERT_TRUE(fan_level_meaning.has_value()) << level;
+    for (int id : TIME_PROGRAM_LEVEL_IDS) {
+      EXPECT_TRUE(means_name(known_property_meaning(id, raw), fan_level_meaning->text)) << id << " " << level;
+    }
+  }
+  EXPECT_TRUE(means_name(known_property_meaning(PAIR_1_SWITCH_TIME_1_LEVEL_ID, std::to_string(OFF_LEVEL)), OFF_NAME));
+  EXPECT_TRUE(means_name(known_property_meaning(PAIR_6_SWITCH_TIME_5_LEVEL_ID, std::to_string(AUTOMATIC_CO2_LEVEL)),
+                         AUTOMATIC_CO2_NAME));
+}
+
+TEST(KnownPropertyMeaning, ReadsASwitchTimeLevelAsTheWholeTrimmedDecimal) {
+  EXPECT_TRUE(means_name(known_property_meaning(PAIR_1_SWITCH_TIME_1_LEVEL_ID, "07               "), BURST_NAME));
+}
+
+// The spec's unexpected examples: Automatik Zeit (10), Sleep (11) and not connected (255) are fan levels, but no
+// switch time takes them.
+TEST(KnownPropertyMeaning, ASwitchTimeLevelAboveAutomaticCo2OrNotADecimalIsUnexpected) {
+  for (int level : {AUTOMATIC_TIME_LEVEL, SLEEP_LEVEL, NOT_CONNECTED_LEVEL}) {
+    EXPECT_TRUE(is_unexpected(known_property_meaning(PAIR_1_SWITCH_TIME_1_LEVEL_ID, std::to_string(level)),
+                              std::to_string(level)));
+  }
+  EXPECT_TRUE(is_unexpected(known_property_meaning(PAIR_1_SWITCH_TIME_1_LEVEL_ID, ""), ""));
+  EXPECT_TRUE(is_unexpected(known_property_meaning(PAIR_1_SWITCH_TIME_1_LEVEL_ID, " 3a "), "3a"));
+  EXPECT_TRUE(is_unexpected(known_property_meaning(PAIR_1_SWITCH_TIME_1_LEVEL_ID, "-1"), "-1"));
+  EXPECT_TRUE(is_unexpected(known_property_meaning(PAIR_1_SWITCH_TIME_1_LEVEL_ID, "99999999999"), "99999999999"));
+}
+
+// ── time-program enabled masks ──
+
+TEST(KnownPropertyMeaning, AnEnabledMaskNamesTheSwitchTimesOfItsBits) {
+  EXPECT_TRUE(means_name(known_property_meaning(PAIR_1_ENABLED_ID, "01"), enabled_name({1})));
+  EXPECT_TRUE(means_name(known_property_meaning(PAIR_1_ENABLED_ID, "02"), enabled_name({2})));
+  EXPECT_TRUE(means_name(known_property_meaning(PAIR_1_ENABLED_ID, "03"), enabled_name({1, 2})));
+  EXPECT_TRUE(means_name(known_property_meaning(PAIR_1_ENABLED_ID, "0C"), enabled_name({3, 4})));
+  EXPECT_TRUE(means_name(known_property_meaning(PAIR_6_ENABLED_ID, "18"), enabled_name({4, 5})));
+  EXPECT_TRUE(means_name(known_property_meaning(PAIR_6_ENABLED_ID, "1F"), enabled_name({1, 2, 3, 4, 5})));
+}
+
+TEST(KnownPropertyMeaning, AnEnabledMaskOfZeroIsNoneEnabled) {
+  EXPECT_TRUE(means_name(known_property_meaning(PAIR_1_ENABLED_ID, "00"), ENABLED_MASK_NONE_NAME));
+}
+
+TEST(KnownPropertyMeaning, AnEnabledMaskIsTwoTrimmedHexDigitsInEitherCase) {
+  EXPECT_TRUE(means_name(known_property_meaning(PAIR_1_ENABLED_ID, "1f"), enabled_name({1, 2, 3, 4, 5})));
+  EXPECT_TRUE(means_name(known_property_meaning(PAIR_1_ENABLED_ID, "0c"), enabled_name({3, 4})));
+  EXPECT_TRUE(means_name(known_property_meaning(PAIR_1_ENABLED_ID, " 03   "), enabled_name({1, 2})));
+}
+
+// The spec's unexpected example is 20: the bit after switch time 5's.
+TEST(KnownPropertyMeaning, AnEnabledMaskWithABitAboveTheSwitchTimesIsUnexpected) {
+  ASSERT_EQ(SWITCH_TIME_COUNT, 5);  // 1F is the highest mask with a bit for each switch time and no other
+  for (const char *raw : {"20", "21", "3F", "80", "FF", "ff"}) {
+    EXPECT_TRUE(is_unexpected(known_property_meaning(PAIR_1_ENABLED_ID, raw), raw)) << raw;
+  }
+}
+
+TEST(KnownPropertyMeaning, AnEnabledMaskThatIsNotTwoHexDigitsIsUnexpected) {
+  for (const char *raw : {"", "3", "003", "0x3", "G0", "0g", "-1", "+3", "0 3"}) {
+    EXPECT_TRUE(is_unexpected(known_property_meaning(PAIR_1_ENABLED_ID, raw), raw)) << raw;
+  }
+}
+
+TEST(KnownPropertyMeaning, AnEnabledMaskNameIsStatic) {
+  const std::string raw = "03";
+  auto meaning = known_property_meaning(PAIR_1_ENABLED_ID, raw);
+  ASSERT_TRUE(meaning.has_value());
+  EXPECT_NE(meaning->text.data(), raw.data());
+  EXPECT_EQ(known_property_meaning(PAIR_6_ENABLED_ID, "03")->text.data(), meaning->text.data());
+}
+
+// ── time-program times ──
+
+TEST(KnownPropertyMeaning, ASwitchTimeTimeIsTheTrimmedHhMmSsAsSent) {
+  EXPECT_TRUE(
+      means(known_property_meaning(PAIR_1_SWITCH_TIME_1_TIME_ID, "08:30:00"), MeaningKind::AS_SENT, "08:30:00"));
+  EXPECT_TRUE(
+      means(known_property_meaning(PAIR_6_SWITCH_TIME_5_TIME_ID, " 00:00:00   "), MeaningKind::AS_SENT, "00:00:00"));
+  EXPECT_TRUE(
+      means(known_property_meaning(PAIR_6_SWITCH_TIME_5_TIME_ID, "23:59:59"), MeaningKind::AS_SENT, "23:59:59"));
+}
+
+// The spec's unexpected example is 24:00:00.
+TEST(KnownPropertyMeaning, ASwitchTimeTimeOutOfRangeIsUnexpected) {
+  for (const char *raw : {"24:00:00", "12:60:00", "12:00:60", "99:99:99"}) {
+    EXPECT_TRUE(is_unexpected(known_property_meaning(PAIR_1_SWITCH_TIME_1_TIME_ID, raw), raw)) << raw;
+  }
+}
+
+TEST(KnownPropertyMeaning, ASwitchTimeTimeNotExactlyHhMmSsIsUnexpected) {
+  for (const char *raw : {"", "8:30:00", "08:30", "08:30:00:00", "08:30:0", "08-30-00", "0830:00", "ab:cd:ef",
+                          "08:3a:00", "+8:30:00", "08:30 00", "16.11.26"}) {
+    EXPECT_TRUE(is_unexpected(known_property_meaning(PAIR_1_SWITCH_TIME_1_TIME_ID, raw), raw)) << raw;
+  }
 }
 
 int main(int argc, char **argv) {

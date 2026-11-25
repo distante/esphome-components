@@ -1,6 +1,16 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import button, datetime, event, select, switch, uart
+from esphome.components import (
+    button,
+    datetime,
+    event,
+    select,
+    sensor,
+    switch,
+    text_sensor,
+    time,
+    uart,
+)
 from esphome.const import (
     CONF_DEVICE_ID,
     CONF_ENTITY_CATEGORY,
@@ -9,6 +19,8 @@ from esphome.const import (
     CONF_NAME,
     CONF_REFRESH,
     CONF_TIME,
+    CONF_TIME_ID,
+    DEVICE_CLASS_TIMESTAMP,
     ENTITY_CATEGORY_CONFIG,
     ENTITY_CATEGORY_DIAGNOSTIC,
 )
@@ -41,6 +53,15 @@ CONF_WRITE_FAILED = "write_failed"
 CONF_FIELD_ENTITIES = "field_entities"
 CONF_SWITCH_TIME = "switch_time"
 CONF_ENABLED = "enabled"
+# Live state (.specs/time-programs.md, "Live state").
+CONF_SWITCH_TIME_IN_EFFECT = "switch_time_in_effect"
+CONF_RUNNING_LEVEL = "running_level"
+CONF_NEXT_LEVEL = "next_level"
+CONF_NEXT_CHANGE = "next_change"
+LIVE_STATE_TEXT_KEYS = (CONF_SWITCH_TIME_IN_EFFECT, CONF_RUNNING_LEVEL, CONF_NEXT_LEVEL)
+LIVE_STATE_KEYS = LIVE_STATE_TEXT_KEYS + (CONF_NEXT_CHANGE,)
+# Generated before validation when a pair has a live-state entity, never written by the user.
+CONF_LIVE_STATE_ID = "live_state_id"
 
 FAN_PAIR_COUNT = len(FAN_LEVEL_IDS)
 # SWITCH_TIME_COUNT in protocol_ids.h; the generated code static_asserts that both agree.
@@ -58,11 +79,13 @@ TimeProgramRefreshButton = sec_touch_ns.class_(
 TimeProgramWriteFailedEvent = sec_touch_ns.class_(
     "TimeProgramWriteFailedEvent", event.Event
 )
+TimeProgramLiveState = sec_touch_ns.class_("TimeProgramLiveState", cg.Component)
 
 # The domains each time-program entity needs.
 TIME_PROGRAM_DOMAINS = ["datetime", "select", "switch"]
 REFRESH_DOMAIN = "button"
 WRITE_FAILED_DOMAIN = "event"
+NEXT_CHANGE_DOMAIN = "sensor"
 
 
 def AUTO_LOAD(config):
@@ -72,7 +95,11 @@ def AUTO_LOAD(config):
     # A falsy config is a tooling probe for the maximal set (None from
     # dependency resolution, {} from the components-graph platform probe).
     if not config:
-        return base + TIME_PROGRAM_DOMAINS + [REFRESH_DOMAIN, WRITE_FAILED_DOMAIN]
+        return (
+            base
+            + TIME_PROGRAM_DOMAINS
+            + [REFRESH_DOMAIN, WRITE_FAILED_DOMAIN, NEXT_CHANGE_DOMAIN]
+        )
     entries = config.get(CONF_TIME_PROGRAMS) or []
     if not isinstance(entries, list):
         entries = [entries]
@@ -83,6 +110,8 @@ def AUTO_LOAD(config):
         loads.append(REFRESH_DOMAIN)
     if any(CONF_WRITE_FAILED in entry for entry in entries):
         loads.append(WRITE_FAILED_DOMAIN)
+    if any(CONF_NEXT_CHANGE in entry for entry in entries):
+        loads.append(NEXT_CHANGE_DOMAIN)
     return loads
 
 
@@ -131,15 +160,23 @@ TIME_PROGRAM_SCHEMA = cv.Schema(
             TimeProgramWriteFailedEvent, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
         ),
         cv.Required(CONF_FIELD_ENTITIES): cv.ensure_list(FIELD_ENTITIES_SCHEMA),
+        cv.Optional(CONF_LIVE_STATE_ID): cv.declare_id(TimeProgramLiveState),
+        **{
+            cv.Optional(key): text_sensor.text_sensor_schema()
+            for key in LIVE_STATE_TEXT_KEYS
+        },
+        cv.Optional(CONF_NEXT_CHANGE): sensor.sensor_schema(
+            device_class=DEVICE_CLASS_TIMESTAMP
+        ).extend({cv.GenerateID(CONF_TIME_ID): cv.use_id(time.RealTimeClock)}),
     }
 )
 
 # The entries a pair can have besides its field entities; their own device_id wins over the pair's.
-OPTIONAL_ENTITY_KEYS = (CONF_REFRESH, CONF_WRITE_FAILED)
+OPTIONAL_ENTITY_KEYS = (CONF_REFRESH, CONF_WRITE_FAILED) + LIVE_STATE_KEYS
 
 
-def _fan_entry_name(hub_config, fan_number):
-    """The name of this hub's `fan:` entry for `fan_number`, or None."""
+def _fan_entries(hub_config, fan_number):
+    """This hub's `fan:` entries for `fan_number`."""
     hub_id = hub_config.get(CONF_ID)
     for fan in (CORE.raw_config or {}).get("fan") or []:
         if not isinstance(fan, dict) or fan.get("platform") != "sec_touch":
@@ -148,6 +185,12 @@ def _fan_entry_name(hub_config, fan_number):
             continue
         if fan.get(CONF_SEC_TOUCH_ID) not in (None, hub_id):
             continue
+        yield fan
+
+
+def _fan_entry_name(hub_config, fan_number):
+    """The name of this hub's `fan:` entry for `fan_number`, or None."""
+    for fan in _fan_entries(hub_config, fan_number):
         if fan.get(CONF_NAME):
             return fan[CONF_NAME]
     return None
@@ -164,6 +207,8 @@ def _prepare_time_program(hub_config, entry):
             f"{CONF_FIELD_ENTITIES} is generated from {CONF_SWITCH_TIMES}",
             path=[CONF_FIELD_ENTITIES],
         )
+    if CONF_LIVE_STATE_ID in entry:
+        raise cv.Invalid(f"{CONF_LIVE_STATE_ID} is generated", path=[CONF_LIVE_STATE_ID])
     try:
         fan_number = FAN_NUMBER_SCHEMA(entry.get(CONF_FAN_NUMBER))
     except cv.Invalid as err:
@@ -178,6 +223,16 @@ def _prepare_time_program(hub_config, entry):
         raise
 
     entry = dict(entry)
+    live_state = [key for key in LIVE_STATE_KEYS if key in entry]
+    if live_state:
+        # Live state reads the pair's level ID, which only the pair's fan entry polls.
+        if next(_fan_entries(hub_config, fan_number), None) is None:
+            raise cv.Invalid(
+                f"{live_state[0]} needs this hub's sec_touch fan entry with fan_number {fan_number}",
+                path=[live_state[0]],
+            )
+        # None declares an ID that ESPHome generates.
+        entry[CONF_LIVE_STATE_ID] = None
     device_id = entry.get(CONF_DEVICE_ID)
     prefix = ""
     if device_id is None:
@@ -289,6 +344,26 @@ async def _time_program_to_code(hub, entry):
         # The event types come from C++ (WRITE_FAILURE_NAMES).
         failed = cg.new_Pvariable(write_failed[CONF_ID], program)
         await event.register_event(failed, write_failed, event_types=[])
+    if CONF_LIVE_STATE_ID in entry:
+        await _live_state_to_code(hub, entry)
+
+
+async def _live_state_to_code(hub, entry):
+    live_state = cg.new_Pvariable(entry[CONF_LIVE_STATE_ID], hub, entry[CONF_FAN_NUMBER])
+    await cg.register_component(live_state, {})
+    if conf := entry.get(CONF_SWITCH_TIME_IN_EFFECT):
+        sens = await text_sensor.new_text_sensor(conf)
+        cg.add(live_state.set_switch_time_in_effect(sens))
+    if conf := entry.get(CONF_RUNNING_LEVEL):
+        sens = await text_sensor.new_text_sensor(conf)
+        cg.add(live_state.set_running_level(sens))
+    if conf := entry.get(CONF_NEXT_LEVEL):
+        sens = await text_sensor.new_text_sensor(conf)
+        cg.add(live_state.set_next_level(sens))
+    if conf := entry.get(CONF_NEXT_CHANGE):
+        sens = await sensor.new_sensor(conf)
+        time_source = await cg.get_variable(conf[CONF_TIME_ID])
+        cg.add(live_state.set_next_change(sens, time_source))
 
 
 async def to_code(config):

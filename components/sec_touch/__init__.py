@@ -1,3 +1,4 @@
+from esphome import automation
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import button, datetime, event, select, switch, uart
@@ -7,8 +8,11 @@ from esphome.const import (
     CONF_ID,
     CONF_LEVEL,
     CONF_NAME,
+    CONF_ON_ERROR,
+    CONF_ON_SUCCESS,
     CONF_REFRESH,
     CONF_TIME,
+    CONF_TIMES,
     ENTITY_CATEGORY_CONFIG,
     ENTITY_CATEGORY_DIAGNOSTIC,
 )
@@ -265,14 +269,108 @@ CONFIG_SCHEMA = cv.All(
     .extend(cv.polling_component_schema("5s")),
 )
 
-FINAL_VALIDATE_SCHEMA = uart.final_validate_device_schema(
-    "sec_touch",
-    require_tx=True,
-    require_rx=True,
-    # parity="NONE",
-    # stop_bits=1,
-    baud_rate=28800,
+# sec_touch.set_time_program (.specs/time-programs.md, "Bulk-set action").
+CONF_LEVELS = "levels"
+SetTimeProgramAction = sec_touch_ns.class_(
+    "SetTimeProgramAction",
+    automation.Action,
+    cg.Parented.template(SECTouchComponent),
 )
+# Where each set_time_program records its hub and constant fan_number (None for a lambda), so the hub's final
+# validation can check them against its time_programs: an action may be validated before the hub.
+SET_TIME_PROGRAM_CALLS = "sec_touch_set_time_program_calls"
+
+
+def _record_set_time_program_call(config):
+    fan_number = config[CONF_FAN_NUMBER]
+    CORE.data.setdefault(SET_TIME_PROGRAM_CALLS, []).append(
+        (config[CONF_ID], None if cg.is_template(fan_number) else fan_number)
+    )
+    return config
+
+
+# Only the list shapes are checked here; C++ checks every value at run time, with one rule for constants and
+# lambdas alike (time_program_bulk.h).
+SET_TIME_PROGRAM_SCHEMA = cv.All(
+    cv.Schema(
+        {
+            cv.GenerateID(): cv.use_id(SECTouchComponent),
+            cv.Required(CONF_FAN_NUMBER): cv.templatable(FAN_NUMBER_SCHEMA),
+            cv.Required(CONF_TIMES): cv.templatable(cv.ensure_list(cv.string_strict)),
+            cv.Required(CONF_LEVELS): cv.templatable(cv.ensure_list(cv.int_)),
+            cv.Required(CONF_ENABLED): cv.templatable(cv.ensure_list(cv.boolean)),
+            cv.Optional(CONF_ON_SUCCESS): automation.validate_automation(single=True),
+            cv.Optional(CONF_ON_ERROR): automation.validate_automation(single=True),
+        }
+    ),
+    _record_set_time_program_call,
+)
+
+
+def _final_validate_set_time_program_calls(config):
+    listed = {entry[CONF_FAN_NUMBER] for entry in config.get(CONF_TIME_PROGRAMS, [])}
+    for hub_id, fan_number in CORE.data.get(SET_TIME_PROGRAM_CALLS, []):
+        if hub_id != config[CONF_ID]:
+            continue
+        if not listed:
+            raise cv.Invalid(
+                f"sec_touch.set_time_program needs at least one entry in sec_touch {CONF_TIME_PROGRAMS}"
+            )
+        if fan_number is not None and fan_number not in listed:
+            raise cv.Invalid(
+                f"sec_touch.set_time_program: fan_number {fan_number} is not listed in sec_touch {CONF_TIME_PROGRAMS}"
+            )
+    return config
+
+
+FINAL_VALIDATE_SCHEMA = cv.All(
+    uart.final_validate_device_schema(
+        "sec_touch",
+        require_tx=True,
+        require_rx=True,
+        # parity="NONE",
+        # stop_bits=1,
+        baud_rate=28800,
+    ),
+    _final_validate_set_time_program_calls,
+)
+
+
+# synchronous=False: on_success / on_error fire after the writes end, with the call's arguments, so those must be
+# owning copies (the API then passes std::vector, not views into its receive buffer).
+@automation.register_action(
+    "sec_touch.set_time_program",
+    SetTimeProgramAction,
+    SET_TIME_PROGRAM_SCHEMA,
+    synchronous=False,
+)
+async def set_time_program_to_code(config, action_id, template_arg, args):
+    var = cg.new_Pvariable(action_id, template_arg)
+    await cg.register_parented(var, config[CONF_ID])
+    fan_number = await cg.templatable(config[CONF_FAN_NUMBER], args, cg.int_)
+    cg.add(var.set_fan_number(fan_number))
+    times = await cg.templatable(
+        config[CONF_TIMES], args, cg.std_vector.template(cg.std_string)
+    )
+    cg.add(var.set_times(times))
+    levels = await cg.templatable(
+        config[CONF_LEVELS], args, cg.std_vector.template(cg.int32)
+    )
+    cg.add(var.set_levels(levels))
+    enabled = await cg.templatable(
+        config[CONF_ENABLED], args, cg.std_vector.template(cg.bool_)
+    )
+    cg.add(var.set_enabled(enabled))
+    if on_success := config.get(CONF_ON_SUCCESS):
+        await automation.build_automation(
+            var.get_success_trigger(), args, on_success
+        )
+    # `error` comes after the call's arguments: api.respond reads call_id from the first one.
+    if on_error := config.get(CONF_ON_ERROR):
+        await automation.build_automation(
+            var.get_error_trigger(), [*args, (cg.std_string, "error")], on_error
+        )
+    return var
 
 
 async def _time_program_to_code(hub, entry):

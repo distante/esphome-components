@@ -25,6 +25,19 @@ enum class TimeProgramField : uint8_t {
   LEVEL,
 };
 
+/// How the log and the bulk report name a field: "enabled mask", or the "time" or "level" of a switch time.
+constexpr const char *time_program_field_name(TimeProgramField field) {
+  switch (field) {
+    case TimeProgramField::ENABLED:
+      return "enabled mask";
+    case TimeProgramField::TIME:
+      return "time";
+    case TimeProgramField::LEVEL:
+      return "level";
+  }
+  return "?";
+}
+
 /// Where a time-program ID sits: its pair (1-based), its switch time (1-based, 0 for the enabled mask) and field.
 struct TimeProgramSlot {
   int pair;

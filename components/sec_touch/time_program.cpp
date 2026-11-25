@@ -25,22 +25,23 @@ std::size_t block_index(const TimeProgramSlot &slot) {
   return 0;
 }
 
-const char *field_name(TimeProgramField field) {
-  switch (field) {
-    case TimeProgramField::ENABLED:
-      return "enabled mask";
-    case TimeProgramField::TIME:
-      return "time";
-    case TimeProgramField::LEVEL:
-      return "level";
-  }
-  return "?";
-}
-
 }  // namespace
 
 TimeProgram::TimeProgram(SECTouchComponent *hub, int pair) : hub_(hub), pair_(pair) {
-  this->hub_->register_task_end_listener([this](const BaseTask &task, TaskEnd end) { this->on_task_end_(task, end); });
+  this->hub_->register_time_program(pair, this);
+  // The whole block's data messages come here, listed switch time or not: a bulk write reads back every field. Only
+  // the polled IDs (watch_()) and the read-backs ever answer.
+  auto on_value = [this](int property_id, const std::string &raw) { this->on_value_(property_id, raw); };
+  this->hub_->register_time_program_listener(time_program_enabled_id(pair), on_value);
+  for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
+    this->hub_->register_time_program_listener(time_program_time_id(pair, n), on_value);
+    this->hub_->register_time_program_listener(time_program_level_id(pair, n), on_value);
+  }
+  // Every step of a bulk write ends with a task end: a delivered answer reaches on_value_() just before it.
+  this->hub_->register_task_end_listener([this](const BaseTask &task, TaskEnd end) {
+    this->on_task_end_(task, end);
+    this->finish_bulk_write_if_done_();
+  });
 }
 
 void TimeProgram::attach_time(int switch_time, TimeProgramTime *entity) {
@@ -82,8 +83,6 @@ void TimeProgram::watch_(int id) {
   }
   watched = true;
   this->hub_->add_time_program_poll_id(this->pair_, id);
-  this->hub_->register_time_program_listener(
-      id, [this](int property_id, const std::string &raw) { this->on_value_(property_id, raw); });
 }
 
 void TimeProgram::refresh() {
@@ -142,6 +141,10 @@ TimeProgram::ReadBack *TimeProgram::read_back_(int id) {
 }
 
 void TimeProgram::check_read_back_(int id, int actual) {
+  auto slot = time_program_slot(id);
+  if (slot.has_value()) {
+    this->bulk_.read_back(*slot, actual);
+  }
   ReadBack *read_back = this->read_back_(id);
   if (read_back == nullptr || !read_back->armed) {
     return;
@@ -293,15 +296,17 @@ void TimeProgram::on_task_end_(const BaseTask &task, TaskEnd end) {
     }
     // In scan mode a read-back would never reach this program: data messages go to the sniffer only.
     if (this->hub_->is_scan_mode_active()) {
+      this->bulk_.set_ended(*slot, false);
       return;
     }
     read_back->armed = true;
-    this->hub_->add_priority_get_task(TaskTargetType::TIME_PROGRAM, task.property_id);
+    this->bulk_.set_ended(*slot, this->hub_->add_priority_get_task(TaskTargetType::TIME_PROGRAM, task.property_id));
     return;
   }
 
   // A GET of this ID ended. A delivered answer already took the read-back; a failed GET leaves nothing to compare.
   read_back->armed = false;
+  this->bulk_.get_ended(*slot, end);
   if (slot->field != TimeProgramField::ENABLED || !this->mask_read_pending_) {
     return;
   }
@@ -314,17 +319,57 @@ void TimeProgram::on_task_end_(const BaseTask &task, TaskEnd end) {
   }
 }
 
+void log_bulk_write_refused(int pair, const std::string &error) {
+  ESP_LOGW(TAG, "Fan pair %d: set_time_program wrote nothing, %s", pair, error.c_str());
+}
+
+void TimeProgram::write_program(const BulkProgram &program, BulkWriteListener *listener) {
+  ESP_LOGI(TAG, "Fan pair %d: set_time_program writes the whole program", this->pair_);
+  this->bulk_.begin(program);
+  this->bulk_listener_ = listener;
+  for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
+    const SwitchTimeTime &time = program.times[n - 1];
+    this->write_time(n, time.hour, time.minute);
+  }
+  for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
+    this->write_level(n, program.levels[n - 1]);
+  }
+  // Each switch time's bit goes through the mask merge: one mask SET built from a fresh GET.
+  for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
+    this->write_enabled(n, (program.enabled & switch_time_bit(n)) != 0);
+  }
+}
+
+void TimeProgram::finish_bulk_write_if_done_() {
+  if (!this->bulk_.done()) {
+    return;
+  }
+  BulkWriteListener *listener = this->bulk_listener_;
+  this->bulk_listener_ = nullptr;
+  // finish() frees the pair before the listener runs: its automation may start the next bulk write.
+  const std::optional<std::string> error = this->bulk_.finish();
+  if (error.has_value()) {
+    ESP_LOGW(TAG, "Fan pair %d: set_time_program: %s", this->pair_, error->c_str());
+  } else {
+    ESP_LOGI(TAG, "Fan pair %d: set_time_program: every write landed", this->pair_);
+  }
+  if (listener != nullptr) {
+    listener->on_bulk_write_done(this->pair_, error);
+  }
+}
+
 void TimeProgram::report_(int id, WriteFailure failure) {
   auto slot = time_program_slot(id);
   if (!slot.has_value()) {
     return;
   }
+  this->bulk_.fail(*slot, failure);
   if (slot->field == TimeProgramField::ENABLED) {
-    ESP_LOGW(TAG, "Fan pair %d %s: write failed, %s", this->pair_, field_name(slot->field),
+    ESP_LOGW(TAG, "Fan pair %d %s: write failed, %s", this->pair_, time_program_field_name(slot->field),
              write_failure_name(failure));
   } else {
     ESP_LOGW(TAG, "Fan pair %d switch time %d %s: write failed, %s", this->pair_, slot->switch_time,
-             field_name(slot->field), write_failure_name(failure));
+             time_program_field_name(slot->field), write_failure_name(failure));
   }
 #ifdef USE_EVENT
   if (this->write_failed_ != nullptr) {

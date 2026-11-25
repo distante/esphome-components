@@ -10,6 +10,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 
 #include "esphome/components/datetime/time_entity.h"
@@ -23,6 +24,7 @@
 #endif
 
 #include "sec_touch.h"
+#include "time_program_bulk.h"
 #include "time_program_codec.h"
 #include "time_program_ids.h"
 #include "time_program_mask.h"
@@ -35,10 +37,23 @@ class TimeProgramTime;
 class TimeProgramLevelSelect;
 class TimeProgramEnabledSwitch;
 
+/// Hears how a bulk write (TimeProgram::write_program) ended.
+class BulkWriteListener {
+ public:
+  /// Every write of fan pair `pair`'s bulk write has ended; `error` is the report when one failed.
+  virtual void on_bulk_write_done(int pair, const std::optional<std::string> &error) = 0;
+
+ protected:
+  ~BulkWriteListener() = default;
+};
+
+/// Logs why `sec_touch.set_time_program` wrote nothing for fan pair `pair`.
+void log_bulk_write_refused(int pair, const std::string &error);
+
 /**
- * One fan pair's time program. Its entities attach themselves; each attach puts that field's ID on the pair's poll
- * and routes its data messages here. Writes go out one SET per ID, then a read-back GET of that ID; the enabled mask
- * is read fresh right before it is written, so only the requested bits change.
+ * One fan pair's time program. Its entities attach themselves; each attach puts that field's ID on the pair's poll.
+ * The data messages of the pair's whole block come here. Writes go out one SET per ID, then a read-back GET of that ID;
+ * the enabled mask is read fresh right before it is written, so only the requested bits change.
  */
 class TimeProgram {
  public:
@@ -59,6 +74,14 @@ class TimeProgram {
   /// Queues one poll of this pair; the regular poll stays on its schedule.
   void refresh();
 
+  /// A bulk write of this pair runs: a new one would be `busy`.
+  bool is_bulk_write_running() const { return this->bulk_.active(); }
+  /**
+   * Writes the whole `program` through the per-field write path: the 5 times, the 5 levels, then the mask from a fresh
+   * GET. Tells `listener` once every write has ended. Call it only while no bulk write runs.
+   */
+  void write_program(const BulkProgram &program, BulkWriteListener *listener);
+
  protected:
   /// What a write sent, kept until the read-back. `armed` from the SET's end until the next GET of the ID ends.
   struct ReadBack {
@@ -66,7 +89,7 @@ class TimeProgram {
     bool armed{false};
   };
 
-  /// Puts `id` on the pair's poll and routes its data messages here, once per ID.
+  /// Puts `id` on the pair's poll, once per ID.
   void watch_(int id);
   void on_value_(int id, const std::string &raw);
   void on_time_(int switch_time, const std::string &raw);
@@ -83,6 +106,8 @@ class TimeProgram {
   /// Publishes each listed switch time's enabled switch from `mask` whose state differs.
   void publish_switches_(uint8_t mask);
   void report_(int id, WriteFailure failure);
+  /// Ends the bulk write once each of its writes has ended, and tells its listener.
+  void finish_bulk_write_if_done_();
 
   SECTouchComponent *hub_;
   int pair_;
@@ -96,13 +121,16 @@ class TimeProgram {
   std::array<ReadBack, SWITCH_TIME_COUNT> time_read_backs_{};
   std::array<ReadBack, SWITCH_TIME_COUNT> level_read_backs_{};
   ReadBack mask_read_back_{};
-  /// Which IDs watch_() has routed here, by offset in the pair's block (enabled, times, levels).
+  /// Which IDs watch_() has put on the poll, by offset in the pair's block (enabled, times, levels).
   std::array<bool, TIME_PROGRAM_IDS_PER_PAIR> watched_{};
 
   MaskMerge mask_merge_;
   /// A mask GET is wanted: the next fresh mask applies the requested bits.
   bool mask_read_pending_{false};
   int last_good_mask_{-1};
+
+  BulkWrite bulk_;
+  BulkWriteListener *bulk_listener_{nullptr};
 };
 
 class TimeProgramTime : public datetime::TimeEntity {

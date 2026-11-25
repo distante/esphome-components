@@ -249,10 +249,17 @@ Position *i* is switch time *i*. HA's `string[]`, `int[]` and `bool[]` pass stra
 | Failure | Writing continues after a failed field. `on_success` fires only when every read-back matches; otherwise `on_error` gets `error`, and the pair's `write_failed` fires per failed field. |
 | Overlap | A second call for the same pair while one runs → `busy`, nothing written. An entity write that replaces a bulk value shows up as `not_kept` in the bulk report. |
 | Deadline | None. HA waits 30 s for a response by default (aioesphomeapi); past it the writes still finish and the entities show the truth. The readme notes it. |
+| In an automation | Fire and forget: the action queues the writes and the next action runs at once. `on_success` / `on_error` fire later, with the call's arguments. A call that writes nothing (bad argument, `busy`) fires `on_error` at once. |
+| One failure per field | The report names each failed field once, with its first failure, in write order. A read-back GET that fails, or whose answer can't be compared, leaves the field unconfirmed: `timeout` (or `not_kept` when a newer SET of it was queued). These two appear only in the report; `write_failed` fires as for an entity write. |
+| Scan mode | The scan's dropped tasks end each pending field as in [Writing](#writing); the call ends with `on_error` naming them and frees the pair. |
+| Config time | Only the list shapes are checked (`times` strings, `levels` integers, `enabled` booleans). Counts and ranges are checked at run time for constants and lambdas alike. |
 
 | Case | `error` |
 |---|---|
 | Bad argument | `invalid_argument: switch time 4 level 12 not in 0–9` |
+| Bad time | `invalid_argument: switch time 2 time '25:00' not HH:MM or HH:MM:SS` |
+| Wrong count | `invalid_argument: times has 4 values, not 5` |
+| Pair not listed (lambda) | `invalid_argument: fan_number 7 not in time_programs` |
 | Write failures | `2 of 11 writes failed: switch time 3 level refused; enabled mask mask_unreadable` |
 | Overlap | `busy` |
 
@@ -270,7 +277,8 @@ The [readme copy block and HA call](https://github.com/distante/esphome-componen
 | Panel clock anchor | static | |
 | Bulk `error` text | `std::string`, built only when a bulk call fails | ESPHome's `api.respond` takes a `std::string` anyway ([Memory rule](../.claude/skills/coding-standards/SKILL.md#memory)). |
 | Listener registrations | the hub's listener maps (`std::multimap` entries holding `std::function`s) and its task-end listener list (one entry per pair) | One entry per registered ID, at most 6 pairs × 11. Allocated while the entities are built, never freed. |
-| Bulk action list arguments | `std::vector`, ESPHome's action argument type | HA's `string[]`, `int[]` and `bool[]` arrive as vectors. |
+| Bulk action list arguments | `std::vector`, ESPHome's action argument type; the action keeps a copy of each running call's arguments (one static slot per pair) until it fires `on_success` / `on_error` | HA's `string[]`, `int[]` and `bool[]` arrive as vectors. |
+| Bulk write state | static, per pair: what each of the 11 writes sent and how it ended | |
 | Per-pair poll ID lists | static, 6 pairs × 11 IDs | |
 | Entities | static: ESPHome codegen builds each with placement new into a `static` buffer (`esphome/esphome/cpp_generator.py`, `Pvariable`) | Worst case 6 pairs × (15 + 4 + 2) = 126. Estimated 30–60 B each ([research](https://github.com/distante/esphome-components/blob/research/time-program-entities/.specs/research/time-program-entities.md#cost-of-90-extra-entities)), measured in the device check. No cap until then. |
 

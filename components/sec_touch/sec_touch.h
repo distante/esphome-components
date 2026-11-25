@@ -18,6 +18,7 @@ namespace esphome {
 namespace sec_touch {
 
 class SecTouchFan;
+class TimeProgram;
 
 class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
  public:
@@ -113,6 +114,16 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   void register_text_sensor(int id, text_sensor::TextSensor *sensor);
   esphome::optional<text_sensor::TextSensor *> get_text_sensor(int id);
   void register_fan(int level_id, SecTouchFan *fan);
+  /// Makes `program` fan pair `pair`'s time program, for get_time_program().
+  void register_time_program(int pair, TimeProgram *program) {
+    if (is_time_program_pair(pair)) {
+      this->time_programs_[pair - 1] = program;
+    }
+  }
+  /// Fan pair `pair`'s time program, or nullptr when `time_programs` doesn't list it.
+  TimeProgram *get_time_program(int pair) const {
+    return is_time_program_pair(pair) ? this->time_programs_[pair - 1] : nullptr;
+  }
   esphome::optional<SecTouchFan *> get_fan(int level_id);
   bool has_pending_set_task_for(int property_id) const;
 
@@ -144,6 +155,8 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
 
   std::map<int, text_sensor::TextSensor *> text_sensors;
   std::map<int, SecTouchFan *> fans_;
+  /// Per fan pair, by pair - 1: its time program, or nullptr when it isn't listed.
+  std::array<TimeProgram *, TIME_PROGRAM_PAIR_COUNT> time_programs_{};
 
   void notify_update_listeners(int command_id, int property_id, int new_value, const std::string &raw_value);
   TaskType current_running_task_type = TaskType::NONE;

@@ -18,6 +18,7 @@ URLs come from ESPHome's `web_server` and the sniffer's paths (`sniffer_data.h`)
 - **A pair's mode goes through its mode select**, not the fan: web_server's fan `turn_on` ignores `preset_mode` and still answers 200. The select exists only where the YAML adds one ([readme](../../../components/sec_touch/readme.md), `split_special_modes`).
 - **A fan speed also switches the pair to Normal**, ending Automatik Zeit.
 - **IDs 209–255 time out**: a discover scan of 1–208 covers everything in about 2 min; 1–255 takes 5½.
+- **A probe or restore body needs a Content-Type**: `curl -X POST -H 'Content-Type: text/plain' --data-binary '08:30:00' '<device>/sniffer/probe?id=148'`. Without one it answers 400. The 200 comes before the probe runs: poll `/sniffer/data` until `probe.active` is `false` (about 1 s), then read `verdict` and `restore`.
 - **Check a write landed** by reading the pair's level ID in `/sniffer/data`; its `hist` shows when it changed.
 
 ## Protocol (both components)

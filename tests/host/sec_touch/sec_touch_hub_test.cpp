@@ -23,9 +23,6 @@ std::vector<uint8_t> frame_without_crc(int property_id, const std::string &value
 /// The reply for FAN_1_LEVEL_ID with one bit flipped ('7' -> '3'), captured on the installed controller (issue #43).
 std::vector<uint8_t> bad_crc_frame() { return frame(data_head(133, "10") + "42696"); }
 
-/// The panel's ACK with one bit flipped (issue #50): `02 07 0A`, too short to be a data frame.
-std::vector<uint8_t> corrupted_ack() { return frame(std::string(1, static_cast<char>(ACK ^ 0x01))); }
-
 class SECTouchHubTest : public ::testing::Test {
  protected:
   void SetUp() override { this->hub_.set_uart_parent(&this->uart_); }
@@ -172,7 +169,7 @@ TEST_F(SECTouchHubTest, FrameWithoutCrcReachesTapWithOptionalCrc) {
 TEST_F(SECTouchHubTest, NakDuringScanRecordsNakOutcome) {
   this->hub_.enter_scan_mode();
 
-  this->uart_.push_rx(frame(std::string(1, static_cast<char>(NAK))));
+  this->uart_.push_rx(nak_frame());
   this->loop_times(2);
 
   EXPECT_EQ(this->hub_.get_last_scan_outcome(), ScanOutcome::SCAN_OUTCOME_NAK);
@@ -376,6 +373,89 @@ TEST_F(SECTouchGetRetryTest, QueuedTasksKeepTheirOrderBehindTheRetry) {
   EXPECT_EQ(this->labels_,
             (std::vector<std::string>{std::to_string(LABEL_1_ID) + "=1", std::to_string(LABEL_2_ID) + "=2",
                                       std::to_string(LABEL_3_ID) + "=3"}));
+}
+
+// Two entities may read one property (the clock for clock_drift and for live state, #130): both get each value,
+// and the poll still sends one GET of it.
+TEST_F(SECTouchGetRetryTest, TwoListenersOnOneIdBothGetItsValueFromOneGet) {
+  std::vector<std::string> first;
+  std::vector<std::string> second;
+  this->hub_.register_global_setting_string_listener(CLOCK_PROPERTY_ID,
+                                                     [&first](int, const std::string &raw) { first.push_back(raw); });
+  this->hub_.register_global_setting_string_listener(CLOCK_PROPERTY_ID,
+                                                     [&second](int, const std::string &raw) { second.push_back(raw); });
+  this->hub_.add_global_setting_tasks_to_queue();
+  this->send_next_task();
+  ASSERT_EQ(this->uart_.tx, get_frame(CLOCK_PROPERTY_ID));
+
+  EXPECT_EQ(this->panel_answers(data_frame(CLOCK_PROPERTY_ID, "08:30:00")), ack_frame());
+  EXPECT_EQ(first, std::vector<std::string>{"08:30:00"});
+  EXPECT_EQ(second, std::vector<std::string>{"08:30:00"});
+}
+
+/// Records every task end as "<GET|SET> <property_id> <end>".
+class SECTouchTaskEndTest : public SECTouchGetRetryTest {
+ protected:
+  void SetUp() override {
+    SECTouchGetRetryTest::SetUp();
+    this->hub_.register_task_end_listener([this](const BaseTask &task, TaskEnd end) {
+      this->ends_.push_back(std::string(task.get_task_type() == TaskType::SET_DATA ? "SET " : "GET ") +
+                            std::to_string(task.property_id) + " " + task_end_name(end));
+    });
+  }
+
+  std::string end_of(const char *kind, int property_id, TaskEnd end) {
+    return std::string(kind) + " " + std::to_string(property_id) + " " + task_end_name(end);
+  }
+
+  std::vector<std::string> ends_;
+};
+
+TEST_F(SECTouchTaskEndTest, AnAnsweredGetAndSetEachEndOnce) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->hub_.add_set_task(SetDataTask::create(TaskTargetType::LEVEL, FAN_1_LEVEL_ID, "5"));
+  this->send_next_task();
+  this->uart_.push_rx(ack_frame());
+  this->loop_times(2);
+  this->panel_answers(data_frame(LABEL_1_ID, "3"));
+
+  EXPECT_EQ(this->ends_, (std::vector<std::string>{end_of("SET", FAN_1_LEVEL_ID, TaskEnd::TASK_END_ANSWERED),
+                                                   end_of("GET", LABEL_1_ID, TaskEnd::TASK_END_ANSWERED)}));
+}
+
+TEST_F(SECTouchTaskEndTest, ANakAndATimeoutEachEndTheirTask) {
+  this->queue_label_reads({LABEL_1_ID, LABEL_2_ID});
+  this->send_next_task();
+  this->uart_.push_rx(nak_frame());
+  this->loop_times(2);
+  this->age_task_past_watchdog();
+  this->hub_.loop();
+
+  EXPECT_EQ(this->ends_, (std::vector<std::string>{end_of("GET", LABEL_1_ID, TaskEnd::TASK_END_NAK),
+                                                   end_of("GET", LABEL_2_ID, TaskEnd::TASK_END_TIMEOUT)}));
+}
+
+// A GET sent once more after a dropped reply has not ended yet; only its second malformed reply ends it.
+TEST_F(SECTouchTaskEndTest, AMalformedGetEndsOnceAfterItsRetry) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+  this->panel_answers(data_frame_with_bad_crc(LABEL_1_ID, "3"));
+  EXPECT_TRUE(this->ends_.empty());
+
+  this->panel_answers(data_frame_with_bad_crc(LABEL_1_ID, "3"));
+  EXPECT_EQ(this->ends_, std::vector<std::string>{end_of("GET", LABEL_1_ID, TaskEnd::TASK_END_MALFORMED)});
+}
+
+// Scan mode clears the queue: every discarded task, the one in flight first, ends as a timeout.
+TEST_F(SECTouchTaskEndTest, ScanModeEndsEveryDiscardedTaskAsATimeout) {
+  this->queue_label_reads({LABEL_1_ID, LABEL_2_ID, LABEL_3_ID});
+  this->send_next_task();
+
+  this->hub_.enter_scan_mode();
+
+  EXPECT_EQ(this->ends_, (std::vector<std::string>{end_of("GET", LABEL_1_ID, TaskEnd::TASK_END_TIMEOUT),
+                                                   end_of("GET", LABEL_2_ID, TaskEnd::TASK_END_TIMEOUT),
+                                                   end_of("GET", LABEL_3_ID, TaskEnd::TASK_END_TIMEOUT)}));
 }
 
 }  // namespace esphome::sec_touch::testing

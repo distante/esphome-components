@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <map>
 #include <queue>
 #include "esphome/core/component.h"
@@ -10,6 +11,7 @@
 #include "data_message.h"
 #include "message_router.h"
 #include "scan_outcome.h"
+#include "time_program_ids.h"
 
 #include <typeinfo>
 namespace esphome {
@@ -59,6 +61,17 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
    */
   void register_message_tap(MessageTap tap);
   void register_queue_empty_listener(QueueEmptyListener listener);
+
+  /**
+   * Hands the raw value of every time-program data message for `property_id` to `listener`. Puts the ID on no poll:
+   * add_time_program_poll_id() does that. Several listeners may share one ID.
+   */
+  void register_time_program_listener(int property_id, StringUpdateCallbackListener listener);
+  /// Puts `property_id` on fan pair `pair`'s time-program poll, once. Returns false for an ID outside that pair's
+  /// block.
+  bool add_time_program_poll_id(int pair, int property_id);
+  /// Sees every task that ends; see TaskEndListener.
+  void register_task_end_listener(TaskEndListener listener);
   void add_discovery_get_task(int property_id);
   /// Queues a SET of any property ID, unknown ones included, for the sniffer's write probe. Only in scan mode:
   /// outside it nothing is queued, a warning is logged and the call returns false, so nothing else can write an
@@ -76,12 +89,27 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
 
   void set_inter_task_delay(uint32_t ms) { inter_task_delay_ms_ = ms; }
   void set_global_settings_update_interval_ms(uint32_t ms) { global_settings_update_interval_ms_ = ms; }
+  void set_time_programs_update_interval_ms(uint32_t ms) { time_programs_update_interval_ms_ = ms; }
+  bool is_scan_mode_active() const { return this->scan_mode_active_; }
   void set_optional_crc(bool v) { optional_crc_ = v; }
 
   void add_set_task(std::unique_ptr<SetDataTask> task);
+  /**
+   * Queues a SET of `property_id`, one per ID: when a SET of that ID is already queued, its value is replaced in place
+   * instead. A SET in flight isn't touched; the new one queues behind it. Returns false for an ID `target` doesn't
+   * accept.
+   */
+  bool add_set_task_latest_wins(TaskTargetType target, int property_id, const char *value);
+  /// Queues a GET of `property_id` ahead of every other GET, after the queued SETs. Returns false for an ID `target`
+  /// doesn't accept.
+  bool add_priority_get_task(TaskTargetType target, int property_id);
   void add_recursive_tasks_to_get_queue();
   void add_manual_tasks_to_queue();
   void add_global_setting_tasks_to_queue();
+  /// One poll of every pair's time program; restarts its interval.
+  void add_time_program_tasks_to_queue();
+  /// One poll of `pair`'s time program, outside the schedule: the interval runs on.
+  void add_time_program_tasks_to_queue(int pair);
   void register_text_sensor(int id, text_sensor::TextSensor *sensor);
   esphome::optional<text_sensor::TextSensor *> get_text_sensor(int id);
   void register_fan(int level_id, SecTouchFan *fan);
@@ -94,15 +122,20 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   /// The task sent last, kept until it ends so a dropped GET can go back to the queue.
   std::unique_ptr<BaseTask> in_flight_task_;
 
-  std::map<int, UpdateCallbackListener> recursive_update_listeners;
+  // Several listeners may share one property ID; each poll list holds an ID once.
+  std::multimap<int, UpdateCallbackListener> recursive_update_listeners;
   std::vector<int> fan_level_property_ids_;
 
-  std::map<int, UpdateCallbackListener> manual_update_listeners;
+  std::multimap<int, UpdateCallbackListener> manual_update_listeners;
   std::vector<int> fan_label_property_ids_;
 
   std::vector<int> global_setting_property_ids_;
 
-  std::map<int, StringUpdateCallbackListener> string_update_listeners;
+  std::multimap<int, StringUpdateCallbackListener> string_update_listeners;
+
+  /// Per fan pair, by pair - 1: the IDs its time-program poll queues. Fixed size, filled while entities are built.
+  std::array<TimeProgramPollList, TIME_PROGRAM_PAIR_COUNT> time_program_polls_;
+  std::vector<TaskEndListener> task_end_listeners_;
 
   MessageRouter message_router_;
   std::vector<QueueEmptyListener> queue_empty_listeners;
@@ -126,6 +159,8 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
    */
   int store_data_to_incoming_message(uint8_t data);
   void cleanup_after_task_complete(TaskEnd end);
+  void notify_task_end(const BaseTask &task, TaskEnd end);
+  bool has_time_program_polls() const;
   void send_ack_message();
   void drop_data_message(DataMessageCheck check);
 
@@ -134,6 +169,8 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   uint32_t inter_task_delay_ms_ = 30;
   uint32_t global_settings_update_interval_ms_ = 30000;
   unsigned long last_global_settings_update_ms_ = 0;
+  uint32_t time_programs_update_interval_ms_ = 300000;
+  unsigned long last_time_programs_update_ms_ = 0;
   int current_running_task_property_id_ = -1;
   ScanOutcomeTracker scan_outcome_;
   bool optional_crc_{false};

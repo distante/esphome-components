@@ -1,4 +1,5 @@
 #include "sec_touch.h"
+#include <algorithm>
 #include "XModemCRC.h"
 #include "data_message.h"
 #include "get_retry.h"
@@ -7,6 +8,17 @@
 
 namespace esphome {
 namespace sec_touch {
+
+namespace {
+
+/// Appends `id` to `ids` unless it is there already, so a second listener for an ID adds no second GET.
+void push_once(std::vector<int> &ids, int id) {
+  if (std::find(ids.begin(), ids.end(), id) == ids.end()) {
+    ids.push_back(id);
+  }
+}
+
+}  // namespace
 
 static const char *const TAG = "sec_touch";
 static const char *const TAG_UART = "sec_touch.uart";
@@ -20,6 +32,7 @@ void SECTouchComponent::setup() {
   this->add_manual_tasks_to_queue();
   this->add_recursive_tasks_to_get_queue();
   this->add_global_setting_tasks_to_queue();
+  this->add_time_program_tasks_to_queue();
 
   ESP_LOGI(TAG, " SEC-Touch setup complete.");
 }
@@ -40,6 +53,14 @@ void SECTouchComponent::dump_config() {
     ESP_LOGCONFIG(TAG, "  - Global Setting Property ID: %d", id);
   }
   ESP_LOGCONFIG(TAG, "  optional_crc: %s", this->optional_crc_ ? "true" : "false");
+  if (this->has_time_program_polls()) {
+    ESP_LOGCONFIG(TAG, "  time_programs_update_interval_ms: %" PRIu32, this->time_programs_update_interval_ms_);
+  }
+  for (size_t i = 0; i < this->time_program_polls_.size(); i++) {
+    for (int id : this->time_program_polls_[i]) {
+      ESP_LOGCONFIG(TAG, "  - Time Program Property ID: %d (fan pair %zu)", id, i + 1);
+    }
+  }
 
   if (this->is_failed()) {
     ESP_LOGE(TAG, "  !!!! SETUP of SEC-Touch failed !!!!");
@@ -87,6 +108,10 @@ void SECTouchComponent::loop() {
       if (!this->scan_mode_active_ && !this->available() &&
           millis() - this->last_global_settings_update_ms_ >= this->global_settings_update_interval_ms_) {
         this->add_global_setting_tasks_to_queue();
+      }
+      if (!this->scan_mode_active_ && this->has_time_program_polls() &&
+          millis() - this->last_time_programs_update_ms_ >= this->time_programs_update_interval_ms_) {
+        this->add_time_program_tasks_to_queue();
       }
       if (!this->queue_was_idle_) {
         this->queue_was_idle_ = true;
@@ -185,21 +210,21 @@ void SECTouchComponent::notify_update_listeners(int command_id, int property_id,
     return;
   }
 
-  auto string_listener = this->string_update_listeners.find(property_id);
-  if (string_listener != this->string_update_listeners.end()) {
-    string_listener->second(property_id, raw_value);
+  auto strings = this->string_update_listeners.equal_range(property_id);
+  for (auto it = strings.first; it != strings.second; ++it) {
+    it->second(property_id, raw_value);
   }
 
-  auto recursive_listener = this->recursive_update_listeners.find(property_id);
-  if (recursive_listener != this->recursive_update_listeners.end()) {
+  auto recursives = this->recursive_update_listeners.equal_range(property_id);
+  for (auto it = recursives.first; it != recursives.second; ++it) {
     ESP_LOGV(TAG, "recursive_update_listener found for property_id %d", property_id);
-    recursive_listener->second(property_id, new_value);
+    it->second(property_id, new_value);
   }
 
-  auto manual_listener = this->manual_update_listeners.find(property_id);
-  if (manual_listener != this->manual_update_listeners.end()) {
+  auto manuals = this->manual_update_listeners.equal_range(property_id);
+  for (auto it = manuals.first; it != manuals.second; ++it) {
     ESP_LOGD(TAG, "manual_update_listener found for property_id %d", property_id);
-    manual_listener->second(property_id, new_value);
+    it->second(property_id, new_value);
   }
 }
 
@@ -259,7 +284,7 @@ void SECTouchComponent::add_recursive_tasks_to_get_queue() {
 void SECTouchComponent::add_manual_tasks_to_queue() {
   ESP_LOGD(TAG, "add_manual_tasks_to_queue");
 
-  if (this->fan_label_property_ids_[0] == 0) {
+  if (this->fan_label_property_ids_.empty() || this->fan_label_property_ids_[0] == 0) {
     ESP_LOGE(TAG, "No property ids are registered for manual tasks");
     return;
   }
@@ -291,27 +316,71 @@ void SECTouchComponent::add_global_setting_tasks_to_queue() {
 
 void SECTouchComponent::register_recursive_update_listener(int property_id, UpdateCallbackListener listener) {
   ESP_LOGD(TAG, "register_recursive_update_listener for property_id %d", property_id);
-  this->recursive_update_listeners[property_id] = std::move(listener);
-  this->fan_level_property_ids_.push_back(property_id);
+  this->recursive_update_listeners.emplace(property_id, std::move(listener));
+  push_once(this->fan_level_property_ids_, property_id);
 }
 
 void SECTouchComponent::register_manual_update_listener(int property_id, UpdateCallbackListener listener) {
   ESP_LOGD(TAG, "register_manual_update_listener for property_id %d", property_id);
-  this->manual_update_listeners[property_id] = std::move(listener);
-  this->fan_label_property_ids_.push_back(property_id);
+  this->manual_update_listeners.emplace(property_id, std::move(listener));
+  push_once(this->fan_label_property_ids_, property_id);
 }
 
 void SECTouchComponent::register_global_setting_recursive_listener(int property_id, UpdateCallbackListener listener) {
   ESP_LOGD(TAG, "register_global_setting_recursive_listener for property_id %d", property_id);
-  this->recursive_update_listeners[property_id] = std::move(listener);
-  this->global_setting_property_ids_.push_back(property_id);
+  this->recursive_update_listeners.emplace(property_id, std::move(listener));
+  push_once(this->global_setting_property_ids_, property_id);
 }
 
 void SECTouchComponent::register_global_setting_string_listener(int property_id,
                                                                 StringUpdateCallbackListener listener) {
   ESP_LOGD(TAG, "register_global_setting_string_listener for property_id %d", property_id);
-  this->string_update_listeners[property_id] = std::move(listener);
-  this->global_setting_property_ids_.push_back(property_id);
+  this->string_update_listeners.emplace(property_id, std::move(listener));
+  push_once(this->global_setting_property_ids_, property_id);
+}
+
+void SECTouchComponent::register_time_program_listener(int property_id, StringUpdateCallbackListener listener) {
+  ESP_LOGD(TAG, "register_time_program_listener for property_id %d", property_id);
+  this->string_update_listeners.emplace(property_id, std::move(listener));
+}
+
+bool SECTouchComponent::add_time_program_poll_id(int pair, int property_id) {
+  auto slot = time_program_slot(property_id);
+  if (!slot.has_value() || slot->pair != pair) {
+    ESP_LOGE(TAG, "Property ID %d is not part of fan pair %d's time program", property_id, pair);
+    return false;
+  }
+  return this->time_program_polls_[pair - 1].add(property_id);
+}
+
+void SECTouchComponent::register_task_end_listener(TaskEndListener listener) {
+  this->task_end_listeners_.push_back(std::move(listener));
+}
+
+bool SECTouchComponent::has_time_program_polls() const {
+  for (const auto &poll : this->time_program_polls_) {
+    if (poll.size() > 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void SECTouchComponent::add_time_program_tasks_to_queue() {
+  this->last_time_programs_update_ms_ = millis();
+  for (int pair = 1; pair <= TIME_PROGRAM_PAIR_COUNT; pair++) {
+    this->add_time_program_tasks_to_queue(pair);
+  }
+}
+
+void SECTouchComponent::add_time_program_tasks_to_queue(int pair) {
+  if (!is_time_program_pair(pair)) {
+    ESP_LOGE(TAG, "Fan pair %d has no time program", pair);
+    return;
+  }
+  for (int id : this->time_program_polls_[pair - 1]) {
+    this->data_task_queue.push_back(GetDataTask::create(TaskTargetType::TIME_PROGRAM, id));
+  }
 }
 
 void SECTouchComponent::register_message_tap(MessageTap tap) { this->message_router_.add_tap(std::move(tap)); }
@@ -338,14 +407,23 @@ void SECTouchComponent::enter_scan_mode() {
   if (!this->data_task_queue.empty()) {
     ESP_LOGW(TAG, "Entering scan mode — discarding %zu pending task(s)", this->data_task_queue.size());
   }
-  this->data_task_queue.clear();
-  this->in_flight_task_.reset();
+  // The discarded tasks end as timeouts once scan mode is on, so a listener knows not to queue anything for them.
+  std::deque<std::unique_ptr<BaseTask>> discarded;
+  discarded.swap(this->data_task_queue);
+  std::unique_ptr<BaseTask> in_flight = std::move(this->in_flight_task_);
   this->incoming_message.reset();
   this->current_running_task_type = TaskType::NONE;
   this->task_start_time_ = 0;
   this->queue_was_idle_ = false;  // Force queue-empty callback to fire so scan tasks get queued
   this->scan_outcome_.begin_scan();
   this->scan_mode_active_ = true;
+
+  if (in_flight != nullptr) {
+    this->notify_task_end(*in_flight, TaskEnd::TASK_END_TIMEOUT);
+  }
+  for (const auto &task : discarded) {
+    this->notify_task_end(*task, TaskEnd::TASK_END_TIMEOUT);
+  }
 }
 
 void SECTouchComponent::exit_scan_mode() {
@@ -355,6 +433,38 @@ void SECTouchComponent::exit_scan_mode() {
   this->scan_mode_active_ = false;
   this->add_recursive_tasks_to_get_queue();
   this->add_global_setting_tasks_to_queue();
+  this->add_time_program_tasks_to_queue();
+}
+
+bool SECTouchComponent::add_set_task_latest_wins(TaskTargetType target, int property_id, const char *value) {
+  for (auto &task : this->data_task_queue) {
+    if (task->get_task_type() == TaskType::SET_DATA && task->property_id == property_id) {
+      ESP_LOGD(TAG, "Replacing the queued SET of property_id %d with '%s'", property_id, value);
+      static_cast<SetDataTask *>(task.get())->set_value(value);
+      return true;
+    }
+  }
+  auto task = SetDataTask::create(target, property_id, value);
+  if (task == nullptr) {
+    ESP_LOGE(TAG, "No SET of property_id %d as %s", property_id, EnumToString::TaskTargetType(target));
+    return false;
+  }
+  this->add_set_task(std::move(task));
+  return true;
+}
+
+bool SECTouchComponent::add_priority_get_task(TaskTargetType target, int property_id) {
+  auto task = GetDataTask::create(target, property_id);
+  if (task == nullptr) {
+    ESP_LOGE(TAG, "No GET of property_id %d as %s", property_id, EnumToString::TaskTargetType(target));
+    return false;
+  }
+  auto it = this->data_task_queue.begin();
+  while (it != this->data_task_queue.end() && (*it)->get_task_type() == TaskType::SET_DATA) {
+    ++it;
+  }
+  this->data_task_queue.insert(it, std::move(task));
+  return true;
 }
 
 void SECTouchComponent::add_set_task(std::unique_ptr<SetDataTask> task) {
@@ -570,8 +680,11 @@ void SECTouchComponent::drop_data_message(DataMessageCheck check) {
   this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
   this->send_ack_message();
 
-  if (task == nullptr ||
-      !should_retry_get(task->get_task_type() == TaskType::GET_DATA, check, task->retried, this->scan_mode_active_)) {
+  if (task == nullptr) {
+    return;
+  }
+  if (!should_retry_get(task->get_task_type() == TaskType::GET_DATA, check, task->retried, this->scan_mode_active_)) {
+    this->notify_task_end(*task, TaskEnd::TASK_END_MALFORMED);
     return;
   }
   ESP_LOGI(TAG, "Sending the GET for property_id %d once more after dropping its reply", task->property_id);
@@ -581,12 +694,21 @@ void SECTouchComponent::drop_data_message(DataMessageCheck check) {
 
 void SECTouchComponent::cleanup_after_task_complete(TaskEnd end) {
   ESP_LOGD(TAG, "cleanup_after_task_complete called, end: %s", task_end_name(end));
+  std::unique_ptr<BaseTask> task = std::move(this->in_flight_task_);
   this->incoming_message.reset();
-  this->in_flight_task_.reset();
   this->current_running_task_type = TaskType::NONE;
   this->task_start_time_ = 0;
   this->scan_outcome_.record(end, this->scan_mode_active_);
   this->task_ready_at_ms_ = millis() + this->inter_task_delay_ms_;
+  if (task != nullptr) {
+    this->notify_task_end(*task, end);
+  }
+}
+
+void SECTouchComponent::notify_task_end(const BaseTask &task, TaskEnd end) {
+  for (const auto &listener : this->task_end_listeners_) {
+    listener(task, end);
+  }
 }
 }  // namespace sec_touch
 }  // namespace esphome

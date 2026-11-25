@@ -8,6 +8,8 @@
 #include <functional>
 #include "protocol_ids.h"
 #include "data_message.h"
+#include "scan_outcome.h"
+#include "time_program_ids.h"
 
 namespace esphome {
 namespace sec_touch {
@@ -33,10 +35,15 @@ using StringUpdateCallbackListener = std::function<void(int property_id, const s
 // Called when the task queue is empty and no task is awaiting a response
 using QueueEmptyListener = std::function<void()>;
 
+struct BaseTask;
+/// Called once for every task that ends: answered, refused, malformed (after its one retry, if any), timed out, or
+/// dropped from the queue when scan mode starts (as a timeout). The task is gone once the listener returns.
+using TaskEndListener = std::function<void(const BaseTask &task, TaskEnd end)>;
+
 /**
  * Used to couple `SetDataTask->id` with the level_id or label_id for example
  */
-enum class TaskTargetType { LEVEL, LABEL, GLOBAL_SETTING };
+enum class TaskTargetType { LEVEL, LABEL, GLOBAL_SETTING, TIME_PROGRAM };
 enum class TaskType {
   SET_DATA,
   GET_DATA,
@@ -59,6 +66,8 @@ class EnumToString {
         return "LABEL";
       case TaskTargetType::GLOBAL_SETTING:
         return "GLOBAL_SETTING";
+      case TaskTargetType::TIME_PROGRAM:
+        return "TIME_PROGRAM";
       default:
         return "UNKNOWN";
     }
@@ -149,7 +158,8 @@ struct SetDataTask : public BaseTask {
   static std::unique_ptr<SetDataTask> create(TaskTargetType targetType, int property_id, const char *value) {
     if ((targetType == TaskTargetType::LEVEL && contains(FAN_LEVEL_IDS, property_id)) ||
         (targetType == TaskTargetType::LABEL && contains(FAN_LABEL_IDS, property_id)) ||
-        (targetType == TaskTargetType::GLOBAL_SETTING && contains(GLOBAL_SETTING_IDS, property_id))) {
+        (targetType == TaskTargetType::GLOBAL_SETTING && contains(GLOBAL_SETTING_IDS, property_id)) ||
+        (targetType == TaskTargetType::TIME_PROGRAM && time_program_slot(property_id).has_value())) {
       return std::unique_ptr<SetDataTask>(new SetDataTask(targetType, property_id, value));  // Valid task
     }
     return nullptr;  // Null unique_ptr if validation fails
@@ -163,12 +173,17 @@ struct SetDataTask : public BaseTask {
 
   TaskType get_task_type() const override { return TaskType::SET_DATA; }
 
+  /// Replaces the value to send; one over SET_VALUE_CAP is cut.
+  void set_value(const char *value) {
+    std::strncpy(this->value, value, sizeof(this->value) - 1);
+    this->value[sizeof(this->value) - 1] = '\0';  // Ensure null termination
+  }
+
  private:
   SetDataTask(TaskTargetType targetType, int property_id, const char *value) {
     this->targetType = targetType;
     this->property_id = property_id;
-    std::strncpy(this->value, value, sizeof(this->value) - 1);
-    this->value[sizeof(this->value) - 1] = '\0';  // Ensure null termination
+    this->set_value(value);
   }
 };
 
@@ -176,7 +191,8 @@ struct GetDataTask : public BaseTask {
   static std::unique_ptr<GetDataTask> create(TaskTargetType targetType, int property_id) {
     if ((targetType == TaskTargetType::LEVEL && contains(FAN_LEVEL_IDS, property_id)) ||
         (targetType == TaskTargetType::LABEL && contains(FAN_LABEL_IDS, property_id)) ||
-        (targetType == TaskTargetType::GLOBAL_SETTING && contains(GLOBAL_SETTING_IDS, property_id))) {
+        (targetType == TaskTargetType::GLOBAL_SETTING && contains(GLOBAL_SETTING_IDS, property_id)) ||
+        (targetType == TaskTargetType::TIME_PROGRAM && time_program_slot(property_id).has_value())) {
       return std::unique_ptr<GetDataTask>(new GetDataTask(targetType, property_id));  // Valid task
     }
     return nullptr;  // Null unique_ptr if validation fails

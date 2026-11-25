@@ -89,10 +89,19 @@ class FakeUART : public uart::UARTComponent {
 
 /// Re-exports the hub internals the tests steer. task_start_time_ lets a test age a task past the watchdog,
 /// since the host platform's millis() is the real clock. current_running_task_type shows whether a task is still open.
+/// The last_*_ms_ members let a test age a poll's interval the same way.
 class TestableSECTouch : public SECTouchComponent {
  public:
   using SECTouchComponent::current_running_task_type;
+  using SECTouchComponent::last_global_settings_update_ms_;
+  using SECTouchComponent::last_time_programs_update_ms_;
   using SECTouchComponent::task_start_time_;
 };
+
+/// `[STX][NAK][ETX]`: the panel refuses a request.
+inline std::vector<uint8_t> nak_frame() { return frame(std::string(1, static_cast<char>(NAK))); }
+
+/// The panel's ACK with one bit flipped (issue #50): `02 07 0A`, too short to be a data frame.
+inline std::vector<uint8_t> corrupted_ack() { return frame(std::string(1, static_cast<char>(ACK ^ 0x01))); }
 
 }  // namespace esphome::sec_touch::testing

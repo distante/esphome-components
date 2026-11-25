@@ -208,7 +208,7 @@ The state words live in the live-state model's header ([Implementation notes](#i
 
 | Case | Switch time in effect | Running level | Next change / Next level |
 |---|---|---|---|
-| Not in Automatik Zeit (level ID ≠ 10) | `not running` | `not running` | no value (NaN) / `not running` |
+| Not running (see **Running** above) | `not running` | `not running` | no value (NaN) / `not running` |
 | Automatik Zeit, no switch time enabled | `none` | `none` | no value (NaN) / `none` |
 | Two enabled switch times tied at the time in effect | `conflict` | `conflict` | as normal |
 | The next change is a tie | as normal | as normal | valid / `conflict` |
@@ -279,7 +279,7 @@ Pure headers ([Tests](../.claude/skills/coding-standards/SKILL.md#tests)) hold t
 | Seam | Holds |
 |---|---|
 | Time-program IDs | pair + switch time → ID lookups over the three arrays |
-| Field codec | parse and format `HH:MM:SS`, level 0–9, the enabled mask |
+| Field codec | parse and format the time, the level and the enabled mask ([meaning rules](#known-property-catalogue)) |
 | Mask merge | pending set / clear bits, applying them to a fresh mask |
 | Live-state model | inputs → switch time in effect, running level, next change, next level, state words |
 | Bulk validation | the argument checks and the `error` text |
@@ -332,7 +332,7 @@ Ships in **v1.5.0** with the sniffer goals and experiments. The work for this se
 6. An HA write follows [Writing](#writing): published at once, one queued SET per ID (a newer value replaces the queued one), after the SET ends one GET whose value is published. No SET is retried.
 7. A switch write GETs the mask, changes only the requested bits and SETs it. A failed GET writes nothing. `write_failed` fires each type of the [event table](#writing) in its case.
 8. Time writes send `HH:MM:00`. A level the [meaning rule](#known-property-catalogue) marks unexpected, read from the panel, leaves the select with no state, and nothing is written.
-9. Live state follows the [model](#live-state) and every row of its cases table, and publishes only on change. Tests cover: exactly one enabled switch time, a failed or unexpected input before and after a good read, a switch time exactly at the panel time (in effect) and the next change strictly after it. `not running` appears whenever the level ID isn't 10.
+9. Live state follows the [model](#live-state) and every row of its cases table, and publishes only on change. Tests cover: exactly one enabled switch time, a failed or unexpected input before and after a good read, a switch time exactly at the panel time (in effect) and the next change strictly after it. `not running` appears whenever the program isn't [running](#live-state).
 10. `sec_touch.set_time_program` follows [Bulk-set action](#bulk-set-action): validates everything first, writes times, levels, then the mask, reports `invalid_argument`, `busy` or the failed-field list in `error`, and fires `on_success` only when every read-back matches.
 11. No heap use beyond the [Memory](#memory) table.
 12. The device check is recorded with the heap numbers, and the readme states them.

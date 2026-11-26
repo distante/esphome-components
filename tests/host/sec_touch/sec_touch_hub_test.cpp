@@ -346,17 +346,15 @@ TEST_F(SECTouchGetRetryTest, MalformedReplyAfterScanStoppedIsNotRetried) {
   EXPECT_EQ(this->panel_answers(data_frame_with_bad_crc(FAN_1_LEVEL_ID, "10")), ack_frame());
 }
 
-// Without a reply, the watchdog still ends the scan query, so polling goes on after the scan.
-TEST_F(SECTouchGetRetryTest, WatchdogEndsAScanQueryStillInFlightAfterScanStopped) {
+// Leaving scan mode drops the scan query still in flight, so polling goes on at once, without waiting for the watchdog.
+TEST_F(SECTouchGetRetryTest, PollingGoesOnAtOnceAfterScanStoppedWithAQueryInFlight) {
   this->hub_.enter_scan_mode();
   this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
   this->send_next_task();
   this->hub_.exit_scan_mode();
   this->queue_label_reads({LABEL_1_ID});
 
-  this->uart_.tx.clear();
-  this->age_task_past_watchdog();
-  this->hub_.loop();
+  this->send_next_task();
 
   EXPECT_EQ(this->uart_.tx, get_frame(LABEL_1_ID));
 }
@@ -456,6 +454,17 @@ TEST_F(SECTouchTaskEndTest, ScanModeEndsEveryDiscardedTaskAsATimeout) {
   EXPECT_EQ(this->ends_, (std::vector<std::string>{end_of("GET", LABEL_1_ID, TaskEnd::TASK_END_TIMEOUT),
                                                    end_of("GET", LABEL_2_ID, TaskEnd::TASK_END_TIMEOUT),
                                                    end_of("GET", LABEL_3_ID, TaskEnd::TASK_END_TIMEOUT)}));
+}
+
+// Leaving scan mode drops the task in flight: it ends as a timeout, like the tasks a scan's start drops.
+TEST_F(SECTouchTaskEndTest, ScanExitEndsTheTaskInFlightAsATimeout) {
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
+  this->send_next_task();
+
+  this->hub_.exit_scan_mode();
+
+  EXPECT_EQ(this->ends_, std::vector<std::string>{end_of("GET", FAN_1_LEVEL_ID, TaskEnd::TASK_END_TIMEOUT)});
 }
 
 }  // namespace esphome::sec_touch::testing

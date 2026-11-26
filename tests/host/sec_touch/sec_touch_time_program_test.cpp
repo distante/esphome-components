@@ -393,4 +393,18 @@ TEST_F(TimeProgramTest, ScanModeTimesOutAQueuedSet) {
   EXPECT_TRUE(this->send_next_task().empty());
 }
 
+// Leaving scan mode drops a switch write's fresh mask GET in flight: mask_unreadable, and the next switch write reads
+// the mask again.
+TEST_F(TimeProgramTest, AScanExitEndsTheMaskGetInFlight) {
+  this->hub_.enter_scan_mode();
+  this->enabled_.turn_on();
+  ASSERT_EQ(this->send_next_task(), get_frame(MASK_ID));
+
+  this->hub_.exit_scan_mode();
+  EXPECT_EQ(this->events_, std::vector<std::string>{event_name(WriteFailure::MASK_UNREADABLE)});
+
+  this->enabled_.turn_off();
+  EXPECT_EQ(this->send_next_task(), get_frame(MASK_ID));
+}
+
 }  // namespace esphome::sec_touch::testing

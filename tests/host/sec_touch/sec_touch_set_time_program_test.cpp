@@ -323,4 +323,19 @@ TEST_F(SetTimeProgramTest, AScanEndsTheRunningCall) {
   EXPECT_FALSE(this->program_.is_bulk_write_running());
 }
 
+// Leaving scan mode drops the SET in flight: it ends as a timeout and the call still ends, freeing the pair.
+TEST_F(SetTimeProgramTest, AScanExitEndsTheSetInFlight) {
+  this->hub_.enter_scan_mode();
+  this->action_.play_complex();
+  this->hub_.loop();  // the first time SET goes out
+
+  this->hub_.exit_scan_mode();
+  this->run_panel();
+
+  EXPECT_EQ(this->errors_,
+            std::vector<std::string>{failed_prefix(1) + bulk_detail::switch_time_field(1, TimeProgramField::TIME) +
+                                     " " + write_failure_name(WriteFailure::TIMEOUT)});
+  EXPECT_FALSE(this->program_.is_bulk_write_running());
+}
+
 }  // namespace esphome::sec_touch::testing

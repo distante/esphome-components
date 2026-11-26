@@ -379,7 +379,12 @@ void SECTouchComponent::add_time_program_tasks_to_queue(int pair) {
     return;
   }
   for (int id : this->time_program_polls_[pair - 1]) {
-    this->data_task_queue.push_back(GetDataTask::create(TaskTargetType::TIME_PROGRAM, id));
+    auto task = GetDataTask::create(TaskTargetType::TIME_PROGRAM, id);
+    if (task == nullptr) {
+      ESP_LOGE(TAG, "No GET of property_id %d as a time program", id);
+      continue;
+    }
+    this->data_task_queue.push_back(std::move(task));
   }
 }
 

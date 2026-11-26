@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <limits>
 #include <string>
 #include <vector>
@@ -157,6 +158,18 @@ TEST_F(TimeProgramTest, APollThatRanBeforeTheMillisWrapIsDueOnlyAfterItsInterval
 }
 
 // AC 5: the global-settings poll sends its own IDs only.
+// sec-touch: a task creation that refuses an ID returns null. A poll ID it refuses is skipped, not queued as null.
+TEST_F(TimeProgramTest, APollIdWithNoTaskIsSkipped) {
+  constexpr int NOT_A_TIME_PROGRAM_ID = FAN_LEVEL_IDS[0];
+  this->hub_.time_program_polls_[PAIR - 1].add(NOT_A_TIME_PROGRAM_ID);
+
+  this->program_.refresh();
+
+  const auto &queue = this->hub_.data_task_queue;
+  EXPECT_TRUE(std::none_of(queue.begin(), queue.end(), [](const auto &task) { return task == nullptr; }));
+  EXPECT_EQ(queue.size(), one_poll().size());
+}
+
 TEST_F(TimeProgramTest, TheGlobalSettingsPollSendsNoTimeProgramId) {
   this->hub_.register_global_setting_string_listener(CLOCK_PROPERTY_ID, [](int, const std::string &) {});
   this->hub_.setup();

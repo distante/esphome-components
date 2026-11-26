@@ -90,10 +90,13 @@ class FakeUART : public uart::UARTComponent {
 
 /// Re-exports the hub internals the tests steer. task_start_time_ lets a test age a task past the watchdog,
 /// since the host platform's millis() is the real clock. current_running_task_type shows whether a task is still open.
-/// The last_*_ms_ members let a test age a poll's interval the same way.
+/// The last_*_ms_ members let a test age a poll's interval the same way. data_task_queue and time_program_polls_ let a
+/// test check and bend the queue.
 class TestableSECTouch : public SECTouchComponent {
  public:
   using SECTouchComponent::current_running_task_type;
+  using SECTouchComponent::data_task_queue;
+  using SECTouchComponent::time_program_polls_;
   using SECTouchComponent::last_global_settings_update_ms_;
   using SECTouchComponent::last_time_programs_update_ms_;
   using SECTouchComponent::task_start_time_;

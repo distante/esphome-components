@@ -33,6 +33,16 @@ Enforces [Tests](../coding-standards/SKILL.md#tests): a removal is a change, so 
 
 Done when every removed piece of state has its readers listed, and each reader the removal changes has a test.
 
+## Every task end reaches its listeners
+
+Enforces [Error handling](../coding-standards/SKILL.md#c-style): a task that ends any way but the usual one still leaves no state behind.
+
+1. List every path in the diff that ends, drops, clears or replaces a queued or in-flight task: answer, NAK, timeout, retry give-up, scan entry and exit, queue clear. Check that each one tells the task-end listeners. Example: `exit_scan_mode` reset the in-flight task without notifying, so a bulk call stayed `busy` and a pending mask read blocked every later switch write until reboot.
+2. For each pending flag or busy state the diff adds, name the task end that clears it on every path in step 1. A state with no clearing end on some path is a finding.
+3. For each path that skips a step the usual end performs (a read-back, a compare), check that the outcome reports that the step was skipped, not success.
+
+Done when each end path has its listener call, and each pending state has a clearing end on every path.
+
 ## No restated rules in skills and docs for agents
 
 Enforces [coding-standards](../coding-standards/SKILL.md)' single source: every rule lives there once.

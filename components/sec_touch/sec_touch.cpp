@@ -340,8 +340,8 @@ void SECTouchComponent::register_global_setting_string_listener(int property_id,
   push_once(this->global_setting_property_ids_, property_id);
 }
 
-void SECTouchComponent::register_time_program_listener(int property_id, StringUpdateCallbackListener listener) {
-  ESP_LOGD(TAG, "register_time_program_listener for property_id %d", property_id);
+void SECTouchComponent::register_unpolled_string_listener(int property_id, StringUpdateCallbackListener listener) {
+  ESP_LOGD(TAG, "register_unpolled_string_listener for property_id %d", property_id);
   this->string_update_listeners.emplace(property_id, std::move(listener));
 }
 

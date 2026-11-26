@@ -17,10 +17,10 @@ TimeProgram::TimeProgram(SECTouchComponent *hub, int pair) : hub_(hub), pair_(pa
   // The whole block's data messages come here, listed switch time or not: a bulk write reads back every field. Only
   // the polled IDs (watch_()) and the read-backs ever answer.
   auto on_value = [this](int property_id, const std::string &raw) { this->on_value_(property_id, raw); };
-  this->hub_->register_time_program_listener(time_program_enabled_id(pair), on_value);
+  this->hub_->register_unpolled_string_listener(time_program_enabled_id(pair), on_value);
   for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
-    this->hub_->register_time_program_listener(time_program_time_id(pair, n), on_value);
-    this->hub_->register_time_program_listener(time_program_level_id(pair, n), on_value);
+    this->hub_->register_unpolled_string_listener(time_program_time_id(pair, n), on_value);
+    this->hub_->register_unpolled_string_listener(time_program_level_id(pair, n), on_value);
   }
   // Every step of a bulk write ends with a task end: a delivered answer reaches on_value_() just before it.
   this->hub_->register_task_end_listener([this](const BaseTask &task, TaskEnd end) {

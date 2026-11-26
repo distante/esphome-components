@@ -18,7 +18,7 @@ TimeProgramLiveState::TimeProgramLiveState(SECTouchComponent *hub, int pair) : h
   // The whole block, whatever switch_times lists: every switch time feeds the model.
   auto watch = [this](int id) {
     this->hub_->add_time_program_poll_id(this->pair_, id);
-    this->hub_->register_time_program_listener(
+    this->hub_->register_unpolled_string_listener(
         id, [this](int property_id, const std::string &raw) { this->on_block_value_(property_id, raw); });
   };
   watch(time_program_enabled_id(pair));
@@ -29,8 +29,8 @@ TimeProgramLiveState::TimeProgramLiveState(SECTouchComponent *hub, int pair) : h
     watch(time_program_level_id(pair, n));
   }
   // The pair's fan entry, which the config requires, polls its level ID; listen only.
-  this->hub_->register_time_program_listener(FAN_LEVEL_IDS[pair - 1],
-                                             [this](int, const std::string &raw) { this->on_pair_level_(raw); });
+  this->hub_->register_unpolled_string_listener(FAN_LEVEL_IDS[pair - 1],
+                                                [this](int, const std::string &raw) { this->on_pair_level_(raw); });
   // IDs 1 and 2, date first: clock_drift needs the date right before the clock, and the poll keeps the order of the
   // first registration. The live state needs only the clock.
   this->hub_->register_global_setting_string_listener(DATE_PROPERTY_ID, [](int, const std::string &) {});

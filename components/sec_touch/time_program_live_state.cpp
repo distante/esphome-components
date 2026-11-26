@@ -143,7 +143,7 @@ void TimeProgramLiveState::clear_text_(text_sensor::TextSensor *sensor) {
     return;
   }
   sensor->set_has_state(false);
-#if defined(USE_CONTROLLER_REGISTRY)
+#if defined(USE_TEXT_SENSOR) && defined(USE_CONTROLLER_REGISTRY)
   ControllerRegistry::notify_text_sensor_update(sensor);
 #endif
 }

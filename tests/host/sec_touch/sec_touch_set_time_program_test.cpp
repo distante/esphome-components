@@ -39,6 +39,16 @@ const uint8_t MASK_AFTER = switch_time_bit(1) | switch_time_bit(2) | switch_time
 
 std::string mask_text(uint8_t mask) { return std::string(format_enabled_mask(mask).data()); }
 
+/// How the `error` names a failed write of switch time `switch_time`'s `field`.
+std::string failed_write(int switch_time, TimeProgramField field, WriteFailure failure) {
+  return bulk_detail::switch_time_field(switch_time, field) + " " + write_failure_name(failure);
+}
+
+/// How the `error` names a failed mask write.
+std::string failed_mask_write(WriteFailure failure) {
+  return std::string(time_program_field_name(TimeProgramField::ENABLED)) + " " + write_failure_name(failure);
+}
+
 /// How the `error` of a bulk write with `count` failed writes starts.
 std::string failed_prefix(size_t count) {
   return std::to_string(count) + " of " + std::to_string(BULK_WRITE_COUNT) + " writes failed: ";
@@ -265,8 +275,10 @@ TEST_F(SetTimeProgramTest, WritingGoesOnPastFailuresAndReportsThem) {
   std::vector<Request> expected = this->expected_sets(MASK_AFTER);
   expected.pop_back();  // the mask GET failed: no mask SET
   EXPECT_EQ(this->sets(sent), expected);
-  EXPECT_EQ(this->errors_, std::vector<std::string>{failed_prefix(2) + "switch time 3 level refused" +
-                                                    BULK_FAILURE_SEPARATOR + "enabled mask mask_unreadable"});
+  EXPECT_EQ(this->errors_,
+            std::vector<std::string>{failed_prefix(2) +
+                                     failed_write(SWITCH_TIME, TimeProgramField::LEVEL, WriteFailure::REFUSED) +
+                                     BULK_FAILURE_SEPARATOR + failed_mask_write(WriteFailure::MASK_UNREADABLE)});
   EXPECT_EQ(this->successes_, 0);
   // One event per failed write: the refused level's read-back differs too, but is no second report.
   EXPECT_EQ(this->events_, (std::vector<std::string>{write_failure_name(WriteFailure::REFUSED),
@@ -282,7 +294,9 @@ TEST_F(SetTimeProgramTest, AnEntityWriteThatReplacesABulkValueIsNotKept) {
 
   this->run_panel();
 
-  EXPECT_EQ(this->errors_, std::vector<std::string>{failed_prefix(1) + "switch time 3 level not_kept"});
+  EXPECT_EQ(this->errors_,
+            std::vector<std::string>{failed_prefix(1) +
+                                     failed_write(SWITCH_TIME, TimeProgramField::LEVEL, WriteFailure::NOT_KEPT)});
   EXPECT_TRUE(this->events_.empty());  // the entity's own write landed
 }
 
@@ -318,8 +332,10 @@ TEST_F(SetTimeProgramTest, AScanEndsTheRunningCall) {
   this->hub_.enter_scan_mode();
 
   ASSERT_EQ(this->errors_.size(), 1u);
-  EXPECT_EQ(this->errors_[0].rfind(
-                failed_prefix(BULK_WRITE_COUNT) + "switch time 1 time timeout" + BULK_FAILURE_SEPARATOR, 0),
+  EXPECT_EQ(this->errors_[0].rfind(failed_prefix(BULK_WRITE_COUNT) +
+                                       failed_write(1, TimeProgramField::TIME, WriteFailure::TIMEOUT) +
+                                       BULK_FAILURE_SEPARATOR,
+                                   0),
             0u);
   EXPECT_FALSE(this->program_.is_bulk_write_running());
 }
@@ -333,9 +349,8 @@ TEST_F(SetTimeProgramTest, AScanExitEndsTheSetInFlight) {
   this->hub_.exit_scan_mode();
   this->run_panel();
 
-  EXPECT_EQ(this->errors_,
-            std::vector<std::string>{failed_prefix(1) + bulk_detail::switch_time_field(1, TimeProgramField::TIME) +
-                                     " " + write_failure_name(WriteFailure::TIMEOUT)});
+  EXPECT_EQ(this->errors_, std::vector<std::string>{failed_prefix(1) +
+                                                    failed_write(1, TimeProgramField::TIME, WriteFailure::TIMEOUT)});
   EXPECT_FALSE(this->program_.is_bulk_write_running());
 }
 
@@ -356,12 +371,10 @@ TEST_F(SetTimeProgramTest, ACallDuringAScanIsNotConfirmed) {
   std::string expected = failed_prefix(BULK_WRITE_COUNT);
   for (TimeProgramField field : {TimeProgramField::TIME, TimeProgramField::LEVEL}) {
     for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
-      expected += bulk_detail::switch_time_field(n, field) + " " + write_failure_name(WriteFailure::NOT_KEPT) +
-                  BULK_FAILURE_SEPARATOR;
+      expected += failed_write(n, field, WriteFailure::NOT_KEPT) + BULK_FAILURE_SEPARATOR;
     }
   }
-  expected += std::string(time_program_field_name(TimeProgramField::ENABLED)) + " " +
-              write_failure_name(WriteFailure::MASK_UNREADABLE);
+  expected += failed_mask_write(WriteFailure::MASK_UNREADABLE);
   EXPECT_EQ(this->errors_, std::vector<std::string>{expected});
   EXPECT_EQ(this->successes_, 0);
 }
@@ -390,8 +403,7 @@ TEST_F(SetTimeProgramTest, AMaskGetThatCantBeQueuedEndsTheCall) {
   this->run_panel();
 
   EXPECT_EQ(this->errors_,
-            std::vector<std::string>{failed_prefix(1) + time_program_field_name(TimeProgramField::ENABLED) + " " +
-                                     write_failure_name(WriteFailure::MASK_UNREADABLE)});
+            std::vector<std::string>{failed_prefix(1) + failed_mask_write(WriteFailure::MASK_UNREADABLE)});
   EXPECT_EQ(this->events_, std::vector<std::string>{write_failure_name(WriteFailure::MASK_UNREADABLE)});
   EXPECT_FALSE(this->program_.is_bulk_write_running());
 }

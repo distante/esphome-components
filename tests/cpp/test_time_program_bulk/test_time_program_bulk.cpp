@@ -11,7 +11,7 @@ using esphome::sec_touch::BULK_FAILURE_SEPARATOR;
 using esphome::sec_touch::BULK_INVALID_ARGUMENT;
 using esphome::sec_touch::BULK_WRITE_COUNT;
 using esphome::sec_touch::bulk_unlisted_pair_error;
-using esphome::sec_touch::BulkListArgument;
+using esphome::sec_touch::BulkArgument;
 using esphome::sec_touch::BulkProgram;
 using esphome::sec_touch::BulkWrite;
 using esphome::sec_touch::MAX_SWITCH_TIME_LEVEL;
@@ -358,8 +358,8 @@ struct Counted {
 int Counted::copies = 0;
 
 // AC 11: a constant list is checked where it is kept, not copied first.
-TEST(BulkListArgument, HandsOutAConstantWithoutACopy) {
-  BulkListArgument<Counted> argument;
+TEST(BulkArgument, HandsOutAConstantWithoutACopy) {
+  BulkArgument<Counted> argument;
   argument.set(Counted{});
   Counted result;
   Counted::copies = 0;
@@ -370,8 +370,8 @@ TEST(BulkListArgument, HandsOutAConstantWithoutACopy) {
 }
 
 // AC 11: a lambda reads the call's arguments where they are; only its result is new.
-TEST(BulkListArgument, PassesTheCallsArgumentsToALambdaByReference) {
-  BulkListArgument<std::vector<int>, Counted, std::vector<int>> argument;
+TEST(BulkArgument, PassesTheCallsArgumentsToALambdaByReference) {
+  BulkArgument<std::vector<int>, Counted, std::vector<int>> argument;
   argument.set([](const Counted & /*call_id*/, const std::vector<int> &levels) { return levels; });
   const Counted call_id;
   const std::vector<int> levels = {4, 2};

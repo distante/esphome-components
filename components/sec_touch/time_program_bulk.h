@@ -115,11 +115,12 @@ inline std::optional<std::string> read_bulk_program(const std::vector<std::strin
 }
 
 /**
- * A list argument of `sec_touch.set_time_program`, whose arguments are `Ts`: a constant list from the YAML, or a lambda
- * over the call's arguments. Unlike ESPHome's TemplatableValue, it hands out a constant by reference and passes the
- * call's arguments to the lambda by reference, so checking a call copies no list; only a lambda builds its result.
+ * An argument of `sec_touch.set_time_program`, whose own arguments are `Ts`: a constant from the YAML, or a lambda over
+ * the call's arguments. Unlike ESPHome's TemplatableValue, it hands out a constant by reference and passes the call's
+ * arguments to the lambda by reference, so reading the arguments copies none of the call's lists; only a lambda builds
+ * its result.
  */
-template<typename T, typename... Ts> class BulkListArgument {
+template<typename T, typename... Ts> class BulkArgument {
  public:
   using Lambda = T (*)(const Ts &...);
 
@@ -129,7 +130,7 @@ template<typename T, typename... Ts> class BulkListArgument {
   }
   void set(Lambda lambda) { this->lambda_ = lambda; }
 
-  /// The list of a call with arguments `x`: the constant, or the lambda's result, kept in `result`.
+  /// The value for a call with arguments `x`: the constant, or the lambda's result, kept in `result`.
   const T &get(T &result, const Ts &...x) const {
     if (this->lambda_ == nullptr) {
       return this->value_;

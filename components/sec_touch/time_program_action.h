@@ -33,11 +33,13 @@ namespace sec_touch {
 template<typename... Ts>
 class SetTimeProgramAction : public Action<Ts...>, public Parented<SECTouchComponent>, public BulkWriteListener {
  public:
-  using Times = BulkListArgument<std::vector<std::string>, Ts...>;
-  using Levels = BulkListArgument<std::vector<int32_t>, Ts...>;
-  using Enabled = BulkListArgument<std::vector<bool>, Ts...>;
+  using FanNumber = BulkArgument<int, Ts...>;
+  using Times = BulkArgument<std::vector<std::string>, Ts...>;
+  using Levels = BulkArgument<std::vector<int32_t>, Ts...>;
+  using Enabled = BulkArgument<std::vector<bool>, Ts...>;
 
-  TEMPLATABLE_VALUE(int, fan_number)
+  void set_fan_number(int fan_number) { this->fan_number_.set(fan_number); }
+  void set_fan_number(typename FanNumber::Lambda fan_number) { this->fan_number_.set(fan_number); }
   void set_times(std::vector<std::string> times) { this->times_.set(std::move(times)); }
   void set_times(typename Times::Lambda times) { this->times_.set(times); }
   void set_levels(std::vector<int32_t> levels) { this->levels_.set(std::move(levels)); }
@@ -50,7 +52,8 @@ class SetTimeProgramAction : public Action<Ts...>, public Parented<SECTouchCompo
   Trigger<Ts..., std::string> *get_error_trigger() { return &this->error_trigger_; }
 
   void play(const Ts &...x) override {
-    const int pair = this->fan_number_.value(x...);
+    int fan_number = 0;
+    const int pair = this->fan_number_.get(fan_number, x...);
     TimeProgram *program = this->parent_->get_time_program(pair);
     if (program == nullptr) {
       this->refuse_(pair, bulk_unlisted_pair_error(pair), x...);
@@ -97,6 +100,7 @@ class SetTimeProgramAction : public Action<Ts...>, public Parented<SECTouchCompo
     this->error_trigger_.trigger(x..., error);
   }
 
+  FanNumber fan_number_;
   Times times_;
   Levels levels_;
   Enabled enabled_;

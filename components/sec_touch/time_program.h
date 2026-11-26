@@ -86,11 +86,13 @@ class TimeProgram {
 
  protected:
   /// What a write sent, kept until the read-back. `armed` from the SET's end until the next GET of the ID ends.
-  /// `reported` when the SET itself failed: its read-back is then no second report.
+  /// `reported` when the SET itself failed: its read-back is then no second report. `set_ticket` names the ID's
+  /// latest SET: only its end counts for a bulk write and arms the read-back.
   struct ReadBack {
     int expected{-1};
     bool armed{false};
     bool reported{false};
+    uint32_t set_ticket{0};
   };
 
   /// Puts `id` on the pair's poll, once per ID.
@@ -113,6 +115,7 @@ class TimeProgram {
   void fail_mask_write_(const char *why);
   /// Publishes each listed switch time's enabled switch from `mask` whose state differs.
   void publish_switches_(uint8_t mask);
+  /// Logs a failed write of `id` and fires write_failed. A failure that counts for a bulk write goes to bulk_ too.
   void report_(int id, WriteFailure failure);
   /// Ends the bulk write once each of its writes has ended, and tells its listener.
   void finish_bulk_write_if_done_();

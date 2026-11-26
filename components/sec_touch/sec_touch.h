@@ -102,10 +102,10 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   void add_set_task(std::unique_ptr<SetDataTask> task);
   /**
    * Queues a SET of `property_id`, one per ID: when a SET of that ID is already queued, its value is replaced in place
-   * instead. A SET in flight isn't touched; the new one queues behind it. Returns false for an ID `target` doesn't
-   * accept.
+   * instead. A SET in flight isn't touched; the new one queues behind it. Returns the SET's ticket (never 0), new on
+   * a replace too, which its task carries to the task-end listeners; or 0 for an ID `target` doesn't accept.
    */
-  bool add_set_task_latest_wins(TaskTargetType target, int property_id, const char *value);
+  uint32_t add_set_task_latest_wins(TaskTargetType target, int property_id, const char *value);
   /// Queues a GET of `property_id` ahead of every other GET, after the queued SETs. Returns the GET's ticket (never 0),
   /// which its task carries to the task-end listeners, or 0 for an ID `target` doesn't accept.
   uint32_t add_priority_get_task(TaskTargetType target, int property_id);
@@ -156,7 +156,7 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   MessageRouter message_router_;
   std::vector<QueueEmptyListener> queue_empty_listeners;
   bool scan_mode_active_{false};
-  /// The ticket of the last priority GET.
+  /// The last ticket handed out (next_ticket_()).
   uint32_t last_ticket_{0};
   bool queue_was_idle_{false};
 
@@ -190,6 +190,8 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   void end_task_(std::unique_ptr<BaseTask> task, TaskEnd end);
   /// Ends `task` as dropped (BaseTask::dropped), as a timeout.
   void drop_task_(std::unique_ptr<BaseTask> task);
+  /// A new task ticket, never 0.
+  uint32_t next_ticket_();
   bool has_time_program_polls() const;
   void send_ack_message();
   void drop_data_message(DataMessageCheck check);

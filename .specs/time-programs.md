@@ -165,7 +165,7 @@ flowchart LR
 |---|---|
 | No SET retry | Nothing is written twice. A failed SET is reported once; the read-back GET then publishes the truth and fires no second event. A SET whose ACK arrives corrupted is no failure: its read-back decides (`not_kept` if it didn't land). |
 | Scan mode | Starting the sniffer's scan clears the queue; starting or stopping it drops the task in flight. Each time-program SET dropped ends as `timeout`, with no read-back; a mask GET dropped fails as below. A SET that ends during a scan without being dropped still gets its read-back GET, but the scan takes the answer: nothing is compared. |
-| One queued SET per ID | A newer write to an ID with a SET still queued replaces that task's value in place. A SET already in flight isn't touched; the newer write queues behind it. |
+| One queued SET per ID | A newer write to an ID with a SET still queued replaces that task's value in place. A SET already in flight isn't touched; the newer write queues behind it. Each SET carries a ticket, a new one on a replace: only the ID's latest SET gets the read-back and counts for a bulk call. An older SET still in flight that fails fires `write_failed`, nothing more. |
 | Time | Written as `HH:MM:00`. Seconds from HA are dropped, never rounded. A call with only the hour or only the minute keeps the other one as shown; while the entity shows no time, such a call writes nothing. |
 | Level | The select's index, 0–9, as a decimal string. |
 | Enabled mask | Per pair, the hub keeps the requested bit changes (bits to set, bits to clear). When the write is due: GET the mask fresh, apply only those bits, SET. Bits of switch times outside `switch_times` and any bit above switch time 5's (value `20` and up) stay as they are. Changes merge; per bit, the later request wins. |
@@ -249,7 +249,7 @@ Position *i* is switch time *i*. HA's `string[]`, `int[]` and `bool[]` pass stra
 | Order | The 5 times and 5 levels, then one mask SET built from a fresh mask GET. Only the 5 switch-time bits are replaced. |
 | Writes | 11 writes: all 5 times, 5 levels and the mask, even when the cache shows the same value (it can be 5 min old). Same per-field path as [Writing](#writing). |
 | Failure | Writing continues after a failed field. `on_success` fires only when every read-back matches; otherwise `on_error` gets `error`, and the pair's `write_failed` fires per failed field. |
-| Overlap | A second call for the same pair while one runs → `busy`, nothing written. An entity write that replaces a bulk value shows up as `not_kept` in the bulk report. |
+| Overlap | A second call for the same pair while one runs → `busy`, nothing written. An entity write that replaces a bulk value shows up as `not_kept` in the bulk report. An entity SET still in flight when the call starts is not the call's: its failure isn't in the report. |
 | Deadline | None. HA waits 30 s for a response by default (aioesphomeapi); past it the writes still finish and the entities show the truth. The readme notes it. |
 | In an automation | Fire and forget: the action queues the writes and the next action runs at once. `on_success` / `on_error` fire later, with the call's arguments. A call that writes nothing (bad argument, `busy`) fires `on_error` at once. |
 | One failure per field | The report names each failed field once, with its first failure, in write order. A read-back GET that fails, or whose answer can't be compared, leaves the field unconfirmed: `timeout` (or `not_kept` when a newer SET of it was queued, or a scan took the answer). These two appear only in the report; `write_failed` fires as for an entity write. |
@@ -282,6 +282,7 @@ The [readme copy block and HA call](https://github.com/distante/esphome-componen
 | Bulk action list arguments | `std::vector`, ESPHome's action argument type; the action keeps a copy of each running call's arguments (one static slot per pair) until it fires `on_success` / `on_error`. A constant list is kept once, from setup. A lambda gets the call's arguments by reference; its result lives only while the call is checked. | HA's `string[]`, `int[]` and `bool[]` arrive as vectors. |
 | Bulk write state | static, per pair: how each of the 11 writes ended; what each sent is in the per-field write path's read-back slot, which compares for both | |
 | Per-pair poll ID lists | static, 6 pairs × 11 IDs | |
+| Task tickets and the dropped mark | static: a `uint32_t` ticket and a `bool` on each task, and the latest SET's ticket in each read-back slot | |
 | Entities | static: ESPHome codegen builds each with placement new into a `static` buffer (`esphome/esphome/cpp_generator.py`, `Pvariable`) | Worst case 6 pairs × (15 + 4 + 2) = 126. Estimated 30–60 B each ([research](https://github.com/distante/esphome-components/blob/research/time-program-entities/.specs/research/time-program-entities.md#cost-of-90-extra-entities)), measured in the device check. No cap until then. |
 
 ---

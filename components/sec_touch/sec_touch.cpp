@@ -430,21 +430,24 @@ void SECTouchComponent::exit_scan_mode() {
   this->add_time_program_tasks_to_queue();
 }
 
-bool SECTouchComponent::add_set_task_latest_wins(TaskTargetType target, int property_id, const char *value) {
+uint32_t SECTouchComponent::add_set_task_latest_wins(TaskTargetType target, int property_id, const char *value) {
   for (auto &task : this->data_task_queue) {
     if (task->get_task_type() == TaskType::SET_DATA && task->property_id == property_id) {
       ESP_LOGD(TAG, "Replacing the queued SET of property_id %d with '%s'", property_id, value);
       static_cast<SetDataTask *>(task.get())->set_value(value);
-      return true;
+      task->ticket = this->next_ticket_();
+      return task->ticket;
     }
   }
   auto task = SetDataTask::create(target, property_id, value);
   if (task == nullptr) {
     ESP_LOGE(TAG, "No SET of property_id %d as %s", property_id, EnumToString::TaskTargetType(target));
-    return false;
+    return 0;
   }
+  task->ticket = this->next_ticket_();
+  const uint32_t ticket = task->ticket;
   this->add_set_task(std::move(task));
-  return true;
+  return ticket;
 }
 
 uint32_t SECTouchComponent::add_priority_get_task(TaskTargetType target, int property_id) {
@@ -453,16 +456,21 @@ uint32_t SECTouchComponent::add_priority_get_task(TaskTargetType target, int pro
     ESP_LOGE(TAG, "No GET of property_id %d as %s", property_id, EnumToString::TaskTargetType(target));
     return 0;
   }
-  this->last_ticket_++;
-  if (this->last_ticket_ == 0) {
-    this->last_ticket_ = 1;  // 0 means no GET
-  }
-  task->ticket = this->last_ticket_;
+  task->ticket = this->next_ticket_();
+  const uint32_t ticket = task->ticket;
   auto it = this->data_task_queue.begin();
   while (it != this->data_task_queue.end() && (*it)->get_task_type() == TaskType::SET_DATA) {
     ++it;
   }
   this->data_task_queue.insert(it, std::move(task));
+  return ticket;
+}
+
+uint32_t SECTouchComponent::next_ticket_() {
+  this->last_ticket_++;
+  if (this->last_ticket_ == 0) {
+    this->last_ticket_ = 1;  // 0 means no task
+  }
   return this->last_ticket_;
 }
 

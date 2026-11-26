@@ -467,4 +467,20 @@ TEST_F(SECTouchTaskEndTest, ScanExitEndsTheTaskInFlightAsATimeout) {
   EXPECT_EQ(this->ends_, std::vector<std::string>{end_of("GET", FAN_1_LEVEL_ID, TaskEnd::TASK_END_TIMEOUT)});
 }
 
+// A latest-wins SET carries a ticket to its end, a new one when a newer value replaces it in place.
+TEST_F(SECTouchTaskEndTest, AReplacedSetEndsWithItsNewTicket) {
+  std::vector<uint32_t> tickets;
+  this->hub_.register_task_end_listener([&tickets](const BaseTask &task, TaskEnd) { tickets.push_back(task.ticket); });
+  const uint32_t first = this->hub_.add_set_task_latest_wins(TaskTargetType::LEVEL, FAN_1_LEVEL_ID, "5");
+  const uint32_t second = this->hub_.add_set_task_latest_wins(TaskTargetType::LEVEL, FAN_1_LEVEL_ID, "6");
+  this->send_next_task();
+
+  this->uart_.push_rx(ack_frame());
+  this->loop_times(2);
+
+  EXPECT_NE(first, 0u);
+  EXPECT_NE(second, first);
+  EXPECT_EQ(tickets, std::vector<uint32_t>{second});
+}
+
 }  // namespace esphome::sec_touch::testing

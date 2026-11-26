@@ -126,7 +126,7 @@ void TimeProgram::queue_set_(int id, const char *value, int expected) {
     return;
   }
   read_back->expected = expected;
-  this->hub_->add_set_task_latest_wins(TaskTargetType::TIME_PROGRAM, id, value);
+  read_back->set_ticket = this->hub_->add_set_task_latest_wins(TaskTargetType::TIME_PROGRAM, id, value);
 }
 
 TimeProgram::ReadBack *TimeProgram::read_back_(int id) {
@@ -261,6 +261,7 @@ void TimeProgram::fail_mask_write_(const char *why) {
   ESP_LOGW(TAG, "Fan pair %d enabled mask: nothing written, %s", this->pair_, why);
   this->mask_merge_.clear();
   this->mask_read_pending_ = false;
+  this->bulk_.fail(TimeProgramSlot{this->pair_, 0, TimeProgramField::ENABLED}, WriteFailure::MASK_UNREADABLE);
   this->report_(time_program_enabled_id(this->pair_), WriteFailure::MASK_UNREADABLE);
   if (this->last_good_mask_ >= 0) {
     this->publish_switches_(static_cast<uint8_t>(this->last_good_mask_));
@@ -293,9 +294,17 @@ void TimeProgram::on_task_end_(const BaseTask &task, TaskEnd end) {
 
   if (task.get_task_type() == TaskType::SET_DATA) {
     auto failure = set_write_failure(end);
-    read_back->reported = failure.has_value();
     if (failure.has_value()) {
       this->report_(task.property_id, *failure);
+    }
+    // A SET that was in flight when a newer SET of the ID was queued only reports: the newer one is the bulk write's
+    // and gets the read-back.
+    if (task.ticket != read_back->set_ticket) {
+      return;
+    }
+    read_back->reported = failure.has_value();
+    if (failure.has_value()) {
+      this->bulk_.fail(*slot, *failure);
     }
     // A dropped SET gets no read-back: it was never sent, or a scan started or stopped while it was in flight. A SET
     // that ends during a scan gets one: writes stay allowed then, so its GET does too.
@@ -369,7 +378,6 @@ void TimeProgram::report_(int id, WriteFailure failure) {
   if (!slot.has_value()) {
     return;
   }
-  this->bulk_.fail(*slot, failure);
   if (slot->field == TimeProgramField::ENABLED) {
     ESP_LOGW(TAG, "Fan pair %d %s: write failed, %s", this->pair_, time_program_field_name(slot->field),
              write_failure_name(failure));

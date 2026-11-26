@@ -366,4 +366,20 @@ TEST_F(SetTimeProgramTest, ACallDuringAScanIsNotConfirmed) {
   EXPECT_EQ(this->successes_, 0);
 }
 
+// Only the call's own SET of a field counts for it: an entity SET of that field still in flight when the call starts
+// that fails fires its event but is no failure of the call.
+TEST_F(SetTimeProgramTest, ARefusedEntitySetInFlightIsNotTheCallsWrite) {
+  constexpr size_t ENTITY_LEVEL = 7;
+  this->level_.make_call().set_index(ENTITY_LEVEL).perform();
+  this->hub_.loop();  // the entity's level SET goes out
+
+  this->action_.play_complex();
+  this->uart_.push_rx(nak_frame());  // the panel refuses it after the call started
+  this->run_panel();
+
+  EXPECT_EQ(this->successes_, 1);
+  EXPECT_TRUE(this->errors_.empty());
+  EXPECT_EQ(this->events_, std::vector<std::string>{write_failure_name(WriteFailure::REFUSED)});
+}
+
 }  // namespace esphome::sec_touch::testing

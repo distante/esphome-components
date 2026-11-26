@@ -152,7 +152,8 @@ struct BaseTask {
   bool retried{false};
   /// Dropped by the hub when scan mode started or stopped: it ends as a timeout, unsent or with its answer cut off.
   bool dropped{false};
-  /// Tells a priority GET apart from other tasks of its ID when it ends (add_priority_get_task); 0 for other tasks.
+  /// Tells the task apart from other tasks of its ID when it ends: a priority GET (add_priority_get_task) and a
+  /// latest-wins SET (add_set_task_latest_wins) carry one; 0 for other tasks.
   uint32_t ticket{0};
 };
 

@@ -20,9 +20,6 @@ namespace sec_touch {
 class SecTouchFan;
 class TimeProgram;
 
-/// The global-settings poll interval until codegen sets the configured one.
-constexpr uint32_t DEFAULT_GLOBAL_SETTINGS_UPDATE_INTERVAL_MS = 30000;
-
 class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
  public:
   SECTouchComponent();
@@ -199,9 +196,9 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   uint32_t task_start_time_ = 0;
   uint32_t task_ready_at_ms_ = 0;
   uint32_t inter_task_delay_ms_ = 30;
-  uint32_t global_settings_update_interval_ms_ = DEFAULT_GLOBAL_SETTINGS_UPDATE_INTERVAL_MS;
+  /// Codegen always sets both poll intervals; their defaults live in the YAML schema (`__init__.py`).
+  uint32_t global_settings_update_interval_ms_ = 0;
   uint32_t last_global_settings_update_ms_ = 0;
-  /// Codegen always sets it; its default lives in the YAML schema (`__init__.py`).
   uint32_t time_programs_update_interval_ms_ = 0;
   uint32_t last_time_programs_update_ms_ = 0;
   int current_running_task_property_id_ = -1;

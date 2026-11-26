@@ -108,18 +108,9 @@ std::string level_text(int level) { return std::to_string(level); }
 constexpr int LEVEL_OF[SWITCH_TIME_COUNT + 1] = {-1, 1, 2, 3, 4, 5};
 const char *running(int switch_time) { return level_name(LEVEL_OF[switch_time]); }
 
-/// A pair's model fed one good value of every input, the panel clock read at READ_MS.
-class LiveStateModelTest : public ::testing::Test {
+/// A pair's model and helpers that feed it one input each; nothing is read yet.
+class LiveStateModelInputs : public ::testing::Test {
  protected:
-  /// Switch times 1-5 at these times, each at LEVEL_OF its number.
-  void SetUp() override {
-    const char *times[SWITCH_TIME_COUNT] = {"08:00:00", "12:00:00", "18:00:00", "21:00:00", "23:00:00"};
-    for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
-      this->time(n, times[n - 1]);
-      this->level(n, level_text(LEVEL_OF[n]));
-    }
-  }
-
   bool time(int switch_time, const std::string &raw) {
     return this->model_.take_block_value(*time_program_slot(time_program_time_id(PAIR, switch_time)), raw);
   }
@@ -132,12 +123,20 @@ class LiveStateModelTest : public ::testing::Test {
   bool pair_level(const std::string &raw) { return this->model_.take_pair_level(raw); }
   bool clock(const std::string &raw) { return this->model_.take_clock(raw, READ_MS); }
 
-  /// Every input read once: these switch times enabled, running, the panel at `now`.
+  /// Switch time `switch_time` at 08:00 and LEVEL_OF its number.
+  void switch_time(int switch_time) {
+    this->time(switch_time, "08:00:00");
+    this->level(switch_time, level_text(LEVEL_OF[switch_time]));
+  }
+
+  /// The mask, pair level and clock read once: these switch times enabled, running, the panel at `now`.
   void ready(uint8_t enabled, const std::string &now) {
     this->mask(mask_text(enabled));
     this->pair_level(RUNNING);
     this->clock(now);
   }
+
+  bool has_state() const { return this->model_.compute(READ_MS).has_value(); }
 
   /// The state `after_ms` after the clock read.
   LiveState state(uint32_t after_ms = 0) {
@@ -149,6 +148,19 @@ class LiveStateModelTest : public ::testing::Test {
   LiveStateModel model_{PAIR};
 };
 
+/// A pair's model fed one good value of every switch time's time and level.
+class LiveStateModelTest : public LiveStateModelInputs {
+ protected:
+  /// Switch times 1-5 at these times, each at LEVEL_OF its number.
+  void SetUp() override {
+    const char *times[SWITCH_TIME_COUNT] = {"08:00:00", "12:00:00", "18:00:00", "21:00:00", "23:00:00"};
+    for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
+      this->time(n, times[n - 1]);
+      this->level(n, level_text(LEVEL_OF[n]));
+    }
+  }
+};
+
 void expect_state(const LiveState &state, const char *in_effect, const char *running_level, const char *next_level,
                   std::optional<uint32_t> ms_to_next_change) {
   EXPECT_STREQ(state.in_effect, in_effect);
@@ -157,35 +169,84 @@ void expect_state(const LiveState &state, const char *in_effect, const char *run
   EXPECT_EQ(state.ms_to_next_change, ms_to_next_change);
 }
 
-// Cases table, boot row: nothing until every input was read once.
-TEST(LiveStateModelBoot, NothingUntilEveryInputWasReadOnce) {
-  LiveStateModel model{PAIR};
-  EXPECT_FALSE(model.compute(READ_MS).has_value());
-
-  model.take_block_value(*time_program_slot(time_program_enabled_id(PAIR)), mask_text(bit(1)));
+// Cases table, inputs rows: only the inputs the result uses are needed.
+TEST_F(LiveStateModelInputs, NothingBeforeThePairLevelIsRead) {
+  this->mask(mask_text(bit(1)));
   for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
-    model.take_block_value(*time_program_slot(time_program_time_id(PAIR, n)), "08:00:00");
-    model.take_block_value(*time_program_slot(time_program_level_id(PAIR, n)), level_text(LEVEL_OF[n]));
+    this->switch_time(n);
   }
-  model.take_pair_level(RUNNING);
-  EXPECT_FALSE(model.compute(READ_MS).has_value()) << "the clock was never read";
+  this->clock("10:00:00");
 
-  model.take_clock("10:00:00", READ_MS);
-  EXPECT_TRUE(model.compute(READ_MS).has_value());
+  EXPECT_FALSE(this->has_state());
 }
 
-TEST_F(LiveStateModelTest, NothingWhileOneSwitchTimeWasNeverRead) {
-  LiveStateModel model{PAIR};
-  model.take_block_value(*time_program_slot(time_program_enabled_id(PAIR)), mask_text(bit(1)));
-  for (int n = 1; n < SWITCH_TIME_COUNT; n++) {
-    model.take_block_value(*time_program_slot(time_program_time_id(PAIR, n)), "08:00:00");
-    model.take_block_value(*time_program_slot(time_program_level_id(PAIR, n)), level_text(LEVEL_OF[n]));
-  }
-  model.take_block_value(*time_program_slot(time_program_time_id(PAIR, SWITCH_TIME_COUNT)), "08:00:00");
-  model.take_pair_level(RUNNING);
-  model.take_clock("10:00:00", READ_MS);
+TEST_F(LiveStateModelInputs, NotRunningNeedsOnlyThePairLevel) {
+  EXPECT_TRUE(this->pair_level(level_text(LEVEL_NAMES[0].level)));
 
-  EXPECT_FALSE(model.compute(READ_MS).has_value()) << "the last level was never read";
+  expect_state(this->state(), LIVE_STATE_NOT_RUNNING, LIVE_STATE_NOT_RUNNING, LIVE_STATE_NOT_RUNNING, std::nullopt);
+}
+
+TEST_F(LiveStateModelInputs, RunningNeedsTheClock) {
+  this->mask(mask_text(bit(1)));
+  this->switch_time(1);
+  this->pair_level(RUNNING);
+  EXPECT_FALSE(this->has_state()) << "the clock was never read";
+
+  this->clock("10:00:00");
+  expect_state(this->state(), switch_time_name(1), running(1), running(1), hours(22));
+}
+
+TEST_F(LiveStateModelInputs, RunningNeedsTheMask) {
+  this->switch_time(1);
+  this->pair_level(RUNNING);
+  this->clock("10:00:00");
+  EXPECT_FALSE(this->has_state()) << "the mask was never read";
+
+  this->mask(mask_text(bit(1)));
+  expect_state(this->state(), switch_time_name(1), running(1), running(1), hours(22));
+}
+
+TEST_F(LiveStateModelInputs, RunningNeedsTheTimeOfEachEnabledSwitchTime) {
+  this->level(2, level_text(LEVEL_OF[2]));
+  this->ready(bit(2), "10:00:00");
+  EXPECT_FALSE(this->has_state()) << "switch time 2's time was never read";
+
+  this->time(2, "08:00:00");
+  expect_state(this->state(), switch_time_name(2), running(2), running(2), hours(22));
+}
+
+TEST_F(LiveStateModelInputs, RunningNeedsTheLevelOfEachEnabledSwitchTime) {
+  this->time(2, "08:00:00");
+  this->ready(bit(2), "10:00:00");
+  EXPECT_FALSE(this->has_state()) << "switch time 2's level was never read";
+
+  this->level(2, level_text(LEVEL_OF[2]));
+  expect_state(this->state(), switch_time_name(2), running(2), running(2), hours(22));
+}
+
+TEST_F(LiveStateModelInputs, RunningNeedsNothingOfADisabledSwitchTime) {
+  this->switch_time(1);
+  this->ready(bit(1), "10:00:00");  // switch times 2-5 never read
+
+  expect_state(this->state(), switch_time_name(1), running(1), running(1), hours(22));
+}
+
+TEST_F(LiveStateModelInputs, AnUnexpectedFirstReadOfADisabledSwitchTimeIsNotNeeded) {
+  this->switch_time(1);
+  this->ready(bit(1), "10:00:00");
+  EXPECT_FALSE(this->time(2, "24:00:00"));
+  EXPECT_FALSE(this->level(2, level_text(AUTOMATIC_TIME_LEVEL)));
+
+  expect_state(this->state(), switch_time_name(1), running(1), running(1), hours(22));
+}
+
+TEST_F(LiveStateModelInputs, EnablingASwitchTimeNeverReadIsAsBoot) {
+  this->switch_time(1);
+  this->ready(bit(1), "10:00:00");
+  ASSERT_TRUE(this->has_state());
+
+  this->mask(mask_text(bit(1) | bit(2)));
+  EXPECT_FALSE(this->has_state()) << "switch time 2 was never read";
 }
 
 // Cases table, not running: whenever the level ID isn't Automatik Zeit, whatever the program says.
@@ -350,34 +411,34 @@ TEST_F(LiveStateModelTest, AGoodValueReplacesTheLastGoodOne) {
   expect_state(this->state(), switch_time_name(2), running(5), running(3), hours(5));
 }
 
-// AC 9 and the cases table: an input that never read well yet is as boot.
-TEST(LiveStateModelBoot, AnUnexpectedFirstReadIsAsBoot) {
-  LiveStateModel model{PAIR};
-  for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
-    model.take_block_value(*time_program_slot(time_program_time_id(PAIR, n)), "08:00:00");
-    model.take_block_value(*time_program_slot(time_program_level_id(PAIR, n)), level_text(LEVEL_OF[n]));
-  }
-  model.take_pair_level(RUNNING);
-  model.take_clock("10:00:00", READ_MS);
+// AC 9 and the cases table: a needed input that never read well yet is as boot.
+TEST_F(LiveStateModelInputs, AnUnexpectedFirstMaskIsAsBoot) {
+  this->switch_time(1);
+  this->pair_level(RUNNING);
+  this->clock("10:00:00");
 
-  EXPECT_FALSE(model.take_block_value(*time_program_slot(time_program_enabled_id(PAIR)), "zz"));
-  EXPECT_FALSE(model.compute(READ_MS).has_value());
+  EXPECT_FALSE(this->mask("zz"));
+  EXPECT_FALSE(this->has_state());
 
-  EXPECT_TRUE(model.take_block_value(*time_program_slot(time_program_enabled_id(PAIR)), mask_text(bit(1))));
-  EXPECT_TRUE(model.compute(READ_MS).has_value());
+  EXPECT_TRUE(this->mask(mask_text(bit(1))));
+  EXPECT_TRUE(this->has_state());
 }
 
-TEST(LiveStateModelBoot, AnUnexpectedFirstClockIsAsBoot) {
-  LiveStateModel model{PAIR};
-  model.take_block_value(*time_program_slot(time_program_enabled_id(PAIR)), mask_text(bit(1)));
-  for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
-    model.take_block_value(*time_program_slot(time_program_time_id(PAIR, n)), "08:00:00");
-    model.take_block_value(*time_program_slot(time_program_level_id(PAIR, n)), level_text(LEVEL_OF[n]));
-  }
-  model.take_pair_level(RUNNING);
+TEST_F(LiveStateModelInputs, AnUnexpectedFirstClockIsAsBoot) {
+  this->mask(mask_text(bit(1)));
+  this->switch_time(1);
+  this->pair_level(RUNNING);
 
-  EXPECT_FALSE(model.take_clock("25:00:00", READ_MS));
-  EXPECT_FALSE(model.compute(READ_MS).has_value());
+  EXPECT_FALSE(this->clock("25:00:00"));
+  EXPECT_FALSE(this->has_state());
+}
+
+TEST_F(LiveStateModelInputs, AnUnexpectedFirstLevelOfAnEnabledSwitchTimeIsAsBoot) {
+  this->time(1, "08:00:00");
+  this->ready(bit(1), "10:00:00");
+
+  EXPECT_FALSE(this->level(1, level_text(AUTOMATIC_TIME_LEVEL)));
+  EXPECT_FALSE(this->has_state());
 }
 
 TEST(LiveStateModelBoot, AnotherPairsValueIsNotAnInput) {

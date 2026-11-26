@@ -19,6 +19,18 @@ void push_once(std::vector<int> &ids, int id) {
   }
 }
 
+/// push_once() for the global-settings poll, which asks the panel date (ID 1) right before the panel clock (ID 2)
+/// whatever the registration order: clock_drift pairs each clock reading with the date read just before it.
+void push_global_setting_once(std::vector<int> &ids, int id) {
+  push_once(ids, id);
+  auto date = std::find(ids.begin(), ids.end(), DATE_PROPERTY_ID);
+  if (date == ids.end() || std::find(ids.begin(), ids.end(), CLOCK_PROPERTY_ID) == ids.end()) {
+    return;
+  }
+  ids.erase(date);
+  ids.insert(std::find(ids.begin(), ids.end(), CLOCK_PROPERTY_ID), DATE_PROPERTY_ID);
+}
+
 }  // namespace
 
 static const char *const TAG = "sec_touch";
@@ -330,18 +342,18 @@ void SECTouchComponent::register_manual_update_listener(int property_id, UpdateC
 void SECTouchComponent::register_global_setting_recursive_listener(int property_id, UpdateCallbackListener listener) {
   ESP_LOGD(TAG, "register_global_setting_recursive_listener for property_id %d", property_id);
   this->recursive_update_listeners.emplace(property_id, std::move(listener));
-  push_once(this->global_setting_property_ids_, property_id);
+  push_global_setting_once(this->global_setting_property_ids_, property_id);
 }
 
 void SECTouchComponent::register_global_setting_string_listener(int property_id,
                                                                 StringUpdateCallbackListener listener) {
   ESP_LOGD(TAG, "register_global_setting_string_listener for property_id %d", property_id);
   this->string_update_listeners.emplace(property_id, std::move(listener));
-  push_once(this->global_setting_property_ids_, property_id);
+  push_global_setting_once(this->global_setting_property_ids_, property_id);
 }
 
-void SECTouchComponent::register_time_program_listener(int property_id, StringUpdateCallbackListener listener) {
-  ESP_LOGD(TAG, "register_time_program_listener for property_id %d", property_id);
+void SECTouchComponent::register_unpolled_string_listener(int property_id, StringUpdateCallbackListener listener) {
+  ESP_LOGD(TAG, "register_unpolled_string_listener for property_id %d", property_id);
   this->string_update_listeners.emplace(property_id, std::move(listener));
 }
 
@@ -415,12 +427,14 @@ void SECTouchComponent::enter_scan_mode() {
   }
   std::deque<std::unique_ptr<BaseTask>> discarded;
   discarded.swap(this->data_task_queue);
-  std::unique_ptr<BaseTask> in_flight = this->take_in_flight_task_();
-  this->queue_was_idle_ = false;  // Force queue-empty callback to fire so scan tasks get queued
+  // Force the queue-empty callback to fire, once the line is free, so scan tasks get queued.
+  this->queue_was_idle_ = false;
   this->scan_outcome_.begin_scan();
   this->scan_mode_active_ = true;
 
-  this->drop_task_(std::move(in_flight));
+  // The task still in flight is dropped: its listeners hear it end now. The line stays busy until its reply or the
+  // watchdog, so a late reply ends no scan task.
+  this->drop_task_(std::move(this->in_flight_task_));
   for (auto &task : discarded) {
     this->drop_task_(std::move(task));
   }
@@ -710,7 +724,9 @@ void SECTouchComponent::cleanup_after_task_complete(TaskEnd end) {
 std::unique_ptr<BaseTask> SECTouchComponent::finish_in_flight_task_(TaskEnd end) {
   ESP_LOGD(TAG, "Task ended: %s", task_end_name(end));
   std::unique_ptr<BaseTask> task = this->take_in_flight_task_();
-  this->scan_outcome_.record(end, this->scan_mode_active_);
+  // A reply to a task already dropped (no task left) is no scan query's: it leaves the outcome alone too.
+  this->scan_outcome_.record(end, this->scan_mode_active_,
+                             task != nullptr && task->targetType == TaskTargetType::SNIFFER);
   this->task_ready_at_ms_ = millis() + this->inter_task_delay_ms_;
   return task;
 }

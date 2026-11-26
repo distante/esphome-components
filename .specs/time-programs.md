@@ -139,7 +139,7 @@ Decided in [Should sec_touch compute which switch time is in effect, and how is 
 
 - **Own poll:** every `time_programs_update_interval` (default 5 min), the hub queues GETs for each listed pair. This is separate from the 5 s fan poll and the 30 s global-settings poll.
 - **Which IDs:** the enabled ID and the time and level IDs of the listed switch times. With any live-state entity, the pair's **whole block** (11 IDs), whatever `switch_times` says.
-- **Panel clock:** with any live-state entity on any pair, IDs 1 and 2 are polled on the global-settings poll, as for `clock_drift`.
+- **Panel clock:** with any live-state entity on any pair, ID 2 (clock) is polled on the global-settings poll, as for `clock_drift`. ID 1 (date) only with `clock_drift`; the hub polls it right before ID 2, whatever the registration order.
 - **First poll:** right after boot, like the global settings.
 - **`refresh` button:** one press queues the same GETs as one poll of that pair. The regular poll stays on its schedule.
 - Results reach the entities through the hub's existing update listeners.
@@ -164,12 +164,12 @@ flowchart LR
 | Rule | Detail |
 |---|---|
 | No SET retry | Nothing is written twice. A failed SET is reported once; the read-back GET then publishes the truth and fires no second event. A SET whose ACK arrives corrupted is no failure: its read-back decides (`not_kept` if it didn't land). |
-| Scan mode | Starting the sniffer's scan clears the queue; starting or stopping it drops the task in flight. After a stop, the next task waits until the dropped one's reply or the watchdog ends it, so a late reply ends no other task. Each time-program SET dropped ends as `timeout`, with no read-back; a mask GET dropped fails as below. A SET that ends during a scan without being dropped still gets its read-back GET, but the scan takes the answer: nothing is compared. |
+| Scan mode | Starting the sniffer's scan clears the queue; starting or stopping it drops the task in flight. After a start or a stop, the next task waits until the dropped one's reply or the watchdog ends it, so a late reply ends no other task. Each time-program SET dropped ends as `timeout`, with no read-back; a mask GET dropped fails as below. A SET that ends during a scan without being dropped still gets its read-back GET, but the scan takes the answer: nothing is compared. |
 | One queued SET per ID | A newer write to an ID with a SET still queued replaces that task's value in place. A SET already in flight isn't touched; the newer write queues behind it. Each SET carries a ticket, a new one on a replace: only the ID's latest SET gets the read-back and counts for a bulk call. An older SET still in flight that fails fires `write_failed`, nothing more. |
 | Time | Written as `HH:MM:00`. Seconds from HA are dropped, never rounded. A call with only the hour or only the minute keeps the other one as shown; while the entity shows no time, such a call writes nothing. |
 | Level | The select's index, 0–9, as a decimal string. |
-| Enabled mask | Per pair, the hub keeps the requested bit changes (bits to set, bits to clear). When the write is due: GET the mask fresh, apply only those bits, SET. Only that GET's own answer is the fresh mask, not a poll's answer that arrives meanwhile. Bits of switch times outside `switch_times` and any bit above switch time 5's (value `20` and up) stay as they are. Changes merge; per bit, the later request wins. |
-| Mask GET fails | The hub retries a GET only after a dropped reply (`get_retry.h`), not after a timeout or NAK. When the write's own fresh GET fails, or can't be queued: write nothing, fire `mask_unreadable`, log a warning, republish the switches from the last good mask. A poll's GET of the mask that fails meanwhile doesn't count. |
+| Enabled mask | Per pair, the hub keeps the requested bit changes (bits to set, bits to clear). When the write is due: GET the mask fresh, apply only those bits, SET. Only that GET's own answer is the fresh mask, not a poll's answer that arrives meanwhile. Bits of switch times outside `switch_times` stay as they are; a mask the [meaning rule](#known-property-catalogue) marks unexpected is never written over (Mask GET fails, below). Changes merge; per bit, the later request wins. |
+| Mask GET fails | The hub retries a GET only after a dropped reply (`get_retry.h`), not after a timeout or NAK. When the write's own fresh GET fails, can't be queued, or answers a mask the [meaning rule](#known-property-catalogue) marks unexpected: write nothing, fire `mask_unreadable`, log a warning, republish the switches from the last good mask. A poll's GET of the mask that fails meanwhile doesn't count. |
 | Read-back | A `not_kept` is a read-back that differs from what was sent; seconds are ignored when comparing times. Live-state entities recompute from the read-back. |
 
 **`write_failed` event types** (an ESPHome event carries only its type; the log names the field, and in HA the entity that jumped back shows it):
@@ -179,7 +179,7 @@ flowchart LR
 | `refused` | The SET got a NAK |
 | `timeout` | The SET got no answer, or couldn't be queued |
 | `not_kept` | The read-back differs from what was sent |
-| `mask_unreadable` | The fresh mask GET failed; nothing was written |
+| `mask_unreadable` | The fresh mask GET failed or answered an unexpected mask; nothing was written |
 
 HA's toast can't show these: entity commands from HA get no result back from ESPHome.
 
@@ -194,7 +194,7 @@ Decided in [Should sec_touch compute which switch time is in effect, and how is 
 - **In effect:** as defined in the [glossary](../GLOSSARY.md#language) (Switch time in effect). "At or before" includes the panel time itself.
 - **Next change:** the first enabled switch time strictly after the panel time, wrapping to the next day.
 - **Assumption:** the panel never shows the level it runs, so this model can't be checked on the device. The readme says so.
-- **Clock:** the panel clock (IDs 1 and 2), which is what fires the switch times. Advanced with `millis()` between reads, re-anchored on each good read. Drift needs no handling.
+- **Clock:** the panel clock (ID 2), which is what fires the switch times. Advanced with `millis()` between reads, re-anchored on each good read. Drift needs no handling.
 - **Running:** the program runs only when the pair's level ID reads `AUTOMATIC_TIME_LEVEL` (10).
 
 **Entities** (each optional, under the pair's `time_programs` entry):
@@ -216,11 +216,18 @@ The state words live in the live-state model's header ([Implementation notes](#i
 | The next change is a tie | as normal | as normal | valid / `conflict` |
 | A tie at another time of day | no effect | no effect | no effect |
 | Exactly one enabled switch time | that switch time | its level | itself 24 h later / its level |
-| Inputs not read once yet (boot) | nothing published | nothing published | nothing published |
+| A needed input (see **Inputs** below) not read once yet (boot) | nothing published | nothing published | nothing published |
 | An input read fails or is unexpected | from the last good value of that input (for the clock: the old anchor), warning logged | same | same |
-| … and that input never read well yet | as boot | as boot | as boot |
+| … and that input is needed and never read well yet | as boot | as boot | as boot |
 
-- **Inputs:** the pair's enabled mask, its 5 times and 5 levels, its level ID, and the panel clock.
+**Inputs:** the pair's enabled mask, its 5 times and 5 levels, its level ID, and the panel clock. The state needs only the inputs it uses; an input it doesn't need never holds it back:
+
+| Pair's level ID | Needed inputs |
+|---|---|
+| never read well | the level ID: nothing published until it is |
+| not `AUTOMATIC_TIME_LEVEL` | the level ID alone (`not running`) |
+| `AUTOMATIC_TIME_LEVEL` | the level ID, the panel clock, the enabled mask, and the time and level of each enabled switch time. A disabled switch time's time and level are never needed. |
+
 - **Recompute:** on every input read, plus one timeout set for the next change: a deadline the live state's `loop()` checks, so the scheduler allocates nothing. An entity publishes only when its value changes.
 - A GET answer for an input ID while a SET of that ID is queued is skipped, as the fan and the field entities skip it.
 - The HA fan entity isn't changed: in Automatik Zeit it still shows on, preset Automatic Time. Whether it should follow the running level is [sec_touch: in Automatik Zeit the fan shows on even when the program runs level 0](https://github.com/distante/esphome-components/issues/124).
@@ -278,7 +285,7 @@ The [readme copy block and HA call](https://github.com/distante/esphome-componen
 | Requested mask bits | static, 6 pairs × (set, clear) `uint8_t` | |
 | Panel clock anchor, live-state inputs and deadline | static: members of the live-state object, which codegen places statically | |
 | Bulk `error` text | `std::string`, built only when a bulk call fails | ESPHome's `api.respond` takes a `std::string` anyway ([Memory rule](../.claude/skills/coding-standards/SKILL.md#memory)). |
-| Listener registrations | the hub's listener maps (`std::multimap` entries holding `std::function`s) and its task-end listener list (one entry per pair) | One entry per registered ID: per pair 11 for the time program's block (every listed pair, for the bulk read-backs) and 12 for the live state (its block and level ID), plus IDs 1 and 2 once per live-state pair. Allocated while the entities are built, never freed. |
+| Listener registrations | the hub's listener maps (`std::multimap` entries holding `std::function`s) and its task-end listener list (one entry per pair) | One entry per registered ID: per pair 11 for the time program's block (every listed pair, for the bulk read-backs) and 12 for the live state (its block and level ID), plus ID 2 once per live-state pair. Allocated while the entities are built, never freed. |
 | Bulk action list arguments | `std::vector`, ESPHome's action argument type; the action keeps a copy of each running call's arguments (one static slot per pair) until it fires `on_success` / `on_error`. A constant list is kept once, from setup. A lambda gets the call's arguments by reference; its result lives only while the call is checked. | HA's `string[]`, `int[]` and `bool[]` arrive as vectors. |
 | Bulk write state | static, per pair: how each of the 11 writes ended; what each sent is in the per-field write path's read-back slot, which compares for both | |
 | Per-pair poll ID lists | static, 6 pairs × 11 IDs | |
@@ -319,7 +326,7 @@ Ships in **v1.5.0** with the sniffer goals and experiments. The work for this se
 - That the fan entity still shows on in Automatik Zeit.
 - The bulk-action copy block, the HA call, and HA's 30 s response timeout.
 - The measured RAM cost.
-- IDs 1 and 2 are also polled with any live-state entity (readme "Panel Clock" and the `GLOBAL_SETTING_IDS` note say only with `clock_drift`).
+- ID 2 is also polled with any live-state entity, ID 1 only with `clock_drift` and always right before ID 2 (readme "Panel Clock" and the `GLOBAL_SETTING_IDS` note).
 - The known-property list under "Sniffer page" and the "Known Ids" section gain the three time-program arrays.
 - "Not in `protocol_ids.h` yet: #85 decides" under Time programs: point at this spec's [catalogue](#known-property-catalogue).
 
@@ -347,7 +354,7 @@ Ships in **v1.5.0** with the sniffer goals and experiments. The work for this se
 6. An HA write follows [Writing](#writing): published at once, one queued SET per ID (a newer value replaces the queued one), after the SET ends one GET whose value is published. No SET is retried.
 7. A switch write GETs the mask, changes only the requested bits and SETs it. A failed GET writes nothing. `write_failed` fires each type of the [event table](#writing) in its case.
 8. Time writes send `HH:MM:00`. A level the [meaning rule](#known-property-catalogue) marks unexpected, read from the panel, leaves the select with no state, and nothing is written.
-9. Live state follows the [model](#live-state) and every row of its cases table, and publishes only on change. Tests cover: exactly one enabled switch time, a failed or unexpected input before and after a good read, a switch time exactly at the panel time (in effect) and the next change strictly after it. `not running` appears whenever the program isn't [running](#live-state).
+9. Live state follows the [model](#live-state) and every row of its cases table, and publishes only on change. Tests cover: exactly one enabled switch time, a failed or unexpected input before and after a good read, each needed input of the [Inputs](#live-state) table never read well (nothing published) and an unneeded one (published), a switch time exactly at the panel time (in effect) and the next change strictly after it. `not running` appears whenever the program isn't [running](#live-state).
 10. `sec_touch.set_time_program` follows [Bulk-set action](#bulk-set-action): validates everything first, writes times, levels, then the mask, reports `invalid_argument`, `busy` or the failed-field list in `error`, and fires `on_success` only when every read-back matches.
 11. No heap use beyond the [Memory](#memory) table.
 12. The device check is recorded with the heap numbers, and the readme states them.

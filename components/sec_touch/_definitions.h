@@ -43,7 +43,14 @@ using TaskEndListener = std::function<void(const BaseTask &task, TaskEnd end)>;
 /**
  * Used to couple `SetDataTask->id` with the level_id or label_id for example
  */
-enum class TaskTargetType { LEVEL, LABEL, GLOBAL_SETTING, TIME_PROGRAM };
+enum class TaskTargetType {
+  LEVEL,
+  LABEL,
+  GLOBAL_SETTING,
+  TIME_PROGRAM,
+  /// The sniffer's own task (create_unchecked): a scan query or a write probe step. Only these set the scan outcome.
+  SNIFFER,
+};
 enum class TaskType {
   SET_DATA,
   GET_DATA,
@@ -68,6 +75,8 @@ class EnumToString {
         return "GLOBAL_SETTING";
       case TaskTargetType::TIME_PROGRAM:
         return "TIME_PROGRAM";
+      case TaskTargetType::SNIFFER:
+        return "SNIFFER";
       default:
         return "UNKNOWN";
     }
@@ -170,10 +179,9 @@ struct SetDataTask : public BaseTask {
     return nullptr;  // Null unique_ptr if validation fails
   }
 
-  // Bypasses ID validation — for the sniffer's write probe only. A value over SET_VALUE_CAP is cut there. The LEVEL
-  // target type is a placeholder: no SET reads it.
+  // Bypasses ID validation — for the sniffer's write probe only. A value over SET_VALUE_CAP is cut there.
   static std::unique_ptr<SetDataTask> create_unchecked(int property_id, const char *value) {
-    return std::unique_ptr<SetDataTask>(new SetDataTask(TaskTargetType::LEVEL, property_id, value));
+    return std::unique_ptr<SetDataTask>(new SetDataTask(TaskTargetType::SNIFFER, property_id, value));
   }
 
   TaskType get_task_type() const override { return TaskType::SET_DATA; }
@@ -205,7 +213,7 @@ struct GetDataTask : public BaseTask {
 
   // Bypasses ID validation — for sniffer/discovery use only
   static std::unique_ptr<GetDataTask> create_unchecked(int property_id) {
-    return std::unique_ptr<GetDataTask>(new GetDataTask(TaskTargetType::LEVEL, property_id));
+    return std::unique_ptr<GetDataTask>(new GetDataTask(TaskTargetType::SNIFFER, property_id));
   }
 
   TaskType get_task_type() const override { return TaskType::GET_DATA; }

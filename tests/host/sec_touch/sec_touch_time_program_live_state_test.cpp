@@ -32,7 +32,6 @@ const std::string MASK = std::string(format_enabled_mask(switch_time_bit(1) | sw
 const char *const TIMES[SWITCH_TIME_COUNT] = {"08:00:00", "12:00:00", "18:00:00", "21:00:00", "23:00:00"};
 /// A second before switch time 2.
 const std::string CLOCK = "11:59:59";
-const std::string DATE = "26.11.26";
 
 /// A whole minute since the epoch, the time source's now.
 constexpr time_t NOW_S = 1800000000;
@@ -53,9 +52,6 @@ std::vector<int> block_ids() {
 std::string panel_value(int id, const std::string &pair_level) {
   if (id == PAIR_LEVEL_ID) {
     return pair_level;
-  }
-  if (id == DATE_PROPERTY_ID) {
-    return DATE;
   }
   if (id == CLOCK_PROPERTY_ID) {
     return CLOCK;
@@ -133,9 +129,9 @@ class LiveStateTest : public ::testing::Test {
     return sent;
   }
 
-  /// The IDs one boot poll queues, in order: the fan's level ID, the global settings, then the pair's block.
+  /// The IDs one boot poll queues, in order: the fan's level ID, the panel clock, then the pair's block.
   static std::vector<int> boot_poll_ids() {
-    std::vector<int> ids{PAIR_LEVEL_ID, DATE_PROPERTY_ID, CLOCK_PROPERTY_ID};
+    std::vector<int> ids{PAIR_LEVEL_ID, CLOCK_PROPERTY_ID};
     for (int id : block_ids()) {
       ids.push_back(id);
     }
@@ -177,14 +173,16 @@ std::vector<std::vector<uint8_t>> frames_of(const std::vector<int> &ids) {
 
 }  // namespace
 
-// Spec "Reading": with a live-state entity, the pair's whole block and IDs 1 and 2 are polled.
+// Spec "Reading": with a live-state entity, the pair's whole block and the panel clock (ID 2) are polled; the panel
+// date (ID 1) is not.
 TEST_F(LiveStateTest, BootPollsTheWholeBlockAndThePanelClock) {
   this->hub_.setup();
 
   EXPECT_EQ(this->drain(), frames_of(boot_poll_ids()));
 }
 
-// Spec "Reading": IDs 1 and 2 are polled once, also with clock_drift listening to them, date before clock.
+// Spec "Reading": with clock_drift, which registers after the live state, IDs 1 and 2 are polled once each, date
+// right before clock.
 TEST_F(LiveStateTest, ClockDriftSharesThePanelClockPoll) {
   this->hub_.register_global_setting_string_listener(DATE_PROPERTY_ID, [](int, const std::string &) {});
   this->hub_.register_global_setting_string_listener(CLOCK_PROPERTY_ID, [](int, const std::string &) {});
@@ -197,7 +195,8 @@ TEST_F(LiveStateTest, ClockDriftSharesThePanelClockPoll) {
   EXPECT_EQ(this->drain(), frames_of({DATE_PROPERTY_ID, CLOCK_PROPERTY_ID}));
 }
 
-TEST_F(LiveStateTest, NothingIsPublishedBeforeEveryInputWasRead) {
+// Spec "Live state", Inputs: the pair level is always needed.
+TEST_F(LiveStateTest, NothingIsPublishedBeforeThePairLevelWasRead) {
   this->hub_.add_time_program_tasks_to_queue(PAIR);
   for (int id : block_ids()) {
     this->send_next_task();
@@ -227,6 +226,17 @@ TEST_F(LiveStateTest, TheSameReadsAgainPublishNothing) {
   EXPECT_EQ(this->running_level_publishes_, 1);
   EXPECT_EQ(this->next_level_publishes_, 1);
   EXPECT_EQ(this->next_change_publishes_, 1);
+}
+
+// Spec "Live state", Inputs: not running needs the pair level alone.
+TEST_F(LiveStateTest, NotRunningNeedsOnlyThePairLevel) {
+  this->hub_.add_recursive_tasks_to_get_queue();
+  this->send_next_task();
+  this->panel_answers_get(PAIR_LEVEL_ID, std::to_string(MAX_NORMAL_LEVEL));
+
+  EXPECT_EQ(this->in_effect_.get_state(), LIVE_STATE_NOT_RUNNING);
+  EXPECT_EQ(this->running_level_.get_state(), LIVE_STATE_NOT_RUNNING);
+  EXPECT_EQ(this->next_level_.get_state(), LIVE_STATE_NOT_RUNNING);
 }
 
 TEST_F(LiveStateTest, NotRunningOutsideAutomatikZeit) {

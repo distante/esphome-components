@@ -29,7 +29,7 @@ The SEC-Touch hardware and its UART protocol are fixed: command IDs, frame layou
 
 - Treat [components/sec_touch/readme.md](../../../components/sec_touch/readme.md) as the authoritative spec for protocol details, special values, and hardware mapping; do not duplicate or contradict it. If you have tangible proof that it is wrong, ask the user whether to update it.
 - Changes to UART parsing must keep the ACK handshake and GET/SET sequencing the readme describes.
-- Respect the update flows: fan levels are polled via recursive tasks, labels are refreshed only by manual update tasks (triggered by the program text update button).
+- Respect the update flows: fan levels are polled via recursive tasks, labels are refreshed only by manual update tasks (triggered by the program text update button), time-program IDs by the time-program poll (`add_time_program_poll_id`). An unpolled listener (`register_unpolled_string_listener`) hears answers another poll asks for and adds no GET.
 - Validate IDs before queueing tasks; task creation returns null for unknown IDs and must be handled.
 - Schema constraints are strict: fan_number is 1-6, text_sensor requires mode_text while label_text is optional; keep these aligned with ID arrays.
 - If modifying fan behavior, keep the preset-to-speed mapping consistent with the readme's special level values, `255` included.

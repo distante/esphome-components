@@ -153,6 +153,8 @@ TEST_F(SECTouchHubTest, FrameWithoutCrcReachesTapWithOptionalCrc) {
 
 TEST_F(SECTouchHubTest, NakDuringScanRecordsNakOutcome) {
   this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(UNANSWERED_PROPERTY_ID);
+  this->hub_.loop();  // dispatches the scan query
 
   this->uart_.push_rx(nak_frame());
   this->hub_.loop_times(2);
@@ -163,6 +165,8 @@ TEST_F(SECTouchHubTest, NakDuringScanRecordsNakOutcome) {
 // A bad CRC ends the task as malformed, which a scan records as TIMEOUT, the same as no reply (issue #43).
 TEST_F(SECTouchHubTest, BadCrcDuringScanRecordsTimeoutOutcome) {
   this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
+  this->hub_.loop();  // dispatches the scan query
 
   this->uart_.push_rx(bad_crc_frame());
   this->hub_.loop_times(3);
@@ -259,8 +263,9 @@ TEST_F(SECTouchHubTest, CorruptedAckWithoutDataFrameEndsGetAtTheWatchdog) {
 
 // A SET has no data frame to wait for: its ACK is the whole answer, so a corrupted one ends it as malformed.
 TEST_F(SECTouchHubTest, CorruptedAckEndsSetAsMalformed) {
-  this->hub_.enter_scan_mode();  // only so the malformed end is recorded and visible
-  this->hub_.add_set_task(SetDataTask::create(TaskTargetType::LEVEL, FAN_1_LEVEL_ID, "5"));
+  // Scan mode and a probe SET only so the malformed end is recorded and visible: only the sniffer's tasks record it.
+  this->hub_.enter_scan_mode();
+  ASSERT_TRUE(this->hub_.add_discovery_set_task(FAN_1_LEVEL_ID, "5"));
   this->hub_.loop();  // dispatches the SET
   ASSERT_EQ(this->hub_.current_running_task_type, TaskType::SET_DATA);
   this->uart_.tx.clear();
@@ -362,6 +367,35 @@ TEST_F(SECTouchGetRetryTest, ALateReplyAfterScanStoppedEndsTheDroppedQuery) {
   EXPECT_TRUE(this->labels_.empty());
 }
 
+// Entering scan mode drops the task in flight too. Without a reply, the watchdog ends it, and only then does the
+// scan's first query go out.
+TEST_F(SECTouchGetRetryTest, WatchdogEndsATaskStillInFlightAfterScanStarted) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(UNANSWERED_PROPERTY_ID);
+
+  this->send_next_task();
+  EXPECT_TRUE(this->uart_.tx.empty());
+
+  this->hub_.age_task_past_watchdog();
+  this->hub_.loop();
+
+  EXPECT_EQ(this->uart_.tx, get_frame(UNANSWERED_PROPERTY_ID));
+}
+
+// The late reply to the task dropped at scan start ends that task, not the scan's first query.
+TEST_F(SECTouchGetRetryTest, ALateReplyAfterScanStartedEndsTheDroppedTask) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(UNANSWERED_PROPERTY_ID);
+  this->send_next_task();
+
+  EXPECT_EQ(this->panel_answers(data_frame(LABEL_1_ID, "3")), concat(ack_frame(), get_frame(UNANSWERED_PROPERTY_ID)));
+  EXPECT_TRUE(this->labels_.empty());
+}
+
 TEST_F(SECTouchGetRetryTest, QueuedTasksKeepTheirOrderBehindTheRetry) {
   this->queue_label_reads({LABEL_1_ID, LABEL_2_ID, LABEL_3_ID});
   this->send_next_task();
@@ -392,6 +426,22 @@ TEST_F(SECTouchGetRetryTest, TwoListenersOnOneIdBothGetItsValueFromOneGet) {
   EXPECT_EQ(this->panel_answers(data_frame(CLOCK_PROPERTY_ID, "08:30:00")), ack_frame());
   EXPECT_EQ(first, std::vector<std::string>{"08:30:00"});
   EXPECT_EQ(second, std::vector<std::string>{"08:30:00"});
+}
+
+// clock_drift needs the date right before the clock (#130). The poll asks ID 1 right before ID 2 even when another
+// entity registered the clock, and a setting after it, before anything registered the date.
+TEST_F(SECTouchGetRetryTest, TheDateIsPolledRightBeforeTheClockWhateverTheRegistrationOrder) {
+  this->hub_.register_global_setting_string_listener(CLOCK_PROPERTY_ID, [](int, const std::string &) {});
+  this->hub_.register_global_setting_recursive_listener(SUMMER_VENTILATION_PROPERTY_ID, [](int, int) {});
+  this->hub_.register_global_setting_string_listener(DATE_PROPERTY_ID, [](int, const std::string &) {});
+  this->hub_.add_global_setting_tasks_to_queue();
+  this->send_next_task();
+
+  EXPECT_EQ(this->uart_.tx, get_frame(DATE_PROPERTY_ID));
+  EXPECT_EQ(this->panel_answers(data_frame(DATE_PROPERTY_ID, "26.11.26")),
+            concat(ack_frame(), get_frame(CLOCK_PROPERTY_ID)));
+  EXPECT_EQ(this->panel_answers(data_frame(CLOCK_PROPERTY_ID, "08:30:00")),
+            concat(ack_frame(), get_frame(SUMMER_VENTILATION_PROPERTY_ID)));
 }
 
 /// Records every task end as "<GET|SET> <property_id> <end>".

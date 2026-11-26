@@ -9,6 +9,8 @@
 #include <vector>
 
 #include "../sec_touch/common.h"
+#include "esphome/components/sec_touch/time_program.h"
+#include "esphome/components/sec_touch/time_program_ids.h"
 #include "esphome/components/sec_touch_sniffer/sec_touch_sniffer.h"
 #include "esphome/components/sec_touch_sniffer/scan_goal.h"
 #include "esphome/components/sec_touch_sniffer/write_probe.h"
@@ -30,6 +32,11 @@ constexpr int NEXT_UNREGISTERED_ID = UNREGISTERED_ID + 1;
 static_assert(!is_known_property(UNREGISTERED_ID) && !is_known_property(NEXT_UNREGISTERED_ID) &&
                   !is_known_property(NEXT_UNREGISTERED_ID + 1),
               "the unregistered test IDs must be unknown properties");
+
+/// The switch time an entity writes during a scan: fan pair 1, switch time 1, level index 4.
+constexpr int WRITTEN_PAIR = 1;
+constexpr int WRITTEN_SWITCH_TIME = 1;
+constexpr size_t WRITTEN_LEVEL = 4;
 
 /// What the panel holds before a probe (probe_fixture.h's ORIGINAL).
 const std::string PROBE_ORIGINAL = "01";
@@ -239,6 +246,34 @@ TEST(SecTouchSnifferTest, ATimedOutScanQueryIsRetriedOnceThenSkipped) {
   EXPECT_EQ(rig.gets_sent_for(UNREGISTERED_ID), 2);
   EXPECT_FALSE(rig.sniffer.is_scanning());
   EXPECT_EQ(rig.sniffer.store().fields(UNREGISTERED_ID).query_status, ScanOutcome::SCAN_OUTCOME_TIMEOUT);
+}
+
+// Writes stay allowed during a scan: a time-program write (SET, then its read-back GET) that ends after a timed-out
+// scan query leaves that query timed out, so the scan retries it. Waits out SCAN_RETRY_DELAY_MS on the real clock.
+TEST(SecTouchSnifferTest, AWriteEndingAfterATimedOutScanQueryLeavesItTimedOut) {
+  SnifferRig rig;
+  rig.hub.set_inter_task_delay(0);
+  TimeProgram program{&rig.hub, WRITTEN_PAIR};
+  TimeProgramLevelSelect level{&program, WRITTEN_SWITCH_TIME};
+  const int level_id = time_program_level_id(WRITTEN_PAIR, WRITTEN_SWITCH_TIME);
+  const std::string level_text(format_switch_time_level(WRITTEN_LEVEL).data());
+  rig.start_scan(discover(UNREGISTERED_ID, UNREGISTERED_ID));
+  rig.send_scan_query(SecTouchSniffer::SCAN_NEXT_DELAY_MS);
+  level.make_call().set_index(WRITTEN_LEVEL).perform();
+
+  rig.time_out_scan_query();  // the write's SET goes out next
+  ASSERT_EQ(rig.hub.current_running_task_type, TaskType::SET_DATA);
+  rig.uart.push_rx(ack_frame());
+  rig.loop_hub();                     // its read-back GET goes out
+  rig.receive(level_id, level_text);  // the queue runs empty
+
+  rig.send_scan_query(SCAN_RETRY_DELAY_MS);
+  rig.time_out_scan_query();
+
+  EXPECT_EQ(rig.gets_sent_for(UNREGISTERED_ID), 2);
+  EXPECT_EQ(rig.sniffer.store().fields(UNREGISTERED_ID).query_status, ScanOutcome::SCAN_OUTCOME_TIMEOUT);
+  // The scan must have ended: else the rig's stop would call the listeners of the already destroyed program and level.
+  EXPECT_FALSE(rig.sniffer.is_scanning());
 }
 
 // --- Scan goals ---
@@ -584,6 +619,23 @@ TEST(SecTouchSnifferTest, AWritableProbeRunsOnTheWireAndRestores) {
   // The probe's GETs pass the tap like any data message.
   EXPECT_EQ(rig.sniffer.store().raw_value(UNREGISTERED_ID), PROBE_ORIGINAL);
   EXPECT_FALSE(rig.sniffer.is_probing());
+}
+
+// A write the panel refuses during a probe (a fan SET; writes stay allowed in scan mode) leaves the probe's answered
+// GET ok, so the probe goes on to its SET.
+TEST(SecTouchSnifferTest, AWriteRefusedDuringAProbeLeavesItsGetOk) {
+  ProbeRig rig;
+  rig.start(ProbeKind::PROBE_KIND_PROBE, PROBE_VALUE);
+  const std::string fan_level = "5";
+  rig.hub.add_set_task(SetDataTask::create(TaskTargetType::LEVEL, REGISTERED_ID, fan_level.c_str()));
+  rig.take_sent();
+
+  rig.receive(UNREGISTERED_ID, PROBE_ORIGINAL);
+  ASSERT_EQ(rig.take_sent(), concat(ack_frame(), set_frame(REGISTERED_ID, fan_level)));
+  rig.uart.push_rx(nak_frame());
+  rig.loop_hub();
+
+  EXPECT_EQ(rig.take_sent(), set_frame(UNREGISTERED_ID, PROBE_VALUE));
 }
 
 TEST(SecTouchSnifferTest, AProbePausesPollingUntilItEnds) {

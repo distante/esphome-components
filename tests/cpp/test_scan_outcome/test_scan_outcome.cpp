@@ -10,7 +10,7 @@ using esphome::sec_touch::task_end_name;
 TEST(ScanOutcomeTracker, NakDuringAScanIsNak) {
   ScanOutcomeTracker tracker;
 
-  tracker.record(TaskEnd::TASK_END_NAK, /*scan_mode=*/true);
+  tracker.record(TaskEnd::TASK_END_NAK, /*scan_mode=*/true, /*sniffer_task=*/true);
 
   EXPECT_EQ(tracker.last(), ScanOutcome::SCAN_OUTCOME_NAK);
 }
@@ -18,16 +18,16 @@ TEST(ScanOutcomeTracker, NakDuringAScanIsNak) {
 TEST(ScanOutcomeTracker, NoReplyDuringAScanIsTimeout) {
   ScanOutcomeTracker tracker;
 
-  tracker.record(TaskEnd::TASK_END_TIMEOUT, /*scan_mode=*/true);
+  tracker.record(TaskEnd::TASK_END_TIMEOUT, /*scan_mode=*/true, /*sniffer_task=*/true);
 
   EXPECT_EQ(tracker.last(), ScanOutcome::SCAN_OUTCOME_TIMEOUT);
 }
 
 TEST(ScanOutcomeTracker, AnAnswerAfterAFailedQueryIsOk) {
   ScanOutcomeTracker tracker;
-  tracker.record(TaskEnd::TASK_END_TIMEOUT, /*scan_mode=*/true);
+  tracker.record(TaskEnd::TASK_END_TIMEOUT, /*scan_mode=*/true, /*sniffer_task=*/true);
 
-  tracker.record(TaskEnd::TASK_END_ANSWERED, /*scan_mode=*/true);
+  tracker.record(TaskEnd::TASK_END_ANSWERED, /*scan_mode=*/true, /*sniffer_task=*/true);
 
   EXPECT_EQ(tracker.last(), ScanOutcome::SCAN_OUTCOME_OK);
 }
@@ -36,25 +36,37 @@ TEST(ScanOutcomeTracker, AnAnswerAfterAFailedQueryIsOk) {
 TEST(ScanOutcomeTracker, AnUnparseableReplyDuringAScanIsTimeout) {
   ScanOutcomeTracker tracker;
 
-  tracker.record(TaskEnd::TASK_END_MALFORMED, /*scan_mode=*/true);
+  tracker.record(TaskEnd::TASK_END_MALFORMED, /*scan_mode=*/true, /*sniffer_task=*/true);
 
   EXPECT_EQ(tracker.last(), ScanOutcome::SCAN_OUTCOME_TIMEOUT);
 }
 
 TEST(ScanOutcomeTracker, TasksOutsideScanModeLeaveTheOutcomeAlone) {
   ScanOutcomeTracker tracker;
-  tracker.record(TaskEnd::TASK_END_NAK, /*scan_mode=*/true);
+  tracker.record(TaskEnd::TASK_END_NAK, /*scan_mode=*/true, /*sniffer_task=*/true);
 
-  tracker.record(TaskEnd::TASK_END_TIMEOUT, /*scan_mode=*/false);
-  tracker.record(TaskEnd::TASK_END_ANSWERED, /*scan_mode=*/false);
+  tracker.record(TaskEnd::TASK_END_TIMEOUT, /*scan_mode=*/false, /*sniffer_task=*/true);
+  tracker.record(TaskEnd::TASK_END_ANSWERED, /*scan_mode=*/false, /*sniffer_task=*/true);
 
   EXPECT_EQ(tracker.last(), ScanOutcome::SCAN_OUTCOME_NAK);
+}
+
+// Writes stay allowed during a scan: a time-program SET or a fan SET that ends after a scan query must not replace
+// that query's outcome.
+TEST(ScanOutcomeTracker, TasksTheSnifferDidNotQueueLeaveTheOutcomeAlone) {
+  ScanOutcomeTracker tracker;
+  tracker.record(TaskEnd::TASK_END_TIMEOUT, /*scan_mode=*/true, /*sniffer_task=*/true);
+
+  tracker.record(TaskEnd::TASK_END_ANSWERED, /*scan_mode=*/true, /*sniffer_task=*/false);
+  tracker.record(TaskEnd::TASK_END_NAK, /*scan_mode=*/true, /*sniffer_task=*/false);
+
+  EXPECT_EQ(tracker.last(), ScanOutcome::SCAN_OUTCOME_TIMEOUT);
 }
 
 // A scan stopped during the timeout retry wait must not hand that timeout to the next scan.
 TEST(ScanOutcomeTracker, StartingAScanForgetsThePreviousScansOutcome) {
   ScanOutcomeTracker tracker;
-  tracker.record(TaskEnd::TASK_END_TIMEOUT, /*scan_mode=*/true);
+  tracker.record(TaskEnd::TASK_END_TIMEOUT, /*scan_mode=*/true, /*sniffer_task=*/true);
 
   tracker.begin_scan();
 

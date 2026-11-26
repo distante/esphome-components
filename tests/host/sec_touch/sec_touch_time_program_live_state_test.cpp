@@ -197,7 +197,8 @@ TEST_F(LiveStateTest, ClockDriftSharesThePanelClockPoll) {
   EXPECT_EQ(this->drain(), frames_of({DATE_PROPERTY_ID, CLOCK_PROPERTY_ID}));
 }
 
-TEST_F(LiveStateTest, NothingIsPublishedBeforeEveryInputWasRead) {
+// Spec "Live state", Inputs: the pair level is always needed.
+TEST_F(LiveStateTest, NothingIsPublishedBeforeThePairLevelWasRead) {
   this->hub_.add_time_program_tasks_to_queue(PAIR);
   for (int id : block_ids()) {
     this->send_next_task();
@@ -227,6 +228,17 @@ TEST_F(LiveStateTest, TheSameReadsAgainPublishNothing) {
   EXPECT_EQ(this->running_level_publishes_, 1);
   EXPECT_EQ(this->next_level_publishes_, 1);
   EXPECT_EQ(this->next_change_publishes_, 1);
+}
+
+// Spec "Live state", Inputs: not running needs the pair level alone.
+TEST_F(LiveStateTest, NotRunningNeedsOnlyThePairLevel) {
+  this->hub_.add_recursive_tasks_to_get_queue();
+  this->send_next_task();
+  this->panel_answers_get(PAIR_LEVEL_ID, std::to_string(MAX_NORMAL_LEVEL));
+
+  EXPECT_EQ(this->in_effect_.get_state(), LIVE_STATE_NOT_RUNNING);
+  EXPECT_EQ(this->running_level_.get_state(), LIVE_STATE_NOT_RUNNING);
+  EXPECT_EQ(this->next_level_.get_state(), LIVE_STATE_NOT_RUNNING);
 }
 
 TEST_F(LiveStateTest, NotRunningOutsideAutomatikZeit) {

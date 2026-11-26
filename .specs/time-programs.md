@@ -216,11 +216,18 @@ The state words live in the live-state model's header ([Implementation notes](#i
 | The next change is a tie | as normal | as normal | valid / `conflict` |
 | A tie at another time of day | no effect | no effect | no effect |
 | Exactly one enabled switch time | that switch time | its level | itself 24 h later / its level |
-| Inputs not read once yet (boot) | nothing published | nothing published | nothing published |
+| A needed input (see **Inputs** below) not read once yet (boot) | nothing published | nothing published | nothing published |
 | An input read fails or is unexpected | from the last good value of that input (for the clock: the old anchor), warning logged | same | same |
-| … and that input never read well yet | as boot | as boot | as boot |
+| … and that input is needed and never read well yet | as boot | as boot | as boot |
 
-- **Inputs:** the pair's enabled mask, its 5 times and 5 levels, its level ID, and the panel clock.
+**Inputs:** the pair's enabled mask, its 5 times and 5 levels, its level ID, and the panel clock. The state needs only the inputs it uses; an input it doesn't need never holds it back:
+
+| Pair's level ID | Needed inputs |
+|---|---|
+| never read well | the level ID: nothing published until it is |
+| not `AUTOMATIC_TIME_LEVEL` | the level ID alone (`not running`) |
+| `AUTOMATIC_TIME_LEVEL` | the level ID, the panel clock, the enabled mask, and the time and level of each enabled switch time. A disabled switch time's time and level are never needed. |
+
 - **Recompute:** on every input read, plus one timeout set for the next change: a deadline the live state's `loop()` checks, so the scheduler allocates nothing. An entity publishes only when its value changes.
 - A GET answer for an input ID while a SET of that ID is queued is skipped, as the fan and the field entities skip it.
 - The HA fan entity isn't changed: in Automatik Zeit it still shows on, preset Automatic Time. Whether it should follow the running level is [sec_touch: in Automatik Zeit the fan shows on even when the program runs level 0](https://github.com/distante/esphome-components/issues/124).
@@ -347,7 +354,7 @@ Ships in **v1.5.0** with the sniffer goals and experiments. The work for this se
 6. An HA write follows [Writing](#writing): published at once, one queued SET per ID (a newer value replaces the queued one), after the SET ends one GET whose value is published. No SET is retried.
 7. A switch write GETs the mask, changes only the requested bits and SETs it. A failed GET writes nothing. `write_failed` fires each type of the [event table](#writing) in its case.
 8. Time writes send `HH:MM:00`. A level the [meaning rule](#known-property-catalogue) marks unexpected, read from the panel, leaves the select with no state, and nothing is written.
-9. Live state follows the [model](#live-state) and every row of its cases table, and publishes only on change. Tests cover: exactly one enabled switch time, a failed or unexpected input before and after a good read, a switch time exactly at the panel time (in effect) and the next change strictly after it. `not running` appears whenever the program isn't [running](#live-state).
+9. Live state follows the [model](#live-state) and every row of its cases table, and publishes only on change. Tests cover: exactly one enabled switch time, a failed or unexpected input before and after a good read, each needed input of the [Inputs](#live-state) table never read well (nothing published) and an unneeded one (published), a switch time exactly at the panel time (in effect) and the next change strictly after it. `not running` appears whenever the program isn't [running](#live-state).
 10. `sec_touch.set_time_program` follows [Bulk-set action](#bulk-set-action): validates everything first, writes times, levels, then the mask, reports `invalid_argument`, `busy` or the failed-field list in `error`, and fires `on_success` only when every read-back matches.
 11. No heap use beyond the [Memory](#memory) table.
 12. The device check is recorded with the heap numbers, and the readme states them.

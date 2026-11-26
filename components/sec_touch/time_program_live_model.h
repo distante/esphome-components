@@ -154,13 +154,17 @@ class LiveStateModel {
   }
   bool take_clock(std::string_view raw, uint32_t now_ms) { return this->clock_.take(raw, now_ms); }
 
-  /// The state at `now_ms`, or nullopt while an input was never read well.
+  /// The state at `now_ms`, or nullopt while an input the state needs was never read well: the pair level always;
+  /// while running, also the clock, the mask, and each enabled switch time's time and level.
   std::optional<LiveState> compute(uint32_t now_ms) const {
-    if (!this->is_complete()) {
+    if (this->pair_level_ == NEVER_READ) {
       return std::nullopt;
     }
     if (this->pair_level_ != AUTOMATIC_TIME_LEVEL) {
       return LiveState{LIVE_STATE_NOT_RUNNING, LIVE_STATE_NOT_RUNNING, LIVE_STATE_NOT_RUNNING, std::nullopt};
+    }
+    if (!this->has_running_inputs()) {
+      return std::nullopt;
     }
     const int32_t now = static_cast<int32_t>(this->clock_.ms_of_day(now_ms));
     // The latest enabled time at or before now, and the latest of all (yesterday's last, when none is before now).
@@ -214,12 +218,16 @@ class LiveStateModel {
     return true;
   }
 
-  bool is_complete() const {
-    if (this->mask_ == NEVER_READ || this->pair_level_ == NEVER_READ || !this->clock_.is_set()) {
+  /// Whether the inputs a running pair's state needs were each read well once. A disabled switch time's are not.
+  bool has_running_inputs() const {
+    if (this->mask_ == NEVER_READ || !this->clock_.is_set()) {
       return false;
     }
-    for (int n = 0; n < SWITCH_TIME_COUNT; n++) {
-      if (this->times_ms_[n] == NEVER_READ || this->levels_[n] == NEVER_READ) {
+    for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
+      if (!this->is_enabled(n)) {
+        continue;
+      }
+      if (this->times_ms_[n - 1] == NEVER_READ || this->levels_[n - 1] == NEVER_READ) {
         return false;
       }
     }

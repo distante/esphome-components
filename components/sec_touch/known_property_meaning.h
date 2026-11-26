@@ -31,34 +31,39 @@ struct KnownMeaning {
   std::string_view text;
 };
 
-/// Whether `id` is a known property: a fan level or label, summer ventilation, date, clock, or a time-program ID.
-constexpr bool is_known_property(int id) {
-  return contains(FAN_LEVEL_IDS, id) || contains(FAN_LABEL_IDS, id) || contains(GLOBAL_SETTING_IDS, id) ||
-         contains(TIME_PROGRAM_ENABLED_IDS, id) || contains(TIME_PROGRAM_TIME_IDS, id) ||
-         contains(TIME_PROGRAM_LEVEL_IDS, id);
+namespace known_property_detail {
+
+template<typename Visit, std::size_t N> constexpr void visit_ids(Visit &visit, const std::array<int, N> &ids) {
+  for (int id : ids) {
+    visit(id);
+  }
 }
 
-/// The highest known property ID: the largest ID of the arrays is_known_property() reads.
+}  // namespace known_property_detail
+
+/// Calls `visit` with each known property ID: a fan level or label, summer ventilation, date, clock, or a time-program
+/// ID. The one list of the known-property arrays.
+template<typename Visit> constexpr void for_each_known_property(Visit visit) {
+  using known_property_detail::visit_ids;
+  visit_ids(visit, FAN_LEVEL_IDS);
+  visit_ids(visit, FAN_LABEL_IDS);
+  visit_ids(visit, GLOBAL_SETTING_IDS);
+  visit_ids(visit, TIME_PROGRAM_ENABLED_IDS);
+  visit_ids(visit, TIME_PROGRAM_TIME_IDS);
+  visit_ids(visit, TIME_PROGRAM_LEVEL_IDS);
+}
+
+/// Whether `id` is a known property (for_each_known_property).
+constexpr bool is_known_property(int id) {
+  bool known = false;
+  for_each_known_property([&known, id](int known_id) { known = known || known_id == id; });
+  return known;
+}
+
+/// The highest known property ID (for_each_known_property).
 constexpr int max_known_property_id() {
   int max = 0;
-  for (int id : FAN_LEVEL_IDS) {
-    max = id > max ? id : max;
-  }
-  for (int id : FAN_LABEL_IDS) {
-    max = id > max ? id : max;
-  }
-  for (int id : GLOBAL_SETTING_IDS) {
-    max = id > max ? id : max;
-  }
-  for (int id : TIME_PROGRAM_ENABLED_IDS) {
-    max = id > max ? id : max;
-  }
-  for (int id : TIME_PROGRAM_TIME_IDS) {
-    max = id > max ? id : max;
-  }
-  for (int id : TIME_PROGRAM_LEVEL_IDS) {
-    max = id > max ? id : max;
-  }
+  for_each_known_property([&max](int id) { max = id > max ? id : max; });
   return max;
 }
 

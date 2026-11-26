@@ -139,7 +139,7 @@ Decided in [Should sec_touch compute which switch time is in effect, and how is 
 
 - **Own poll:** every `time_programs_update_interval` (default 5 min), the hub queues GETs for each listed pair. This is separate from the 5 s fan poll and the 30 s global-settings poll.
 - **Which IDs:** the enabled ID and the time and level IDs of the listed switch times. With any live-state entity, the pair's **whole block** (11 IDs), whatever `switch_times` says.
-- **Panel clock:** with any live-state entity on any pair, IDs 1 and 2 are polled on the global-settings poll, as for `clock_drift`.
+- **Panel clock:** with any live-state entity on any pair, ID 2 (clock) is polled on the global-settings poll, as for `clock_drift`. ID 1 (date) only with `clock_drift`; the hub polls it right before ID 2, whatever the registration order.
 - **First poll:** right after boot, like the global settings.
 - **`refresh` button:** one press queues the same GETs as one poll of that pair. The regular poll stays on its schedule.
 - Results reach the entities through the hub's existing update listeners.
@@ -278,7 +278,7 @@ The [readme copy block and HA call](https://github.com/distante/esphome-componen
 | Requested mask bits | static, 6 pairs × (set, clear) `uint8_t` | |
 | Panel clock anchor, live-state inputs and deadline | static: members of the live-state object, which codegen places statically | |
 | Bulk `error` text | `std::string`, built only when a bulk call fails | ESPHome's `api.respond` takes a `std::string` anyway ([Memory rule](../.claude/skills/coding-standards/SKILL.md#memory)). |
-| Listener registrations | the hub's listener maps (`std::multimap` entries holding `std::function`s) and its task-end listener list (one entry per pair) | One entry per registered ID: per pair 11 for the time program's block (every listed pair, for the bulk read-backs) and 12 for the live state (its block and level ID), plus IDs 1 and 2 once per live-state pair. Allocated while the entities are built, never freed. |
+| Listener registrations | the hub's listener maps (`std::multimap` entries holding `std::function`s) and its task-end listener list (one entry per pair) | One entry per registered ID: per pair 11 for the time program's block (every listed pair, for the bulk read-backs) and 12 for the live state (its block and level ID), plus ID 2 once per live-state pair. Allocated while the entities are built, never freed. |
 | Bulk action list arguments | `std::vector`, ESPHome's action argument type; the action keeps a copy of each running call's arguments (one static slot per pair) until it fires `on_success` / `on_error`. A constant list is kept once, from setup. A lambda gets the call's arguments by reference; its result lives only while the call is checked. | HA's `string[]`, `int[]` and `bool[]` arrive as vectors. |
 | Bulk write state | static, per pair: how each of the 11 writes ended; what each sent is in the per-field write path's read-back slot, which compares for both | |
 | Per-pair poll ID lists | static, 6 pairs × 11 IDs | |
@@ -319,7 +319,7 @@ Ships in **v1.5.0** with the sniffer goals and experiments. The work for this se
 - That the fan entity still shows on in Automatik Zeit.
 - The bulk-action copy block, the HA call, and HA's 30 s response timeout.
 - The measured RAM cost.
-- IDs 1 and 2 are also polled with any live-state entity (readme "Panel Clock" and the `GLOBAL_SETTING_IDS` note say only with `clock_drift`).
+- ID 2 is also polled with any live-state entity, ID 1 only with `clock_drift` and always right before ID 2 (readme "Panel Clock" and the `GLOBAL_SETTING_IDS` note).
 - The known-property list under "Sniffer page" and the "Known Ids" section gain the three time-program arrays.
 - "Not in `protocol_ids.h` yet: #85 decides" under Time programs: point at this spec's [catalogue](#known-property-catalogue).
 

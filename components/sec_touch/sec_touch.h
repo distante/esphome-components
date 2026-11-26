@@ -46,7 +46,8 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   /**
    * Use this for global controller settings (not per-fan) that should be polled
    * at the configured `global_settings_update_interval` cadence — independent
-   * from the fan-level recursive polling.
+   * from the fan-level recursive polling. The poll asks the panel date (ID 1) right
+   * before the panel clock (ID 2), whatever the registration order.
    */
   void register_global_setting_recursive_listener(int property_id, UpdateCallbackListener listener);
 

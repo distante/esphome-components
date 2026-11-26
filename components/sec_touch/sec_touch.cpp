@@ -19,6 +19,18 @@ void push_once(std::vector<int> &ids, int id) {
   }
 }
 
+/// push_once() for the global-settings poll, which asks the panel date (ID 1) right before the panel clock (ID 2)
+/// whatever the registration order: clock_drift pairs each clock reading with the date read just before it.
+void push_global_setting_once(std::vector<int> &ids, int id) {
+  push_once(ids, id);
+  auto date = std::find(ids.begin(), ids.end(), DATE_PROPERTY_ID);
+  if (date == ids.end() || std::find(ids.begin(), ids.end(), CLOCK_PROPERTY_ID) == ids.end()) {
+    return;
+  }
+  ids.erase(date);
+  ids.insert(std::find(ids.begin(), ids.end(), CLOCK_PROPERTY_ID), DATE_PROPERTY_ID);
+}
+
 }  // namespace
 
 static const char *const TAG = "sec_touch";
@@ -330,14 +342,14 @@ void SECTouchComponent::register_manual_update_listener(int property_id, UpdateC
 void SECTouchComponent::register_global_setting_recursive_listener(int property_id, UpdateCallbackListener listener) {
   ESP_LOGD(TAG, "register_global_setting_recursive_listener for property_id %d", property_id);
   this->recursive_update_listeners.emplace(property_id, std::move(listener));
-  push_once(this->global_setting_property_ids_, property_id);
+  push_global_setting_once(this->global_setting_property_ids_, property_id);
 }
 
 void SECTouchComponent::register_global_setting_string_listener(int property_id,
                                                                 StringUpdateCallbackListener listener) {
   ESP_LOGD(TAG, "register_global_setting_string_listener for property_id %d", property_id);
   this->string_update_listeners.emplace(property_id, std::move(listener));
-  push_once(this->global_setting_property_ids_, property_id);
+  push_global_setting_once(this->global_setting_property_ids_, property_id);
 }
 
 void SECTouchComponent::register_unpolled_string_listener(int property_id, StringUpdateCallbackListener listener) {

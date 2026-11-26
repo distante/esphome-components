@@ -31,9 +31,7 @@ TimeProgramLiveState::TimeProgramLiveState(SECTouchComponent *hub, int pair) : h
   // The pair's fan entry, which the config requires, polls its level ID; listen only.
   this->hub_->register_unpolled_string_listener(FAN_LEVEL_IDS[pair - 1],
                                                 [this](int, const std::string &raw) { this->on_pair_level_(raw); });
-  // IDs 1 and 2, date first: clock_drift needs the date right before the clock, and the poll keeps the order of the
-  // first registration. The live state needs only the clock.
-  this->hub_->register_global_setting_string_listener(DATE_PROPERTY_ID, [](int, const std::string &) {});
+  // Only the panel clock: the panel date is clock_drift's.
   this->hub_->register_global_setting_string_listener(CLOCK_PROPERTY_ID,
                                                       [this](int, const std::string &raw) { this->on_clock_(raw); });
 }

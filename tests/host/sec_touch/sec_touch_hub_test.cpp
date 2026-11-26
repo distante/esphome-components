@@ -394,6 +394,22 @@ TEST_F(SECTouchGetRetryTest, TwoListenersOnOneIdBothGetItsValueFromOneGet) {
   EXPECT_EQ(second, std::vector<std::string>{"08:30:00"});
 }
 
+// clock_drift needs the date right before the clock (#130). The poll asks ID 1 right before ID 2 even when another
+// entity registered the clock, and a setting after it, before anything registered the date.
+TEST_F(SECTouchGetRetryTest, TheDateIsPolledRightBeforeTheClockWhateverTheRegistrationOrder) {
+  this->hub_.register_global_setting_string_listener(CLOCK_PROPERTY_ID, [](int, const std::string &) {});
+  this->hub_.register_global_setting_recursive_listener(SUMMER_VENTILATION_PROPERTY_ID, [](int, int) {});
+  this->hub_.register_global_setting_string_listener(DATE_PROPERTY_ID, [](int, const std::string &) {});
+  this->hub_.add_global_setting_tasks_to_queue();
+  this->send_next_task();
+
+  EXPECT_EQ(this->uart_.tx, get_frame(DATE_PROPERTY_ID));
+  EXPECT_EQ(this->panel_answers(data_frame(DATE_PROPERTY_ID, "26.11.26")),
+            concat(ack_frame(), get_frame(CLOCK_PROPERTY_ID)));
+  EXPECT_EQ(this->panel_answers(data_frame(CLOCK_PROPERTY_ID, "08:30:00")),
+            concat(ack_frame(), get_frame(SUMMER_VENTILATION_PROPERTY_ID)));
+}
+
 /// Records every task end as "<GET|SET> <property_id> <end>".
 class SECTouchTaskEndTest : public SECTouchGetRetryTest {
  protected:

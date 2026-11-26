@@ -93,11 +93,7 @@ struct SnifferRig {
     this->sniffer.setup();
   }
 
-  void loop_hub() {
-    for (int i = 0; i < 3; i++) {
-      this->hub.loop();
-    }
-  }
+  void loop_hub() { this->hub.loop_times(3); }
 
   void receive(int property_id, const std::string &value) {
     this->uart.push_rx(data_frame(property_id, value));
@@ -136,7 +132,7 @@ struct SnifferRig {
 
   /// Lets the GET in flight run into the hub's watchdog, as if the panel never answered.
   void time_out_scan_query() {
-    this->hub.task_start_time_ = millis() - (TASK_TIMEOUT_MS + 1);
+    this->hub.age_task_past_watchdog();
     this->loop_hub();
   }
 
@@ -555,11 +551,6 @@ struct ProbeRig : SnifferRig {
 
   ~ProbeRig() { this->hub.exit_scan_mode(); }
 };
-
-std::vector<uint8_t> concat(std::vector<uint8_t> a, const std::vector<uint8_t> &b) {
-  a.insert(a.end(), b.begin(), b.end());
-  return a;
-}
 
 }  // namespace
 

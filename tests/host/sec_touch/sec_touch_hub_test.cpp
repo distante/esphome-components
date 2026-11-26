@@ -35,15 +35,6 @@ class SECTouchHubTest : public ::testing::Test {
     return this->seen_;
   }
 
-  void loop_times(int n) {
-    for (int i = 0; i < n; i++) {
-      this->hub_.loop();
-    }
-  }
-
-  /// Host millis() is the real clock: ages the running task past the watchdog instead of sleeping.
-  void age_task_past_watchdog() { this->hub_.task_start_time_ = millis() - (TASK_TIMEOUT_MS + 1); }
-
   /// Dispatches a GET for `property_id`, then feeds it a corrupted ACK. Afterwards tx holds only what the hub sent
   /// in reply to that ACK.
   void dispatch_get_then_corrupted_ack(int property_id) {
@@ -51,7 +42,7 @@ class SECTouchHubTest : public ::testing::Test {
     this->hub_.loop();  // dispatches the GET
     this->uart_.tx.clear();
     this->uart_.push_rx(corrupted_ack());
-    this->loop_times(2);
+    this->hub_.loop_times(2);
   }
 
   FakeUART uart_;
@@ -64,12 +55,6 @@ std::vector<uint8_t> data_frame_with_bad_crc(int property_id, const std::string 
   std::string covered = std::string(1, static_cast<char>(STX)) + data_head(property_id, value);
   unsigned short crc = GetXModemCRC(covered.data(), covered.size()) ^ 0x01;
   return frame(data_head(property_id, value) + std::to_string(crc));
-}
-
-std::vector<uint8_t> concat(const std::vector<uint8_t> &a, const std::vector<uint8_t> &b) {
-  std::vector<uint8_t> out = a;
-  out.insert(out.end(), b.begin(), b.end());
-  return out;
 }
 
 constexpr int LABEL_1_ID = FAN_LABEL_IDS[0];
@@ -106,7 +91,7 @@ class SECTouchGetRetryTest : public SECTouchHubTest {
     this->uart_.tx.clear();
     this->uart_.push_rx(ack_frame());
     this->uart_.push_rx(data);
-    this->loop_times(3);
+    this->hub_.loop_times(3);
     return this->uart_.tx;
   }
 
@@ -119,7 +104,7 @@ TEST_F(SECTouchHubTest, DataFrameReachesTapByteExactAndIsAcked) {
   const auto &seen = this->record_taps();
 
   this->uart_.push_rx(data_frame(DATE_PROPERTY_ID, "16.11.26"));
-  this->loop_times(3);
+  this->hub_.loop_times(3);
 
   EXPECT_EQ(seen, std::vector<std::string>{"1=16.11.26"});
   EXPECT_EQ(this->uart_.tx, (std::vector<uint8_t>{STX, ACK, ETX}));
@@ -131,7 +116,7 @@ TEST_F(SECTouchHubTest, FrameWithBadCrcNeverReachesTapButIsAcked) {
   const auto &seen = this->record_taps();
 
   this->uart_.push_rx(bad_crc_frame());
-  this->loop_times(3);
+  this->hub_.loop_times(3);
 
   EXPECT_TRUE(seen.empty());
   EXPECT_EQ(this->uart_.tx, (std::vector<uint8_t>{STX, ACK, ETX}));
@@ -141,7 +126,7 @@ TEST_F(SECTouchHubTest, FrameWithoutCrcIsDroppedByDefaultButAcked) {
   const auto &seen = this->record_taps();
 
   this->uart_.push_rx(frame_without_crc(FAN_1_LEVEL_ID, "10"));
-  this->loop_times(3);
+  this->hub_.loop_times(3);
 
   EXPECT_TRUE(seen.empty());
   EXPECT_EQ(this->uart_.tx, (std::vector<uint8_t>{STX, ACK, ETX}));
@@ -151,7 +136,7 @@ TEST_F(SECTouchHubTest, FrameWithoutCrcIsDroppedByDefaultButAcked) {
 // frame. ACKing it would answer a frame that has not arrived yet.
 TEST_F(SECTouchHubTest, FrameTooShortForDataIsNotAcked) {
   this->uart_.push_rx(corrupted_ack());
-  this->loop_times(2);
+  this->hub_.loop_times(2);
 
   EXPECT_TRUE(this->uart_.tx.empty());
 }
@@ -161,7 +146,7 @@ TEST_F(SECTouchHubTest, FrameWithoutCrcReachesTapWithOptionalCrc) {
   const auto &seen = this->record_taps();
 
   this->uart_.push_rx(frame_without_crc(FAN_1_LEVEL_ID, "10"));
-  this->loop_times(3);
+  this->hub_.loop_times(3);
 
   EXPECT_EQ(seen, std::vector<std::string>{std::to_string(FAN_1_LEVEL_ID) + "=10"});
 }
@@ -170,7 +155,7 @@ TEST_F(SECTouchHubTest, NakDuringScanRecordsNakOutcome) {
   this->hub_.enter_scan_mode();
 
   this->uart_.push_rx(nak_frame());
-  this->loop_times(2);
+  this->hub_.loop_times(2);
 
   EXPECT_EQ(this->hub_.get_last_scan_outcome(), ScanOutcome::SCAN_OUTCOME_NAK);
 }
@@ -180,7 +165,7 @@ TEST_F(SECTouchHubTest, BadCrcDuringScanRecordsTimeoutOutcome) {
   this->hub_.enter_scan_mode();
 
   this->uart_.push_rx(bad_crc_frame());
-  this->loop_times(3);
+  this->hub_.loop_times(3);
 
   EXPECT_EQ(this->hub_.get_last_scan_outcome(), ScanOutcome::SCAN_OUTCOME_TIMEOUT);
 }
@@ -191,7 +176,7 @@ TEST_F(SECTouchHubTest, EnteringScanModeClearsStaleTimeoutOutcome) {
   this->hub_.loop();  // dispatches the GET
   ASSERT_FALSE(this->uart_.tx.empty());
 
-  this->age_task_past_watchdog();
+  this->hub_.age_task_past_watchdog();
   this->hub_.loop();
   ASSERT_EQ(this->hub_.get_last_scan_outcome(), ScanOutcome::SCAN_OUTCOME_TIMEOUT);
 
@@ -222,7 +207,7 @@ TEST_F(SECTouchHubTest, UncheckedSetInScanModeIsSentAndItsAckRecorded) {
   EXPECT_EQ(this->uart_.tx, set_frame(UNANSWERED_PROPERTY_ID, "03"));
 
   this->uart_.push_rx(ack_frame());
-  this->loop_times(2);
+  this->hub_.loop_times(2);
 
   EXPECT_EQ(outcomes, std::vector<ScanOutcome>{ScanOutcome::SCAN_OUTCOME_OK});
 }
@@ -236,7 +221,7 @@ TEST_F(SECTouchHubTest, CorruptedAckKeepsGetOpenUntilItsDataFrame) {
   EXPECT_TRUE(this->uart_.tx.empty());
 
   this->uart_.push_rx(data_frame(FAN_1_LEVEL_ID, "10"));
-  this->loop_times(2);
+  this->hub_.loop_times(2);
 
   EXPECT_EQ(seen, std::vector<std::string>{std::to_string(FAN_1_LEVEL_ID) + "=10"});
   EXPECT_EQ(this->hub_.current_running_task_type, TaskType::NONE);
@@ -252,7 +237,7 @@ TEST_F(SECTouchHubTest, CorruptedAckDuringScanStillRecordsTheAnswer) {
   this->hub_.enter_scan_mode();
   this->dispatch_get_then_corrupted_ack(FAN_1_LEVEL_ID);
   this->uart_.push_rx(data_frame(FAN_1_LEVEL_ID, "10"));
-  this->loop_times(2);
+  this->hub_.loop_times(2);
 
   EXPECT_EQ(outcomes, std::vector<ScanOutcome>{ScanOutcome::SCAN_OUTCOME_OK});
 }
@@ -264,7 +249,7 @@ TEST_F(SECTouchHubTest, CorruptedAckWithoutDataFrameEndsGetAtTheWatchdog) {
   // The real check: the corrupted ACK did not end the GET, so only the watchdog can.
   ASSERT_EQ(this->hub_.current_running_task_type, TaskType::GET_DATA);
 
-  this->age_task_past_watchdog();
+  this->hub_.age_task_past_watchdog();
   this->hub_.loop();
 
   EXPECT_EQ(this->hub_.current_running_task_type, TaskType::NONE);
@@ -281,7 +266,7 @@ TEST_F(SECTouchHubTest, CorruptedAckEndsSetAsMalformed) {
   this->uart_.tx.clear();
 
   this->uart_.push_rx(corrupted_ack());
-  this->loop_times(2);
+  this->hub_.loop_times(2);
 
   // The real check: the SET ended at once, with no watchdog. The outcome reads TIMEOUT because a malformed end
   // is recorded as TIMEOUT (scan_outcome.h).
@@ -318,7 +303,7 @@ TEST_F(SECTouchGetRetryTest, WatchdogTimeoutIsNotRetried) {
   this->send_next_task();
 
   this->uart_.tx.clear();
-  this->age_task_past_watchdog();
+  this->hub_.age_task_past_watchdog();
   this->hub_.loop();
 
   EXPECT_EQ(this->uart_.tx, get_frame(LABEL_2_ID));
@@ -358,7 +343,7 @@ TEST_F(SECTouchGetRetryTest, WatchdogEndsAScanQueryStillInFlightAfterScanStopped
   this->send_next_task();
   EXPECT_TRUE(this->uart_.tx.empty());
 
-  this->age_task_past_watchdog();
+  this->hub_.age_task_past_watchdog();
   this->hub_.loop();
 
   EXPECT_EQ(this->uart_.tx, get_frame(LABEL_1_ID));
@@ -432,7 +417,7 @@ TEST_F(SECTouchTaskEndTest, AnAnsweredGetAndSetEachEndOnce) {
   this->hub_.add_set_task(SetDataTask::create(TaskTargetType::LEVEL, FAN_1_LEVEL_ID, "5"));
   this->send_next_task();
   this->uart_.push_rx(ack_frame());
-  this->loop_times(2);
+  this->hub_.loop_times(2);
   this->panel_answers(data_frame(LABEL_1_ID, "3"));
 
   EXPECT_EQ(this->ends_, (std::vector<std::string>{end_of("SET", FAN_1_LEVEL_ID, TaskEnd::TASK_END_ANSWERED),
@@ -443,8 +428,8 @@ TEST_F(SECTouchTaskEndTest, ANakAndATimeoutEachEndTheirTask) {
   this->queue_label_reads({LABEL_1_ID, LABEL_2_ID});
   this->send_next_task();
   this->uart_.push_rx(nak_frame());
-  this->loop_times(2);
-  this->age_task_past_watchdog();
+  this->hub_.loop_times(2);
+  this->hub_.age_task_past_watchdog();
   this->hub_.loop();
 
   EXPECT_EQ(this->ends_, (std::vector<std::string>{end_of("GET", LABEL_1_ID, TaskEnd::TASK_END_NAK),
@@ -494,7 +479,7 @@ TEST_F(SECTouchTaskEndTest, AReplacedSetEndsWithItsNewTicket) {
   this->send_next_task();
 
   this->uart_.push_rx(ack_frame());
-  this->loop_times(2);
+  this->hub_.loop_times(2);
 
   EXPECT_NE(first, 0u);
   EXPECT_NE(second, first);

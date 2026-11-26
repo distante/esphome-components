@@ -8,6 +8,7 @@
 #include <vector>
 #include "esphome/components/uart/uart_component.h"
 #include "esphome/components/sec_touch/sec_touch.h"
+#include "esphome/components/sec_touch/time_program_codec.h"
 #include "esphome/components/sec_touch/XModemCRC.h"
 
 namespace esphome::sec_touch::testing {
@@ -54,6 +55,16 @@ inline std::vector<uint8_t> set_frame(int property_id, const std::string &value)
   return data_frame(property_id, value);
 }
 
+/// `a` followed by `b`, such as an ACK and the data frame after it.
+inline std::vector<uint8_t> concat(const std::vector<uint8_t> &a, const std::vector<uint8_t> &b) {
+  std::vector<uint8_t> out = a;
+  out.insert(out.end(), b.begin(), b.end());
+  return out;
+}
+
+/// The raw value of enabled mask `mask`, as the hub writes it and the panel sends it.
+inline std::string mask_text(uint8_t mask) { return std::string(format_enabled_mask(mask).data()); }
+
 /// A UART bus whose rx bytes the test pushes and whose tx bytes the test reads.
 class FakeUART : public uart::UARTComponent {
  public:
@@ -88,21 +99,27 @@ class FakeUART : public uart::UARTComponent {
   void check_logger_conflict() override {}
 };
 
-/// The time-program poll interval the tests configure: codegen always sets one, so the hub has no default of its own.
-constexpr uint32_t TIME_PROGRAMS_INTERVAL_MS = 300000;
+/// The poll intervals every test hub runs with. Codegen always sets them and their defaults live only in the YAML
+/// schema, so these are test values, not the defaults.
+constexpr uint32_t TEST_GLOBAL_SETTINGS_INTERVAL_MS = 20000;
+constexpr uint32_t TEST_TIME_PROGRAMS_INTERVAL_MS = 240000;
 
-/// Re-exports the hub internals the tests steer. task_start_time_ lets a test age a task past the watchdog,
-/// since the host platform's millis() is the real clock. current_running_task_type shows whether a task is still open.
-/// The last_*_ms_ members let a test age a poll's interval the same way. data_task_queue and time_program_polls_ let a
-/// test check and bend the queue.
+/// Re-exports the hub internals the tests steer. current_running_task_type shows whether a task is still open. The
+/// host platform's millis() is the real clock, so the last_*_ms_ members let a test age a poll's interval instead of
+/// sleeping, as age_task_past_watchdog() does for a task. data_task_queue and time_program_polls_ let a test check and
+/// bend the queue.
 class TestableSECTouch : public SECTouchComponent {
  public:
+  TestableSECTouch() {
+    this->set_global_settings_update_interval_ms(TEST_GLOBAL_SETTINGS_INTERVAL_MS);
+    this->set_time_programs_update_interval_ms(TEST_TIME_PROGRAMS_INTERVAL_MS);
+  }
+
   using SECTouchComponent::current_running_task_type;
   using SECTouchComponent::data_task_queue;
   using SECTouchComponent::time_program_polls_;
   using SECTouchComponent::last_global_settings_update_ms_;
   using SECTouchComponent::last_time_programs_update_ms_;
-  using SECTouchComponent::task_start_time_;
 
   /// IDs whose priority GET can't be queued: add_priority_get_task() returns 0 for them, as for an ID it doesn't
   /// accept.
@@ -113,6 +130,15 @@ class TestableSECTouch : public SECTouchComponent {
     }
     return SECTouchComponent::add_priority_get_task(target, property_id);
   }
+
+  void loop_times(int n) {
+    for (int i = 0; i < n; i++) {
+      this->loop();
+    }
+  }
+
+  /// Host millis() is the real clock: ages the running task past the watchdog instead of sleeping.
+  void age_task_past_watchdog() { this->task_start_time_ = millis() - (TASK_TIMEOUT_MS + 1); }
 };
 
 /// `[STX][NAK][ETX]`: the panel refuses a request.

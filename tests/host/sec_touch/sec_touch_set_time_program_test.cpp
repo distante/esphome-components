@@ -37,8 +37,6 @@ const uint8_t MASK_BEFORE = switch_time_bit(5);
 /// ENABLED: switch times 1-4 on, 5 off.
 const uint8_t MASK_AFTER = switch_time_bit(1) | switch_time_bit(2) | switch_time_bit(3) | switch_time_bit(4);
 
-std::string mask_text(uint8_t mask) { return std::string(format_enabled_mask(mask).data()); }
-
 /// How the `error` names a failed write of switch time `switch_time`'s `field`.
 std::string failed_write(int switch_time, TimeProgramField field, WriteFailure failure) {
   return bulk_detail::switch_time_field(switch_time, field) + " " + write_failure_name(failure);
@@ -52,12 +50,6 @@ std::string failed_mask_write(WriteFailure failure) {
 /// How the `error` of a bulk write with `count` failed writes starts.
 std::string failed_prefix(size_t count) {
   return std::to_string(count) + " of " + std::to_string(BULK_WRITE_COUNT) + " writes failed: ";
-}
-
-std::vector<uint8_t> concat(const std::vector<uint8_t> &a, const std::vector<uint8_t> &b) {
-  std::vector<uint8_t> out = a;
-  out.insert(out.end(), b.begin(), b.end());
-  return out;
 }
 
 /// A request the hub sent, read back from its bytes.
@@ -96,7 +88,6 @@ class SetTimeProgramTest : public ::testing::Test {
   void SetUp() override {
     this->hub_.set_uart_parent(&this->uart_);
     this->hub_.set_inter_task_delay(0);
-    this->hub_.set_time_programs_update_interval_ms(TIME_PROGRAMS_INTERVAL_MS);
     this->hub_.last_time_programs_update_ms_ = millis();
     this->hub_.last_global_settings_update_ms_ = millis();
     this->action_.set_parent(&this->hub_);
@@ -137,27 +128,21 @@ class SetTimeProgramTest : public ::testing::Test {
       sent.push_back(request);
       this->uart_.tx.clear();
       if (request.is_get && ignore_first_get.count(request.id) > 0 && ignored.insert(request.id).second) {
-        this->hub_.task_start_time_ = millis() - (TASK_TIMEOUT_MS + 1);
+        this->hub_.age_task_past_watchdog();
         this->hub_.loop();
         this->hub_.loop();
       } else if (request.is_get) {
         this->uart_.push_rx(concat(ack_frame(), data_frame(request.id, this->panel_[request.id])));
-        this->loop_times(3);
+        this->hub_.loop_times(3);
       } else if (refuse.count(request.id) > 0) {
         this->uart_.push_rx(nak_frame());
-        this->loop_times(3);
+        this->hub_.loop_times(3);
       } else {
         this->panel_[request.id] = request.value;
         this->uart_.push_rx(ack_frame());
-        this->loop_times(3);
+        this->hub_.loop_times(3);
       }
       out = this->uart_.tx;
-    }
-  }
-
-  void loop_times(int n) {
-    for (int i = 0; i < n; i++) {
-      this->hub_.loop();
     }
   }
 
@@ -308,7 +293,7 @@ TEST_F(SetTimeProgramTest, AnEntityMaskSetInFlightIsNotTheCallsMaskSet) {
   this->hub_.loop();  // the fresh mask GET goes out
   this->uart_.tx.clear();
   this->uart_.push_rx(concat(ack_frame(), data_frame(MASK_ID, this->panel_[MASK_ID])));
-  this->loop_times(3);  // its answer queues the entity's mask SET, which goes out
+  this->hub_.loop_times(3);  // its answer queues the entity's mask SET, which goes out
   std::vector<uint8_t> out = this->uart_.tx;
   const std::vector<uint8_t> ack = ack_frame();
   ASSERT_TRUE(out.size() > ack.size() && std::equal(ack.begin(), ack.end(), out.begin()));
@@ -349,7 +334,7 @@ TEST_F(SetTimeProgramTest, AScanExitEndsTheSetInFlight) {
   this->hub_.loop();  // the first time SET goes out
 
   this->hub_.exit_scan_mode();
-  this->hub_.task_start_time_ = millis() - (TASK_TIMEOUT_MS + 1);
+  this->hub_.age_task_past_watchdog();
   this->run_panel();
 
   EXPECT_EQ(this->errors_, std::vector<std::string>{failed_prefix(1) +

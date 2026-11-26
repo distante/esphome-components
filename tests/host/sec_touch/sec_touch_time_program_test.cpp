@@ -26,22 +26,12 @@ const int LEVEL_ID = time_program_level_id(PAIR, SWITCH_TIME);
 const int FIRST_TIME_ID = time_program_time_id(PAIR, FIRST_SWITCH_TIME);
 const int FIRST_LEVEL_ID = time_program_level_id(PAIR, FIRST_SWITCH_TIME);
 
-constexpr uint32_t INTERVAL_MS = TIME_PROGRAMS_INTERVAL_MS;
-constexpr uint32_t GLOBAL_INTERVAL_MS = DEFAULT_GLOBAL_SETTINGS_UPDATE_INTERVAL_MS;
 /// What a select without state reads as, so a comparison fails.
 constexpr size_t NO_INDEX = SIZE_MAX;
 
 std::string text(const char *value) { return std::string(value); }
 
 std::string event_name(WriteFailure failure) { return write_failure_name(failure); }
-
-std::string mask_text(uint8_t mask) { return text(format_enabled_mask(mask).data()); }
-
-std::vector<uint8_t> concat(const std::vector<uint8_t> &a, const std::vector<uint8_t> &b) {
-  std::vector<uint8_t> out = a;
-  out.insert(out.end(), b.begin(), b.end());
-  return out;
-}
 
 /// Fan pair PAIR with entities for switch times FIRST_SWITCH_TIME and SWITCH_TIME and a write_failed event, driven
 /// through the real entity classes and the real hub, with a fake bus.
@@ -50,19 +40,11 @@ class TimeProgramTest : public ::testing::Test {
   void SetUp() override {
     this->hub_.set_uart_parent(&this->uart_);
     this->hub_.set_inter_task_delay(0);
-    this->hub_.set_time_programs_update_interval_ms(INTERVAL_MS);
-    this->hub_.set_global_settings_update_interval_ms(GLOBAL_INTERVAL_MS);
     // Host millis() is the real clock: start both polls' intervals now, as setup() would.
     this->hub_.last_time_programs_update_ms_ = millis();
     this->hub_.last_global_settings_update_ms_ = millis();
     this->write_failed_.add_on_event_callback(
         [this](StringRef type) { this->events_.push_back(std::string(type.c_str())); });
-  }
-
-  void loop_times(int n) {
-    for (int i = 0; i < n; i++) {
-      this->hub_.loop();
-    }
   }
 
   /// Sends the first queued task. Returns what went out: that request.
@@ -77,7 +59,7 @@ class TimeProgramTest : public ::testing::Test {
   std::vector<uint8_t> panel_replies(const std::vector<uint8_t> &reply) {
     this->uart_.tx.clear();
     this->uart_.push_rx(reply);
-    this->loop_times(3);
+    this->hub_.loop_times(3);
     return this->uart_.tx;
   }
 
@@ -88,8 +70,8 @@ class TimeProgramTest : public ::testing::Test {
   /// The task in flight gets no answer. Returns the next task the hub sent.
   std::vector<uint8_t> panel_stays_silent() {
     this->uart_.tx.clear();
-    this->hub_.task_start_time_ = millis() - (TASK_TIMEOUT_MS + 1);
-    this->loop_times(2);
+    this->hub_.age_task_past_watchdog();
+    this->hub_.loop_times(2);
     return this->uart_.tx;
   }
 
@@ -137,7 +119,7 @@ TEST_F(TimeProgramTest, TheNextPollComesAfterItsInterval) {
   this->drain();
   EXPECT_TRUE(this->send_next_task().empty());
 
-  this->hub_.last_time_programs_update_ms_ = millis() - (INTERVAL_MS + 1);
+  this->hub_.last_time_programs_update_ms_ = millis() - (TEST_TIME_PROGRAMS_INTERVAL_MS + 1);
   this->hub_.loop();  // an idle loop queues the due poll
 
   EXPECT_EQ(this->drain(), one_poll());
@@ -175,7 +157,7 @@ TEST_F(TimeProgramTest, TheGlobalSettingsPollSendsNoTimeProgramId) {
   this->hub_.setup();
   this->drain();
 
-  this->hub_.last_global_settings_update_ms_ = millis() - (GLOBAL_INTERVAL_MS + 1);
+  this->hub_.last_global_settings_update_ms_ = millis() - (TEST_GLOBAL_SETTINGS_INTERVAL_MS + 1);
   this->hub_.loop();  // an idle loop queues the due poll
 
   EXPECT_EQ(this->drain(), std::vector<std::vector<uint8_t>>{get_frame(CLOCK_PROPERTY_ID)});
@@ -186,7 +168,7 @@ TEST_F(TimeProgramTest, RefreshQueuesOnePollAndKeepsTheSchedule) {
   this->hub_.setup();
   this->drain();
   // Halfway through the interval, so a refresh that restarted it would show.
-  this->hub_.last_time_programs_update_ms_ = millis() - INTERVAL_MS / 2;
+  this->hub_.last_time_programs_update_ms_ = millis() - TEST_TIME_PROGRAMS_INTERVAL_MS / 2;
   const uint32_t scheduled = this->hub_.last_time_programs_update_ms_;
 
   this->program_.refresh();

@@ -23,9 +23,6 @@ namespace {
 constexpr int PAIR = 1;
 const int PAIR_LEVEL_ID = FAN_LEVEL_IDS[PAIR - 1];
 
-constexpr uint32_t GLOBAL_INTERVAL_MS = DEFAULT_GLOBAL_SETTINGS_UPDATE_INTERVAL_MS;
-constexpr uint32_t INTERVAL_MS = TIME_PROGRAMS_INTERVAL_MS;
-
 using known_property_detail::level_name;
 
 /// The pair's level ID in Automatik Zeit.
@@ -94,8 +91,6 @@ class LiveStateTest : public ::testing::Test {
   void SetUp() override {
     this->hub_.set_uart_parent(&this->uart_);
     this->hub_.set_inter_task_delay(0);
-    this->hub_.set_global_settings_update_interval_ms(GLOBAL_INTERVAL_MS);
-    this->hub_.set_time_programs_update_interval_ms(INTERVAL_MS);
     this->hub_.last_time_programs_update_ms_ = millis();
     this->hub_.last_global_settings_update_ms_ = millis();
     // Stands in for the pair's fan entry, which a live-state entity requires.
@@ -111,12 +106,6 @@ class LiveStateTest : public ::testing::Test {
     this->next_change_.add_on_state_callback([this](float) { this->next_change_publishes_++; });
   }
 
-  void loop_times(int n) {
-    for (int i = 0; i < n; i++) {
-      this->hub_.loop();
-    }
-  }
-
   /// Sends the first queued task. Returns what went out.
   std::vector<uint8_t> send_next_task() {
     this->uart_.tx.clear();
@@ -127,7 +116,7 @@ class LiveStateTest : public ::testing::Test {
   void panel_answers_get(int property_id, const std::string &value) {
     this->uart_.push_rx(ack_frame());
     this->uart_.push_rx(data_frame(property_id, value));
-    this->loop_times(3);
+    this->hub_.loop_times(3);
   }
 
   /// Sends every queued task, each left unanswered. Returns each request, in order.
@@ -137,8 +126,8 @@ class LiveStateTest : public ::testing::Test {
     while (!next.empty()) {
       sent.push_back(next);
       this->uart_.tx.clear();
-      this->hub_.task_start_time_ = millis() - (TASK_TIMEOUT_MS + 1);
-      this->loop_times(2);
+      this->hub_.age_task_past_watchdog();
+      this->hub_.loop_times(2);
       next = this->uart_.tx;
     }
     return sent;
@@ -202,7 +191,7 @@ TEST_F(LiveStateTest, ClockDriftSharesThePanelClockPoll) {
   this->hub_.setup();
   this->drain();
 
-  this->hub_.last_global_settings_update_ms_ = millis() - (GLOBAL_INTERVAL_MS + 1);
+  this->hub_.last_global_settings_update_ms_ = millis() - (TEST_GLOBAL_SETTINGS_INTERVAL_MS + 1);
   this->hub_.loop();  // an idle loop queues the due poll
 
   EXPECT_EQ(this->drain(), frames_of({DATE_PROPERTY_ID, CLOCK_PROPERTY_ID}));

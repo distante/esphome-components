@@ -318,8 +318,9 @@ sensor:
 ## Time program live state
 
 Optional entities under a pair's `time_programs:` entry ([spec](../../.specs/time-programs.md#live-state)). The
-`time_programs:` keys themselves, the field entities, `refresh`, `write_failed` and `sec_touch.set_time_program` are
-in the spec's [Configuration](../../.specs/time-programs.md#configuration) until this readme takes them over
+`time_programs:` keys themselves, the field entities, `refresh` and `write_failed` are in the spec's
+[Configuration](../../.specs/time-programs.md#configuration), and `sec_touch.set_time_program` in its
+[Bulk-set action](../../.specs/time-programs.md#bulk-set-action), until this readme takes them over
 ([#80](https://github.com/distante/esphome-components/issues/80)):
 
 ```yaml

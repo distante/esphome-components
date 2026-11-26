@@ -99,9 +99,10 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   /**
    * Queues a SET of `property_id`, one per ID: when a SET of that ID is already queued, its value is replaced in place
    * instead. A SET in flight isn't touched; the new one queues behind it. Returns the SET's ticket (never 0), new on
-   * a replace too, which its task carries to the task-end listeners; or 0 for an ID `target` doesn't accept.
+   * a replace too, which its task carries to the task-end listeners; or 0 for an ID `target` doesn't accept. Virtual
+   * so a host test can refuse one.
    */
-  uint32_t add_set_task_latest_wins(TaskTargetType target, int property_id, const char *value);
+  virtual uint32_t add_set_task_latest_wins(TaskTargetType target, int property_id, const char *value);
   /// Queues a GET of `property_id` ahead of every other GET, after the queued SETs. Returns the GET's ticket (never 0),
   /// which its task carries to the task-end listeners, or 0 for an ID `target` doesn't accept. Virtual so a host test
   /// can refuse one.

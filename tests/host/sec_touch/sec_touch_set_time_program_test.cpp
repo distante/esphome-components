@@ -272,6 +272,21 @@ TEST_F(SetTimeProgramTest, WritingGoesOnPastFailuresAndReportsThem) {
   EXPECT_FALSE(this->program_.is_bulk_write_running());
 }
 
+// A SET that can't be queued fails its write as a timeout, and the call still ends, freeing the pair.
+TEST_F(SetTimeProgramTest, ASetThatCantBeQueuedFailsItsWriteAndTheCallEnds) {
+  this->hub_.unqueueable_sets = {time_program_time_id(PAIR, 1), MASK_ID};
+  this->action_.play_complex();
+
+  this->run_panel();
+
+  EXPECT_EQ(this->errors_,
+            std::vector<std::string>{failed_prefix(2) + failed_write(1, TimeProgramField::TIME, WriteFailure::TIMEOUT) +
+                                     BULK_FAILURE_SEPARATOR + failed_mask_write(WriteFailure::TIMEOUT)});
+  EXPECT_EQ(this->events_, (std::vector<std::string>{write_failure_name(WriteFailure::TIMEOUT),
+                                                     write_failure_name(WriteFailure::TIMEOUT)}));
+  EXPECT_FALSE(this->program_.is_bulk_write_running());
+}
+
 // Spec: an entity write that replaces a queued bulk value shows up as not_kept in the bulk report.
 TEST_F(SetTimeProgramTest, AnEntityWriteThatReplacesABulkValueIsNotKept) {
   constexpr size_t ENTITY_LEVEL = 7;

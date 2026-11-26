@@ -177,7 +177,7 @@ flowchart LR
 | Type | When |
 |---|---|
 | `refused` | The SET got a NAK |
-| `timeout` | The SET got no answer |
+| `timeout` | The SET got no answer, or couldn't be queued |
 | `not_kept` | The read-back differs from what was sent |
 | `mask_unreadable` | The fresh mask GET failed; nothing was written |
 

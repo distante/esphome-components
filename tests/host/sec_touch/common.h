@@ -131,6 +131,16 @@ class TestableSECTouch : public SECTouchComponent {
     return SECTouchComponent::add_priority_get_task(target, property_id);
   }
 
+  /// IDs whose latest-wins SET can't be queued: add_set_task_latest_wins() returns 0 for them, as for an ID it doesn't
+  /// accept.
+  std::set<int> unqueueable_sets;
+  uint32_t add_set_task_latest_wins(TaskTargetType target, int property_id, const char *value) override {
+    if (this->unqueueable_sets.count(property_id) > 0) {
+      return 0;
+    }
+    return SECTouchComponent::add_set_task_latest_wins(target, property_id, value);
+  }
+
   void loop_times(int n) {
     for (int i = 0; i < n; i++) {
       this->loop();

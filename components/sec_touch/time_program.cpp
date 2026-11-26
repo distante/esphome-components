@@ -131,12 +131,20 @@ void TimeProgram::read_mask_fresh_() {
 }
 
 void TimeProgram::queue_set_(int id, const char *value, int expected) {
+  auto slot = time_program_slot(id);
   ReadBack *read_back = this->read_back_(id);
-  if (read_back == nullptr) {
+  if (!slot.has_value() || read_back == nullptr) {
     return;
   }
   read_back->expected = expected;
   read_back->set_ticket = this->hub_->add_set_task_latest_wins(TaskTargetType::TIME_PROGRAM, id, value);
+  if (read_back->set_ticket != 0) {
+    return;
+  }
+  // No SET was queued, so no task end comes for it: the write ends here.
+  this->bulk_.fail(*slot, WriteFailure::TIMEOUT);
+  this->bulk_.set_ended(*slot, false);
+  this->report_(id, WriteFailure::TIMEOUT);
 }
 
 TimeProgram::ReadBack *TimeProgram::read_back_(int id) {
@@ -261,9 +269,10 @@ void TimeProgram::write_mask_(uint8_t fresh) {
   this->mask_read_pending_ = false;
   EnabledMaskText text = format_enabled_mask(mask);
   ESP_LOGI(TAG, "Fan pair %d enabled mask -> %s", this->pair_, text.data());
-  this->queue_set_(time_program_enabled_id(this->pair_), text.data(), mask);
-  // A running bulk write requested its bits before this fresh mask: this SET is its mask SET.
+  // A running bulk write requested its bits before this fresh mask: this SET is its mask SET, so a SET that can't be
+  // queued fails it.
   this->bulk_.mask_set_queued();
+  this->queue_set_(time_program_enabled_id(this->pair_), text.data(), mask);
   this->publish_switches_(mask);
 }
 

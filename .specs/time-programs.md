@@ -168,8 +168,8 @@ flowchart LR
 | One queued SET per ID | A newer write to an ID with a SET still queued replaces that task's value in place. A SET already in flight isn't touched; the newer write queues behind it. Each SET carries a ticket, a new one on a replace: only the ID's latest SET gets the read-back and counts for a bulk call. An older SET still in flight that fails fires `write_failed`, nothing more. |
 | Time | Written as `HH:MM:00`. Seconds from HA are dropped, never rounded. A call with only the hour or only the minute keeps the other one as shown; while the entity shows no time, such a call writes nothing. |
 | Level | The select's index, 0–9, as a decimal string. |
-| Enabled mask | Per pair, the hub keeps the requested bit changes (bits to set, bits to clear). When the write is due: GET the mask fresh, apply only those bits, SET. Only that GET's own answer is the fresh mask, not a poll's answer that arrives meanwhile. Bits of switch times outside `switch_times` and any bit above switch time 5's (value `20` and up) stay as they are. Changes merge; per bit, the later request wins. |
-| Mask GET fails | The hub retries a GET only after a dropped reply (`get_retry.h`), not after a timeout or NAK. When the write's own fresh GET fails, or can't be queued: write nothing, fire `mask_unreadable`, log a warning, republish the switches from the last good mask. A poll's GET of the mask that fails meanwhile doesn't count. |
+| Enabled mask | Per pair, the hub keeps the requested bit changes (bits to set, bits to clear). When the write is due: GET the mask fresh, apply only those bits, SET. Only that GET's own answer is the fresh mask, not a poll's answer that arrives meanwhile. Bits of switch times outside `switch_times` stay as they are; a mask the [meaning rule](#known-property-catalogue) marks unexpected is never written over (Mask GET fails, below). Changes merge; per bit, the later request wins. |
+| Mask GET fails | The hub retries a GET only after a dropped reply (`get_retry.h`), not after a timeout or NAK. When the write's own fresh GET fails, can't be queued, or answers a mask the [meaning rule](#known-property-catalogue) marks unexpected: write nothing, fire `mask_unreadable`, log a warning, republish the switches from the last good mask. A poll's GET of the mask that fails meanwhile doesn't count. |
 | Read-back | A `not_kept` is a read-back that differs from what was sent; seconds are ignored when comparing times. Live-state entities recompute from the read-back. |
 
 **`write_failed` event types** (an ESPHome event carries only its type; the log names the field, and in HA the entity that jumped back shows it):
@@ -179,7 +179,7 @@ flowchart LR
 | `refused` | The SET got a NAK |
 | `timeout` | The SET got no answer, or couldn't be queued |
 | `not_kept` | The read-back differs from what was sent |
-| `mask_unreadable` | The fresh mask GET failed; nothing was written |
+| `mask_unreadable` | The fresh mask GET failed or answered an unexpected mask; nothing was written |
 
 HA's toast can't show these: entity commands from HA get no result back from ESPHome.
 

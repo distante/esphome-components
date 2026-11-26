@@ -86,3 +86,12 @@ Enforces the "Facts match their source" bullet of [Docs and PR text](../coding-s
 2. Look up every config key the text calls optional, recommended or required in its schema: the component's `__init__.py`, or the vendored ESPHome under `esphome/`. Example: "ideally with `relation: child`" while ESPHome 2026.11.0 has `relation` as `cv.Required`.
 
 Done when each stated number has its recount and each key its schema line, and each mismatch is reported with its `file:line` and the source it contradicts.
+
+## Every doc names an ID's current readers
+
+Enforces the "Facts match their source" bullet of [Docs and PR text](../coding-standards/SKILL.md#docs-and-pr-text) for docs the diff leaves untouched.
+
+1. List every property ID whose pollers, readers or writers the diff changes (a feature starts or stops polling it, a listener moves, a write path is added).
+2. For each, grep every `.md` in the repo (readmes, `RAW_VALUES.md`, `.specs/`, skills) for the ID and its name, and read each mention's claim about who polls, reads or writes it. Example: live state stopped polling the panel date, yet `RAW_VALUES.md` and the readme's "Date and Clock" line still named only `clock_drift` as reading IDs 1 and 2.
+
+Done when each listed ID has its grep, and each mention naming old readers or writers is reported with its `file:line`.

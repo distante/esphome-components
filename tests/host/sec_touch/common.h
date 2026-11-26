@@ -88,6 +88,9 @@ class FakeUART : public uart::UARTComponent {
   void check_logger_conflict() override {}
 };
 
+/// The time-program poll interval the tests configure: codegen always sets one, so the hub has no default of its own.
+constexpr uint32_t TIME_PROGRAMS_INTERVAL_MS = 300000;
+
 /// Re-exports the hub internals the tests steer. task_start_time_ lets a test age a task past the watchdog,
 /// since the host platform's millis() is the real clock. current_running_task_type shows whether a task is still open.
 /// The last_*_ms_ members let a test age a poll's interval the same way. data_task_queue and time_program_polls_ let a

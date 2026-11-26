@@ -96,6 +96,7 @@ class SetTimeProgramTest : public ::testing::Test {
   void SetUp() override {
     this->hub_.set_uart_parent(&this->uart_);
     this->hub_.set_inter_task_delay(0);
+    this->hub_.set_time_programs_update_interval_ms(TIME_PROGRAMS_INTERVAL_MS);
     this->hub_.last_time_programs_update_ms_ = millis();
     this->hub_.last_global_settings_update_ms_ = millis();
     this->action_.set_parent(&this->hub_);

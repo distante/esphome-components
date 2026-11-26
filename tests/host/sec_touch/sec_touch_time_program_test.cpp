@@ -26,7 +26,7 @@ const int LEVEL_ID = time_program_level_id(PAIR, SWITCH_TIME);
 const int FIRST_TIME_ID = time_program_time_id(PAIR, FIRST_SWITCH_TIME);
 const int FIRST_LEVEL_ID = time_program_level_id(PAIR, FIRST_SWITCH_TIME);
 
-constexpr uint32_t INTERVAL_MS = DEFAULT_TIME_PROGRAMS_UPDATE_INTERVAL_MS;
+constexpr uint32_t INTERVAL_MS = TIME_PROGRAMS_INTERVAL_MS;
 constexpr uint32_t GLOBAL_INTERVAL_MS = DEFAULT_GLOBAL_SETTINGS_UPDATE_INTERVAL_MS;
 /// What a select without state reads as, so a comparison fails.
 constexpr size_t NO_INDEX = SIZE_MAX;

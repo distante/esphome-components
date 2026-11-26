@@ -427,12 +427,14 @@ void SECTouchComponent::enter_scan_mode() {
   }
   std::deque<std::unique_ptr<BaseTask>> discarded;
   discarded.swap(this->data_task_queue);
-  std::unique_ptr<BaseTask> in_flight = this->take_in_flight_task_();
-  this->queue_was_idle_ = false;  // Force queue-empty callback to fire so scan tasks get queued
+  // Force the queue-empty callback to fire, once the line is free, so scan tasks get queued.
+  this->queue_was_idle_ = false;
   this->scan_outcome_.begin_scan();
   this->scan_mode_active_ = true;
 
-  this->drop_task_(std::move(in_flight));
+  // The task still in flight is dropped: its listeners hear it end now. The line stays busy until its reply or the
+  // watchdog, so a late reply ends no scan task.
+  this->drop_task_(std::move(this->in_flight_task_));
   for (auto &task : discarded) {
     this->drop_task_(std::move(task));
   }
@@ -722,7 +724,9 @@ void SECTouchComponent::cleanup_after_task_complete(TaskEnd end) {
 std::unique_ptr<BaseTask> SECTouchComponent::finish_in_flight_task_(TaskEnd end) {
   ESP_LOGD(TAG, "Task ended: %s", task_end_name(end));
   std::unique_ptr<BaseTask> task = this->take_in_flight_task_();
-  this->scan_outcome_.record(end, this->scan_mode_active_);
+  // A reply to a task already dropped (no task left) is no scan query's: it leaves the outcome alone too.
+  this->scan_outcome_.record(end, this->scan_mode_active_,
+                             task != nullptr && task->targetType == TaskTargetType::SNIFFER);
   this->task_ready_at_ms_ = millis() + this->inter_task_delay_ms_;
   return task;
 }

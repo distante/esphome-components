@@ -33,10 +33,17 @@ namespace sec_touch {
 template<typename... Ts>
 class SetTimeProgramAction : public Action<Ts...>, public Parented<SECTouchComponent>, public BulkWriteListener {
  public:
+  using Times = BulkListArgument<std::vector<std::string>, Ts...>;
+  using Levels = BulkListArgument<std::vector<int32_t>, Ts...>;
+  using Enabled = BulkListArgument<std::vector<bool>, Ts...>;
+
   TEMPLATABLE_VALUE(int, fan_number)
-  TEMPLATABLE_VALUE(std::vector<std::string>, times)
-  TEMPLATABLE_VALUE(std::vector<int32_t>, levels)
-  TEMPLATABLE_VALUE(std::vector<bool>, enabled)
+  void set_times(std::vector<std::string> times) { this->times_.set(std::move(times)); }
+  void set_times(typename Times::Lambda times) { this->times_.set(times); }
+  void set_levels(std::vector<int32_t> levels) { this->levels_.set(std::move(levels)); }
+  void set_levels(typename Levels::Lambda levels) { this->levels_.set(levels); }
+  void set_enabled(std::vector<bool> enabled) { this->enabled_.set(std::move(enabled)); }
+  void set_enabled(typename Enabled::Lambda enabled) { this->enabled_.set(enabled); }
 
   Trigger<Ts...> *get_success_trigger() { return &this->success_trigger_; }
   /// `error` comes after the call's arguments: api.respond reads call_id from the first one.
@@ -50,8 +57,12 @@ class SetTimeProgramAction : public Action<Ts...>, public Parented<SECTouchCompo
       return;
     }
     BulkProgram bulk;
-    if (auto error =
-            read_bulk_program(this->times_.value(x...), this->levels_.value(x...), this->enabled_.value(x...), bulk)) {
+    // Each lambda's result lives here until the check is done; a constant is read where the action keeps it.
+    std::vector<std::string> times;
+    std::vector<int32_t> levels;
+    std::vector<bool> enabled;
+    if (auto error = read_bulk_program(this->times_.get(times, x...), this->levels_.get(levels, x...),
+                                       this->enabled_.get(enabled, x...), bulk)) {
       this->refuse_(pair, *error, x...);
       return;
     }
@@ -86,6 +97,9 @@ class SetTimeProgramAction : public Action<Ts...>, public Parented<SECTouchCompo
     this->error_trigger_.trigger(x..., error);
   }
 
+  Times times_;
+  Levels levels_;
+  Enabled enabled_;
   /// Per fan pair, by pair - 1: the arguments of the call whose bulk write runs.
   std::array<std::optional<Call>, TIME_PROGRAM_PAIR_COUNT> calls_{};
   Trigger<Ts...> success_trigger_;

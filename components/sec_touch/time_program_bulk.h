@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "fan_level.h"
@@ -112,6 +113,35 @@ inline std::optional<std::string> read_bulk_program(const std::vector<std::strin
   out = program;
   return std::nullopt;
 }
+
+/**
+ * A list argument of `sec_touch.set_time_program`, whose arguments are `Ts`: a constant list from the YAML, or a lambda
+ * over the call's arguments. Unlike ESPHome's TemplatableValue, it hands out a constant by reference and passes the
+ * call's arguments to the lambda by reference, so checking a call copies no list; only a lambda builds its result.
+ */
+template<typename T, typename... Ts> class BulkListArgument {
+ public:
+  using Lambda = T (*)(const Ts &...);
+
+  void set(T value) {
+    this->value_ = std::move(value);
+    this->lambda_ = nullptr;
+  }
+  void set(Lambda lambda) { this->lambda_ = lambda; }
+
+  /// The list of a call with arguments `x`: the constant, or the lambda's result, kept in `result`.
+  const T &get(T &result, const Ts &...x) const {
+    if (this->lambda_ == nullptr) {
+      return this->value_;
+    }
+    result = this->lambda_(x...);
+    return result;
+  }
+
+ protected:
+  T value_{};
+  Lambda lambda_{nullptr};
+};
 
 /// The `error` of a call for a pair that `time_programs` doesn't list.
 inline std::string bulk_unlisted_pair_error(int pair) {

@@ -404,6 +404,16 @@ FINAL_VALIDATE_SCHEMA = cv.All(
 )
 
 
+async def _bulk_list(value, args, item_type):
+    """A list argument for BulkListArgument (time_program_bulk.h): the constant list, or a lambda that takes the
+    call's arguments by const reference, so no list is copied to check a call."""
+    list_type = cg.std_vector.template(item_type)
+    if not cg.is_template(value):
+        return cg.RawExpression(f"{list_type}({cg.safe_exp(value)})")
+    by_reference = [(cg.RawExpression(f"const {arg_type} &"), name) for arg_type, name in args]
+    return await cg.process_lambda(value, by_reference, return_type=list_type)
+
+
 # synchronous=False: on_success / on_error fire after the writes end, with the call's arguments, so those must be
 # owning copies (the API then passes std::vector, not views into its receive buffer).
 @automation.register_action(
@@ -417,18 +427,9 @@ async def set_time_program_to_code(config, action_id, template_arg, args):
     await cg.register_parented(var, config[CONF_ID])
     fan_number = await cg.templatable(config[CONF_FAN_NUMBER], args, cg.int_)
     cg.add(var.set_fan_number(fan_number))
-    times = await cg.templatable(
-        config[CONF_TIMES], args, cg.std_vector.template(cg.std_string)
-    )
-    cg.add(var.set_times(times))
-    levels = await cg.templatable(
-        config[CONF_LEVELS], args, cg.std_vector.template(cg.int32)
-    )
-    cg.add(var.set_levels(levels))
-    enabled = await cg.templatable(
-        config[CONF_ENABLED], args, cg.std_vector.template(cg.bool_)
-    )
-    cg.add(var.set_enabled(enabled))
+    cg.add(var.set_times(await _bulk_list(config[CONF_TIMES], args, cg.std_string)))
+    cg.add(var.set_levels(await _bulk_list(config[CONF_LEVELS], args, cg.int32)))
+    cg.add(var.set_enabled(await _bulk_list(config[CONF_ENABLED], args, cg.bool_)))
     if on_success := config.get(CONF_ON_SUCCESS):
         await automation.build_automation(
             var.get_success_trigger(), args, on_success

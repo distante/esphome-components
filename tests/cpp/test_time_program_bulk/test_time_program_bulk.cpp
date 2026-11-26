@@ -11,6 +11,7 @@ using esphome::sec_touch::BULK_FAILURE_SEPARATOR;
 using esphome::sec_touch::BULK_INVALID_ARGUMENT;
 using esphome::sec_touch::BULK_WRITE_COUNT;
 using esphome::sec_touch::bulk_unlisted_pair_error;
+using esphome::sec_touch::BulkListArgument;
 using esphome::sec_touch::BulkProgram;
 using esphome::sec_touch::BulkWrite;
 using esphome::sec_touch::MAX_SWITCH_TIME_LEVEL;
@@ -340,6 +341,45 @@ TEST(BulkWriteReport, AReplacedValueIsNotKept) {
   every_write_lands(bulk);
 
   EXPECT_EQ(bulk.finish(), failed({"switch time 2 level not_kept"}));
+}
+
+/// Counts the copies made of it.
+struct Counted {
+  static int copies;
+  Counted() = default;
+  Counted(const Counted & /*other*/) { copies++; }
+  Counted &operator=(const Counted & /*other*/) {
+    copies++;
+    return *this;
+  }
+  Counted(Counted &&) = default;
+  Counted &operator=(Counted &&) = default;
+};
+int Counted::copies = 0;
+
+// AC 11: a constant list is checked where it is kept, not copied first.
+TEST(BulkListArgument, HandsOutAConstantWithoutACopy) {
+  BulkListArgument<Counted> argument;
+  argument.set(Counted{});
+  Counted result;
+  Counted::copies = 0;
+
+  argument.get(result);
+
+  EXPECT_EQ(Counted::copies, 0);
+}
+
+// AC 11: a lambda reads the call's arguments where they are; only its result is new.
+TEST(BulkListArgument, PassesTheCallsArgumentsToALambdaByReference) {
+  BulkListArgument<std::vector<int>, Counted, std::vector<int>> argument;
+  argument.set([](const Counted & /*call_id*/, const std::vector<int> &levels) { return levels; });
+  const Counted call_id;
+  const std::vector<int> levels = {4, 2};
+  std::vector<int> result;
+  Counted::copies = 0;
+
+  EXPECT_EQ(argument.get(result, call_id, levels), levels);
+  EXPECT_EQ(Counted::copies, 0);
 }
 
 int main(int argc, char **argv) {

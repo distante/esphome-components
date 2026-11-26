@@ -105,6 +105,11 @@ WRITE_FAILED_DOMAIN = "event"
 NEXT_CHANGE_DOMAIN = "sensor"
 
 
+# A config value read as ESPHome reads a list key: one entry becomes a list of it, None and {} an empty list. For the
+# raw config, before the schema's own cv.ensure_list runs.
+_as_list = cv.ensure_list()
+
+
 def AUTO_LOAD(config):
     # The hub's public interface uses text_sensor::TextSensor, so it must be in
     # the build even when the config has no text_sensor: section.
@@ -117,9 +122,7 @@ def AUTO_LOAD(config):
             + TIME_PROGRAM_DOMAINS
             + [REFRESH_DOMAIN, WRITE_FAILED_DOMAIN, NEXT_CHANGE_DOMAIN]
         )
-    entries = config.get(CONF_TIME_PROGRAMS) or []
-    if not isinstance(entries, list):
-        entries = [entries]
+    entries = _as_list(config.get(CONF_TIME_PROGRAMS))
     if not entries:
         return base
     loads = base + TIME_PROGRAM_DOMAINS
@@ -195,7 +198,7 @@ OPTIONAL_ENTITY_KEYS = (CONF_REFRESH, CONF_WRITE_FAILED) + LIVE_STATE_KEYS
 def _fan_entries(hub_config, fan_number):
     """This hub's `fan:` entries for `fan_number`."""
     hub_id = hub_config.get(CONF_ID)
-    for fan in (CORE.raw_config or {}).get("fan") or []:
+    for fan in _as_list((CORE.raw_config or {}).get("fan")):
         if not isinstance(fan, dict) or fan.get("platform") != "sec_touch":
             continue
         if fan.get(CONF_FAN_NUMBER) != fan_number:
@@ -291,9 +294,7 @@ def _prepare_time_program(hub_config, entry):
 def _prepare_time_programs(hub_config):
     if not isinstance(hub_config, dict) or CONF_TIME_PROGRAMS not in hub_config:
         return hub_config
-    entries = hub_config[CONF_TIME_PROGRAMS]
-    if not isinstance(entries, list):
-        entries = [entries]
+    entries = _as_list(hub_config[CONF_TIME_PROGRAMS])
     prepared = []
     seen = set()
     for i, entry in enumerate(entries):

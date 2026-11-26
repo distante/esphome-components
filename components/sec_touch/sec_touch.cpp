@@ -3,6 +3,7 @@
 #include "XModemCRC.h"
 #include "data_message.h"
 #include "get_retry.h"
+#include "time_units.h"
 #include "esphome/core/log.h"
 #include "_definitions.h"
 
@@ -122,7 +123,7 @@ void SECTouchComponent::loop() {
       return;
     }
 
-    if (millis() < this->task_ready_at_ms_) {
+    if (!millis_reached(millis(), this->task_ready_at_ms_)) {
       return;
     }
     ESP_LOGD(TAG, "[loop] No Data available, processing task queue");

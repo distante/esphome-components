@@ -45,8 +45,8 @@ void TimeProgramLiveState::loop() {
     return;
   }
 #endif
-  // Signed difference: right across the millis() wrap. The wait is at most a day, far below half the range.
-  if (this->next_change_armed_ && static_cast<int32_t>(millis() - this->next_change_at_ms_) >= 0) {
+  // The wait is at most a day, far below what millis_reached() allows.
+  if (this->next_change_armed_ && millis_reached(millis(), this->next_change_at_ms_)) {
     this->recompute_();
   }
 }

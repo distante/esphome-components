@@ -150,6 +150,8 @@ struct BaseTask {
   int property_id;
   /// Already sent once more after its reply was dropped (should_retry_get).
   bool retried{false};
+  /// Dropped by the hub when scan mode started or stopped: it ends as a timeout, unsent or with its answer cut off.
+  bool dropped{false};
   /// Tells a priority GET apart from other tasks of its ID when it ends (add_priority_get_task); 0 for other tasks.
   uint32_t ticket{0};
 };

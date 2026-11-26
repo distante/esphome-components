@@ -407,4 +407,13 @@ TEST_F(TimeProgramTest, AScanExitEndsTheMaskGetInFlight) {
   EXPECT_EQ(this->send_next_task(), get_frame(MASK_ID));
 }
 
+// Writes stay allowed during a scan: a SET it doesn't drop gets its read-back GET.
+TEST_F(TimeProgramTest, ASetAckedDuringAScanGetsItsReadBack) {
+  this->hub_.enter_scan_mode();
+  this->level_.make_call().set_index(4).perform();
+  ASSERT_EQ(this->send_next_task(), set_frame(LEVEL_ID, text(format_switch_time_level(4).data())));
+
+  EXPECT_EQ(this->panel_replies(ack_frame()), get_frame(LEVEL_ID));
+}
+
 }  // namespace esphome::sec_touch::testing

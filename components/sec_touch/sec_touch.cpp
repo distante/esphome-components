@@ -407,7 +407,6 @@ void SECTouchComponent::enter_scan_mode() {
   if (!this->data_task_queue.empty()) {
     ESP_LOGW(TAG, "Entering scan mode — discarding %zu pending task(s)", this->data_task_queue.size());
   }
-  // The discarded tasks end as timeouts once scan mode is on, so a listener knows not to queue anything for them.
   std::deque<std::unique_ptr<BaseTask>> discarded;
   discarded.swap(this->data_task_queue);
   std::unique_ptr<BaseTask> in_flight = this->take_in_flight_task_();
@@ -415,18 +414,16 @@ void SECTouchComponent::enter_scan_mode() {
   this->scan_outcome_.begin_scan();
   this->scan_mode_active_ = true;
 
-  this->end_task_(std::move(in_flight), TaskEnd::TASK_END_TIMEOUT);
+  this->drop_task_(std::move(in_flight));
   for (auto &task : discarded) {
-    this->end_task_(std::move(task), TaskEnd::TASK_END_TIMEOUT);
+    this->drop_task_(std::move(task));
   }
 }
 
 void SECTouchComponent::exit_scan_mode() {
   ESP_LOGI(TAG, "Exiting scan mode — resuming regular polling");
-  // The task still in flight is dropped: it ends as a timeout now, and polling goes on without waiting for the
-  // watchdog. It ends while scan mode is still on, so a listener queues nothing for it, as for the tasks a scan's
-  // start drops.
-  this->end_task_(this->take_in_flight_task_(), TaskEnd::TASK_END_TIMEOUT);
+  // The task still in flight is dropped: it ends now, and polling goes on without waiting for the watchdog.
+  this->drop_task_(this->take_in_flight_task_());
   this->scan_mode_active_ = false;
   this->add_recursive_tasks_to_get_queue();
   this->add_global_setting_tasks_to_queue();
@@ -708,6 +705,14 @@ std::unique_ptr<BaseTask> SECTouchComponent::take_in_flight_task_() {
   this->current_running_task_type = TaskType::NONE;
   this->task_start_time_ = 0;
   return std::move(this->in_flight_task_);
+}
+
+void SECTouchComponent::drop_task_(std::unique_ptr<BaseTask> task) {
+  if (task == nullptr) {
+    return;
+  }
+  task->dropped = true;
+  this->end_task_(std::move(task), TaskEnd::TASK_END_TIMEOUT);
 }
 
 void SECTouchComponent::end_task_(std::unique_ptr<BaseTask> task, TaskEnd end) {

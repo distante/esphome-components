@@ -297,8 +297,9 @@ void TimeProgram::on_task_end_(const BaseTask &task, TaskEnd end) {
     if (failure.has_value()) {
       this->report_(task.property_id, *failure);
     }
-    // In scan mode a read-back would never reach this program: data messages go to the sniffer only.
-    if (this->hub_->is_scan_mode_active()) {
+    // A dropped SET gets no read-back: it was never sent, or a scan started or stopped while it was in flight. A SET
+    // that ends during a scan gets one: writes stay allowed then, so its GET does too.
+    if (task.dropped) {
       this->bulk_.set_ended(*slot, false);
       return;
     }

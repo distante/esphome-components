@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <map>
 #include <set>
@@ -336,6 +337,33 @@ TEST_F(SetTimeProgramTest, AScanExitEndsTheSetInFlight) {
             std::vector<std::string>{failed_prefix(1) + bulk_detail::switch_time_field(1, TimeProgramField::TIME) +
                                      " " + write_failure_name(WriteFailure::TIMEOUT)});
   EXPECT_FALSE(this->program_.is_bulk_write_running());
+}
+
+// AC 10: writes stay allowed during a scan, and each ACKed SET still gets its read-back GET. The scan takes the
+// answers, so nothing is compared: no on_success.
+TEST_F(SetTimeProgramTest, ACallDuringAScanIsNotConfirmed) {
+  this->hub_.enter_scan_mode();
+  this->action_.play_complex();
+
+  const std::vector<Request> sent = this->run_panel();
+
+  size_t read_backs = 0;
+  for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
+    read_backs += std::count(sent.begin(), sent.end(), Request{true, time_program_time_id(PAIR, n), ""});
+    read_backs += std::count(sent.begin(), sent.end(), Request{true, time_program_level_id(PAIR, n), ""});
+  }
+  EXPECT_EQ(read_backs, 2u * SWITCH_TIME_COUNT);
+  std::string expected = failed_prefix(BULK_WRITE_COUNT);
+  for (TimeProgramField field : {TimeProgramField::TIME, TimeProgramField::LEVEL}) {
+    for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
+      expected += bulk_detail::switch_time_field(n, field) + " " + write_failure_name(WriteFailure::NOT_KEPT) +
+                  BULK_FAILURE_SEPARATOR;
+    }
+  }
+  expected += std::string(time_program_field_name(TimeProgramField::ENABLED)) + " " +
+              write_failure_name(WriteFailure::MASK_UNREADABLE);
+  EXPECT_EQ(this->errors_, std::vector<std::string>{expected});
+  EXPECT_EQ(this->successes_, 0);
 }
 
 }  // namespace esphome::sec_touch::testing

@@ -164,7 +164,7 @@ flowchart LR
 | Rule | Detail |
 |---|---|
 | No SET retry | Nothing is written twice. A failed SET is reported once; the read-back GET then publishes the truth and fires no second event. A SET whose ACK arrives corrupted is no failure: its read-back decides (`not_kept` if it didn't land). |
-| Scan mode | Starting the sniffer's scan clears the queue; starting or stopping it drops the task in flight. Each time-program SET dropped ends as `timeout`, with no read-back; a mask GET dropped fails as below. |
+| Scan mode | Starting the sniffer's scan clears the queue; starting or stopping it drops the task in flight. Each time-program SET dropped ends as `timeout`, with no read-back; a mask GET dropped fails as below. A SET that ends during a scan without being dropped still gets its read-back GET, but the scan takes the answer: nothing is compared. |
 | One queued SET per ID | A newer write to an ID with a SET still queued replaces that task's value in place. A SET already in flight isn't touched; the newer write queues behind it. |
 | Time | Written as `HH:MM:00`. Seconds from HA are dropped, never rounded. A call with only the hour or only the minute keeps the other one as shown; while the entity shows no time, such a call writes nothing. |
 | Level | The select's index, 0–9, as a decimal string. |
@@ -252,7 +252,7 @@ Position *i* is switch time *i*. HA's `string[]`, `int[]` and `bool[]` pass stra
 | Overlap | A second call for the same pair while one runs → `busy`, nothing written. An entity write that replaces a bulk value shows up as `not_kept` in the bulk report. |
 | Deadline | None. HA waits 30 s for a response by default (aioesphomeapi); past it the writes still finish and the entities show the truth. The readme notes it. |
 | In an automation | Fire and forget: the action queues the writes and the next action runs at once. `on_success` / `on_error` fire later, with the call's arguments. A call that writes nothing (bad argument, `busy`) fires `on_error` at once. |
-| One failure per field | The report names each failed field once, with its first failure, in write order. A read-back GET that fails, or whose answer can't be compared, leaves the field unconfirmed: `timeout` (or `not_kept` when a newer SET of it was queued). These two appear only in the report; `write_failed` fires as for an entity write. |
+| One failure per field | The report names each failed field once, with its first failure, in write order. A read-back GET that fails, or whose answer can't be compared, leaves the field unconfirmed: `timeout` (or `not_kept` when a newer SET of it was queued, or a scan took the answer). These two appear only in the report; `write_failed` fires as for an entity write. |
 | Scan mode | The scan's dropped tasks end each pending field as in [Writing](#writing); the call ends with `on_error` naming them and frees the pair. |
 | Config time | Only the list shapes are checked (`times` strings, `levels` integers, `enabled` booleans). Counts and ranges are checked at run time for constants and lambdas alike. |
 

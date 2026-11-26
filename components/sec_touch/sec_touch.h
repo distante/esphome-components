@@ -188,6 +188,8 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   /// The one way a task ends, dropped ones included: tells every task-end listener how, then frees it. Nothing for
   /// nullptr.
   void end_task_(std::unique_ptr<BaseTask> task, TaskEnd end);
+  /// Ends `task` as dropped (BaseTask::dropped), as a timeout.
+  void drop_task_(std::unique_ptr<BaseTask> task);
   bool has_time_program_polls() const;
   void send_ack_message();
   void drop_data_message(DataMessageCheck check);

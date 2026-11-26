@@ -12,8 +12,8 @@ namespace sec_touch {
 static const char *const TAG = "sec_touch.clock";
 
 void SecTouchClockDriftSensor::setup() {
-  // Global settings are polled in registration order, so the date always arrives
-  // right before the clock it belongs to.
+  // The hub polls the date right before the clock, whatever the registration order, so each clock reading follows
+  // the date it belongs to.
   this->parent_->register_global_setting_string_listener(DATE_PROPERTY_ID, [this](int, const std::string &date) {
     this->panel_date_ = date;
     this->panel_date_ms_ = millis();

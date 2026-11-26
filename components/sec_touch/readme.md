@@ -306,11 +306,12 @@ sensor:
 [web server fallback](examples/webserver-fallback.yaml)), use `platform: sntp` instead.
 
 - **`clock_drift`**: seconds the panel clock is ahead of the time source (negative: behind).
-  The panel date and clock are read on every global settings poll (`global_settings_update_interval`).
+  The panel date and clock are read on every global settings poll (`global_settings_update_interval`), the date right
+  before the clock.
   In the repeated hour when daylight saving time ends, the panel's local time is read as
   standard time, so even a correct panel shows +3600 s for that hour.
-- **[Time-program live state](#time-program-live-state)** reads the panel date and clock too: with any live-state
-  entity they are polled on the same poll, with or without `clock_drift`.
+- **[Time-program live state](#time-program-live-state)** reads the panel clock, not the date: with any live-state
+  entity the clock is polled on the same poll, with or without `clock_drift`.
 - **`sync_clock`**: sets the panel date and clock from the time source. The panel drops the
   seconds on write, so the write waits for the next full minute (up to 60 s after the press). There is no automatic sync: trigger the button from a Home Assistant
   automation, e.g. when the drift sensor exceeds a threshold or after a daylight saving change.
@@ -343,7 +344,7 @@ sec_touch:
 | `none` | Automatic Time, but no switch time enabled |
 | `conflict` | Two enabled switch times share that time |
 
-- **Computed, not read.** The panel never says which switch time it runs. sec_touch computes it from the program, the pair's level and the panel clock (IDs 1 and 2, read on the global settings poll). The model is an assumption the panel can't confirm.
+- **Computed, not read.** The panel never says which switch time it runs. sec_touch computes it from the program, the pair's level and the panel clock (ID 2, read on the global settings poll). The model is an assumption the panel can't confirm.
 - **Needs the pair's `fan:` entry**, which polls the pair's level. Without it the config fails.
 - **Polling:** with any live-state entity, the pair's whole block of 11 IDs is polled, whatever `switch_times` lists.
 - **`next_change` precision:** rounded to the minute, but HA gets it as a float, so it can be off by up to ±64 s.
@@ -874,7 +875,12 @@ Stored on `GLOBAL_SETTING_IDS` array as:
 48, 1, 2
 ```
 
-`1` and `2` are the panel date and clock, see [Panel Clock](#panel-clock). They are only polled when `clock_drift` or a [time-program live-state](#time-program-live-state) entity is configured.
+`1` and `2` are the panel date and clock, see [Panel Clock](#panel-clock). Each is polled only with:
+
+| ID | Polled with |
+|----|-------------|
+| 1 (date) | `clock_drift`, always right before `2` |
+| 2 (clock) | `clock_drift` or a [time-program live-state](#time-program-live-state) entity |
 
 | ID | Description | ON value | OFF value |
 |----|-------------|----------|-----------|

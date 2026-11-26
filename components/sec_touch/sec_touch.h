@@ -46,7 +46,8 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   /**
    * Use this for global controller settings (not per-fan) that should be polled
    * at the configured `global_settings_update_interval` cadence — independent
-   * from the fan-level recursive polling.
+   * from the fan-level recursive polling. The poll asks the panel date (ID 1) right
+   * before the panel clock (ID 2), whatever the registration order.
    */
   void register_global_setting_recursive_listener(int property_id, UpdateCallbackListener listener);
 
@@ -64,11 +65,10 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   void register_queue_empty_listener(QueueEmptyListener listener);
 
   /**
-   * Hands the raw value of every time-program data message for `property_id` to `listener`. Puts the ID on no poll:
-   * add_time_program_poll_id() does that. Several listeners may share one ID. The live state also uses it for the
-   * pair's level ID, which the pair's fan polls.
+   * Hands the raw value of every data message for `property_id` to `listener`. Adds no GET: the caller or another
+   * entity polls the ID. Several listeners may share one ID.
    */
-  void register_time_program_listener(int property_id, StringUpdateCallbackListener listener);
+  void register_unpolled_string_listener(int property_id, StringUpdateCallbackListener listener);
   /// Puts `property_id` on fan pair `pair`'s time-program poll, once. Returns false for an ID outside that pair's
   /// block.
   bool add_time_program_poll_id(int pair, int property_id);

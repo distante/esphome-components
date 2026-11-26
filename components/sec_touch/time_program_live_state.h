@@ -24,8 +24,8 @@ namespace sec_touch {
 
 /**
  * One fan pair's live state. Built only when the pair has a live-state entity. It puts the pair's whole block on the
- * pair's poll and IDs 1 and 2 on the global-settings poll, recomputes on every input read and at the next change, and
- * publishes an entity only when its value changes.
+ * pair's poll and ID 2 (the panel clock) on the global-settings poll, recomputes on every input read and at the next
+ * change, and publishes an entity only when its value changes.
  */
 class TimeProgramLiveState : public Component {
  public:

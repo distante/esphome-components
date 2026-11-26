@@ -427,8 +427,9 @@ void SECTouchComponent::enter_scan_mode() {
 
 void SECTouchComponent::exit_scan_mode() {
   ESP_LOGI(TAG, "Exiting scan mode — resuming regular polling");
-  // The task still in flight is dropped: it ends now, and polling goes on without waiting for the watchdog.
-  this->drop_task_(this->take_in_flight_task_());
+  // The task still in flight is dropped: its listeners hear it end now. The line stays busy until its reply or the
+  // watchdog, so a late reply ends no other task.
+  this->drop_task_(std::move(this->in_flight_task_));
   this->scan_mode_active_ = false;
   this->add_recursive_tasks_to_get_queue();
   this->add_global_setting_tasks_to_queue();

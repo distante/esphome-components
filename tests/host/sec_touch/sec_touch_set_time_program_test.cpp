@@ -340,13 +340,15 @@ TEST_F(SetTimeProgramTest, AScanEndsTheRunningCall) {
   EXPECT_FALSE(this->program_.is_bulk_write_running());
 }
 
-// Leaving scan mode drops the SET in flight: it ends as a timeout and the call still ends, freeing the pair.
+// Leaving scan mode drops the SET in flight: it ends as a timeout and the call still ends, freeing the pair. The rest
+// goes out once the watchdog frees the line.
 TEST_F(SetTimeProgramTest, AScanExitEndsTheSetInFlight) {
   this->hub_.enter_scan_mode();
   this->action_.play_complex();
   this->hub_.loop();  // the first time SET goes out
 
   this->hub_.exit_scan_mode();
+  this->hub_.task_start_time_ = millis() - (TASK_TIMEOUT_MS + 1);
   this->run_panel();
 
   EXPECT_EQ(this->errors_, std::vector<std::string>{failed_prefix(1) +

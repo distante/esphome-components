@@ -422,7 +422,7 @@ TEST_F(TimeProgramTest, ScanModeTimesOutAQueuedSet) {
 }
 
 // Leaving scan mode drops a switch write's fresh mask GET in flight: mask_unreadable, and the next switch write reads
-// the mask again.
+// the mask again once the watchdog frees the line.
 TEST_F(TimeProgramTest, AScanExitEndsTheMaskGetInFlight) {
   this->hub_.enter_scan_mode();
   this->enabled_.turn_on();
@@ -432,7 +432,7 @@ TEST_F(TimeProgramTest, AScanExitEndsTheMaskGetInFlight) {
   EXPECT_EQ(this->events_, std::vector<std::string>{event_name(WriteFailure::MASK_UNREADABLE)});
 
   this->enabled_.turn_off();
-  EXPECT_EQ(this->send_next_task(), get_frame(MASK_ID));
+  EXPECT_EQ(this->panel_stays_silent(), get_frame(MASK_ID));
 }
 
 // Writes stay allowed during a scan: a SET it doesn't drop gets its read-back GET.

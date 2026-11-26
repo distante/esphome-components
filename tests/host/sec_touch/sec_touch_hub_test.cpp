@@ -346,8 +346,9 @@ TEST_F(SECTouchGetRetryTest, MalformedReplyAfterScanStoppedIsNotRetried) {
   EXPECT_EQ(this->panel_answers(data_frame_with_bad_crc(FAN_1_LEVEL_ID, "10")), ack_frame());
 }
 
-// Leaving scan mode drops the scan query still in flight, so polling goes on at once, without waiting for the watchdog.
-TEST_F(SECTouchGetRetryTest, PollingGoesOnAtOnceAfterScanStoppedWithAQueryInFlight) {
+// Without a reply, the watchdog still ends the scan query, so polling goes on after the scan. Until then nothing
+// else goes out.
+TEST_F(SECTouchGetRetryTest, WatchdogEndsAScanQueryStillInFlightAfterScanStopped) {
   this->hub_.enter_scan_mode();
   this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
   this->send_next_task();
@@ -355,8 +356,25 @@ TEST_F(SECTouchGetRetryTest, PollingGoesOnAtOnceAfterScanStoppedWithAQueryInFlig
   this->queue_label_reads({LABEL_1_ID});
 
   this->send_next_task();
+  EXPECT_TRUE(this->uart_.tx.empty());
+
+  this->age_task_past_watchdog();
+  this->hub_.loop();
 
   EXPECT_EQ(this->uart_.tx, get_frame(LABEL_1_ID));
+}
+
+// The late reply to the scan query dropped at scan exit ends that query, not the next task.
+TEST_F(SECTouchGetRetryTest, ALateReplyAfterScanStoppedEndsTheDroppedQuery) {
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
+  this->send_next_task();
+  this->hub_.exit_scan_mode();
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+
+  EXPECT_EQ(this->panel_answers(data_frame(FAN_1_LEVEL_ID, "10")), concat(ack_frame(), get_frame(LABEL_1_ID)));
+  EXPECT_TRUE(this->labels_.empty());
 }
 
 TEST_F(SECTouchGetRetryTest, QueuedTasksKeepTheirOrderBehindTheRetry) {

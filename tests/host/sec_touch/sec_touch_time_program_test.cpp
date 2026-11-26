@@ -436,4 +436,15 @@ TEST_F(TimeProgramTest, AMaskGetThatCantBeQueuedFailsTheSwitchWrite) {
   EXPECT_TRUE(this->send_next_task().empty());
 }
 
+// A switch write that writes nothing shows the last good mask again, not the state it never wrote.
+TEST_F(TimeProgramTest, AFailedSwitchWriteShowsTheLastGoodMask) {
+  this->panel_replies(data_frame(MASK_ID, mask_text(0)));
+  ASSERT_FALSE(this->enabled_.state);
+  this->hub_.unqueueable_priority_gets.insert(MASK_ID);
+
+  this->enabled_.turn_on();
+
+  EXPECT_FALSE(this->enabled_.state);
+}
+
 }  // namespace esphome::sec_touch::testing

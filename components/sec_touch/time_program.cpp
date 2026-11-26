@@ -484,8 +484,9 @@ TimeProgramEnabledSwitch::TimeProgramEnabledSwitch(TimeProgram *program, int swi
 }
 
 void TimeProgramEnabledSwitch::write_state(bool state) {
-  this->program_->write_enabled(this->switch_time_, state);
+  // Shown first: a write that writes nothing shows the last good mask again over it.
   this->publish_state(state);
+  this->program_->write_enabled(this->switch_time_, state);
 }
 
 #ifdef USE_EVENT

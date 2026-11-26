@@ -194,7 +194,7 @@ Decided in [Should sec_touch compute which switch time is in effect, and how is 
 - **In effect:** as defined in the [glossary](../GLOSSARY.md#language) (Switch time in effect). "At or before" includes the panel time itself.
 - **Next change:** the first enabled switch time strictly after the panel time, wrapping to the next day.
 - **Assumption:** the panel never shows the level it runs, so this model can't be checked on the device. The readme says so.
-- **Clock:** the panel clock (IDs 1 and 2), which is what fires the switch times. Advanced with `millis()` between reads, re-anchored on each good read. Drift needs no handling.
+- **Clock:** the panel clock (ID 2), which is what fires the switch times. Advanced with `millis()` between reads, re-anchored on each good read. Drift needs no handling.
 - **Running:** the program runs only when the pair's level ID reads `AUTOMATIC_TIME_LEVEL` (10).
 
 **Entities** (each optional, under the pair's `time_programs` entry):

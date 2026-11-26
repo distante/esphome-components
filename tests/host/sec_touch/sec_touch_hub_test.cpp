@@ -153,6 +153,8 @@ TEST_F(SECTouchHubTest, FrameWithoutCrcReachesTapWithOptionalCrc) {
 
 TEST_F(SECTouchHubTest, NakDuringScanRecordsNakOutcome) {
   this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(UNANSWERED_PROPERTY_ID);
+  this->hub_.loop();  // dispatches the scan query
 
   this->uart_.push_rx(nak_frame());
   this->hub_.loop_times(2);
@@ -163,6 +165,8 @@ TEST_F(SECTouchHubTest, NakDuringScanRecordsNakOutcome) {
 // A bad CRC ends the task as malformed, which a scan records as TIMEOUT, the same as no reply (issue #43).
 TEST_F(SECTouchHubTest, BadCrcDuringScanRecordsTimeoutOutcome) {
   this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
+  this->hub_.loop();  // dispatches the scan query
 
   this->uart_.push_rx(bad_crc_frame());
   this->hub_.loop_times(3);
@@ -259,8 +263,9 @@ TEST_F(SECTouchHubTest, CorruptedAckWithoutDataFrameEndsGetAtTheWatchdog) {
 
 // A SET has no data frame to wait for: its ACK is the whole answer, so a corrupted one ends it as malformed.
 TEST_F(SECTouchHubTest, CorruptedAckEndsSetAsMalformed) {
-  this->hub_.enter_scan_mode();  // only so the malformed end is recorded and visible
-  this->hub_.add_set_task(SetDataTask::create(TaskTargetType::LEVEL, FAN_1_LEVEL_ID, "5"));
+  // Scan mode and a probe SET only so the malformed end is recorded and visible: only the sniffer's tasks record it.
+  this->hub_.enter_scan_mode();
+  ASSERT_TRUE(this->hub_.add_discovery_set_task(FAN_1_LEVEL_ID, "5"));
   this->hub_.loop();  // dispatches the SET
   ASSERT_EQ(this->hub_.current_running_task_type, TaskType::SET_DATA);
   this->uart_.tx.clear();

@@ -710,7 +710,9 @@ void SECTouchComponent::cleanup_after_task_complete(TaskEnd end) {
 std::unique_ptr<BaseTask> SECTouchComponent::finish_in_flight_task_(TaskEnd end) {
   ESP_LOGD(TAG, "Task ended: %s", task_end_name(end));
   std::unique_ptr<BaseTask> task = this->take_in_flight_task_();
-  this->scan_outcome_.record(end, this->scan_mode_active_);
+  // A reply to a task already dropped (no task left) is no scan query's: it leaves the outcome alone too.
+  this->scan_outcome_.record(end, this->scan_mode_active_,
+                             task != nullptr && task->targetType == TaskTargetType::SNIFFER);
   this->task_ready_at_ms_ = millis() + this->inter_task_delay_ms_;
   return task;
 }

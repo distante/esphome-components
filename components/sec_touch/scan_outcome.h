@@ -44,9 +44,10 @@ enum class ScanOutcome : uint8_t { SCAN_OUTCOME_OK, SCAN_OUTCOME_NAK, SCAN_OUTCO
 
 class ScanOutcomeTracker {
  public:
-  /// Called by the hub whenever a task ends. Only tasks that end in scan mode count.
-  void record(TaskEnd end, bool scan_mode) {
-    if (!scan_mode) {
+  /// Called by the hub whenever a task ends. Only the sniffer's own tasks (`sniffer_task`: its scan queries and write
+  /// probe steps) that end in scan mode count: a write that runs during a scan leaves the outcome alone.
+  void record(TaskEnd end, bool scan_mode, bool sniffer_task) {
+    if (!scan_mode || !sniffer_task) {
       return;
     }
     this->last_ = outcome_of(end);

@@ -272,6 +272,8 @@ TEST(SecTouchSnifferTest, AWriteEndingAfterATimedOutScanQueryLeavesItTimedOut) {
 
   EXPECT_EQ(rig.gets_sent_for(UNREGISTERED_ID), 2);
   EXPECT_EQ(rig.sniffer.store().fields(UNREGISTERED_ID).query_status, ScanOutcome::SCAN_OUTCOME_TIMEOUT);
+  // The scan must have ended: else the rig's stop would call the listeners of the already destroyed program and level.
+  EXPECT_FALSE(rig.sniffer.is_scanning());
 }
 
 // --- Scan goals ---

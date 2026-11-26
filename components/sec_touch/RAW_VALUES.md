@@ -75,7 +75,8 @@ Values with leading zeros (`5=0100`, `7=01`, `85=00`) are strings as well.
 ## Implementation Notes
 
 - Date and clock are read by `clock_drift` and written by `sync_clock` (see
-  [Panel Clock](readme.md#panel-clock)). For that, IDs 1/2 are in `GLOBAL_SETTING_IDS`
+  [Panel Clock](readme.md#panel-clock)). The [time-program live state](readme.md#time-program-live-state)
+  reads the clock (ID 2) only. For that, IDs 1/2 are in `GLOBAL_SETTING_IDS`
   and `SetDataTask`'s value buffer fits `HH:MM:SS` (it used to hold only 7 characters).
 - To sync the clock to the second, send `HH:MM:00` exactly on the minute boundary
   (the controller seems to drop the seconds, see above).

@@ -306,8 +306,8 @@ sensor:
 [web server fallback](examples/webserver-fallback.yaml)), use `platform: sntp` instead.
 
 - **`clock_drift`**: seconds the panel clock is ahead of the time source (negative: behind).
-  The panel date and clock are read on every global settings poll (`global_settings_update_interval`), the date right
-  before the clock.
+  The panel date and clock are read on every global settings poll (`global_settings_update_interval`), in the order
+  [Global Settings](#global-settings) gives.
   In the repeated hour when daylight saving time ends, the panel's local time is read as
   standard time, so even a correct panel shows +3600 s for that hour.
 - **[Time-program live state](#time-program-live-state)** reads the panel clock, not the date: with any live-state

@@ -178,8 +178,16 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
    * Returns the index of the last byte stored in the buffer
    */
   int store_data_to_incoming_message(uint8_t data);
+  /// The task in flight got its answer, or none: ends it with `end`.
   void cleanup_after_task_complete(TaskEnd end);
-  void notify_task_end(const BaseTask &task, TaskEnd end);
+  /// Takes the task in flight off the line, records its outcome and starts the inter-task delay. Returns the task for
+  /// the caller to end (end_task_) or send again.
+  std::unique_ptr<BaseTask> finish_in_flight_task_(TaskEnd end);
+  /// Takes the task in flight off the line and clears the watchdog, so the next task can go out.
+  std::unique_ptr<BaseTask> take_in_flight_task_();
+  /// The one way a task ends, dropped ones included: tells every task-end listener how, then frees it. Nothing for
+  /// nullptr.
+  void end_task_(std::unique_ptr<BaseTask> task, TaskEnd end);
   bool has_time_program_polls() const;
   void send_ack_message();
   void drop_data_message(DataMessageCheck check);

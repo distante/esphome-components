@@ -410,19 +410,14 @@ void SECTouchComponent::enter_scan_mode() {
   // The discarded tasks end as timeouts once scan mode is on, so a listener knows not to queue anything for them.
   std::deque<std::unique_ptr<BaseTask>> discarded;
   discarded.swap(this->data_task_queue);
-  std::unique_ptr<BaseTask> in_flight = std::move(this->in_flight_task_);
-  this->incoming_message.reset();
-  this->current_running_task_type = TaskType::NONE;
-  this->task_start_time_ = 0;
+  std::unique_ptr<BaseTask> in_flight = this->take_in_flight_task_();
   this->queue_was_idle_ = false;  // Force queue-empty callback to fire so scan tasks get queued
   this->scan_outcome_.begin_scan();
   this->scan_mode_active_ = true;
 
-  if (in_flight != nullptr) {
-    this->notify_task_end(*in_flight, TaskEnd::TASK_END_TIMEOUT);
-  }
-  for (const auto &task : discarded) {
-    this->notify_task_end(*task, TaskEnd::TASK_END_TIMEOUT);
+  this->end_task_(std::move(in_flight), TaskEnd::TASK_END_TIMEOUT);
+  for (auto &task : discarded) {
+    this->end_task_(std::move(task), TaskEnd::TASK_END_TIMEOUT);
   }
 }
 
@@ -681,38 +676,44 @@ where:
 // watchdog fires, and it never resends a frame, so the ACK gives nothing up.
 // A GET whose reply this drops goes back to the front of the queue once, to be sent again after the ACK (issue #52).
 void SECTouchComponent::drop_data_message(DataMessageCheck check) {
-  std::unique_ptr<BaseTask> task = std::move(this->in_flight_task_);
-  this->cleanup_after_task_complete(TaskEnd::TASK_END_MALFORMED);
+  std::unique_ptr<BaseTask> task = this->finish_in_flight_task_(TaskEnd::TASK_END_MALFORMED);
   this->send_ack_message();
 
-  if (task == nullptr) {
+  if (task != nullptr &&
+      should_retry_get(task->get_task_type() == TaskType::GET_DATA, check, task->retried, this->scan_mode_active_)) {
+    ESP_LOGI(TAG, "Sending the GET for property_id %d once more after dropping its reply", task->property_id);
+    task->retried = true;
+    this->data_task_queue.push_front(std::move(task));
     return;
   }
-  if (!should_retry_get(task->get_task_type() == TaskType::GET_DATA, check, task->retried, this->scan_mode_active_)) {
-    this->notify_task_end(*task, TaskEnd::TASK_END_MALFORMED);
-    return;
-  }
-  ESP_LOGI(TAG, "Sending the GET for property_id %d once more after dropping its reply", task->property_id);
-  task->retried = true;
-  this->data_task_queue.push_front(std::move(task));
+  this->end_task_(std::move(task), TaskEnd::TASK_END_MALFORMED);
 }
 
 void SECTouchComponent::cleanup_after_task_complete(TaskEnd end) {
-  ESP_LOGD(TAG, "cleanup_after_task_complete called, end: %s", task_end_name(end));
-  std::unique_ptr<BaseTask> task = std::move(this->in_flight_task_);
+  this->end_task_(this->finish_in_flight_task_(end), end);
+}
+
+std::unique_ptr<BaseTask> SECTouchComponent::finish_in_flight_task_(TaskEnd end) {
+  ESP_LOGD(TAG, "Task ended: %s", task_end_name(end));
+  std::unique_ptr<BaseTask> task = this->take_in_flight_task_();
+  this->scan_outcome_.record(end, this->scan_mode_active_);
+  this->task_ready_at_ms_ = millis() + this->inter_task_delay_ms_;
+  return task;
+}
+
+std::unique_ptr<BaseTask> SECTouchComponent::take_in_flight_task_() {
   this->incoming_message.reset();
   this->current_running_task_type = TaskType::NONE;
   this->task_start_time_ = 0;
-  this->scan_outcome_.record(end, this->scan_mode_active_);
-  this->task_ready_at_ms_ = millis() + this->inter_task_delay_ms_;
-  if (task != nullptr) {
-    this->notify_task_end(*task, end);
-  }
+  return std::move(this->in_flight_task_);
 }
 
-void SECTouchComponent::notify_task_end(const BaseTask &task, TaskEnd end) {
+void SECTouchComponent::end_task_(std::unique_ptr<BaseTask> task, TaskEnd end) {
+  if (task == nullptr) {
+    return;
+  }
   for (const auto &listener : this->task_end_listeners_) {
-    listener(task, end);
+    listener(*task, end);
   }
 }
 }  // namespace sec_touch

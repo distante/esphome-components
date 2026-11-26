@@ -44,9 +44,10 @@ function timeProgram(catalogue, rowsById, pair) {
 /**
  * @param {object} catalogue the CATALOGUE of catalogue.mjs
  * @param {object[]} rows the rows of rowsOf() (records.mjs); only `id`, `raw` and `registered` are read
- * @returns {{fans: object[], global: object[]}} `fans`: per fan in fan order, `{fan, registered, level, label, timeProgram}`,
- *   a fan registered when the hub registered its level or label, `timeProgram` as timeProgram() gives it; `global`: summer ventilation, date and clock as
- *   `{name, ...property}`. Each property is `{id, raw, meaning}`, see knownProperty().
+ * @returns {{fans: object[], global: object[]}} `fans`: per fan in fan order,
+ *   `{fan, registered, level, label, timeProgram}`, a fan registered when the hub registered its level or label,
+ *   `timeProgram` as timeProgram() gives it; `global`: summer ventilation, date and clock as `{name, ...property}`.
+ *   Each property is `{id, raw, meaning}`, see knownProperty().
  */
 export function checkCards(catalogue, rows) {
   const rowsById = new Map(rows.map((row) => [row.id, row]));

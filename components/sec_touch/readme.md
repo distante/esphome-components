@@ -309,13 +309,18 @@ sensor:
   The panel date and clock are read on every global settings poll (`global_settings_update_interval`).
   In the repeated hour when daylight saving time ends, the panel's local time is read as
   standard time, so even a correct panel shows +3600 s for that hour.
+- **[Time-program live state](#time-program-live-state)** reads the panel date and clock too: with any live-state
+  entity they are polled on the same poll, with or without `clock_drift`.
 - **`sync_clock`**: sets the panel date and clock from the time source. The panel drops the
   seconds on write, so the write waits for the next full minute (up to 60 s after the press). There is no automatic sync: trigger the button from a Home Assistant
   automation, e.g. when the drift sensor exceeds a threshold or after a daylight saving change.
 
 ## Time program live state
 
-Optional entities under a pair's `time_programs:` entry ([spec](../../.specs/time-programs.md#live-state)):
+Optional entities under a pair's `time_programs:` entry ([spec](../../.specs/time-programs.md#live-state)). The
+`time_programs:` keys themselves, the field entities, `refresh`, `write_failed` and `sec_touch.set_time_program` are
+in the spec's [Configuration](../../.specs/time-programs.md#configuration) until this readme takes them over
+([#80](https://github.com/distante/esphome-components/issues/80)):
 
 ```yaml
 sec_touch:
@@ -406,7 +411,19 @@ The sniffer serves, at `http://<device>/sniffer`, a page for working out what th
   <img src="images/sniffer-overview.png" alt="Sniffer page: ID map, drawer and change feed" width="900" />
 </p>
 
-For a known property, the Check tab shows what its value means. Known properties are the fan levels (173–178), fan labels (78–83), summer ventilation (48), date (1), clock (2) and the [time programs](#time-programs-zeitprogramm-ids-101166) (101–166). Levels and labels show their name ("level 3", "Burst", "Bad"), summer ventilation shows `0A00` as "on" and `0800` as "off", and date and clock show the value as sent. Each fan card also gets its pair's time program: the enabled mask as "1, 2 enabled" or "none enabled", and per switch time its time as sent, its level name (0–9 only) and whether it is enabled (yes or no, from its bit of the mask). A value that matches none of these shows as `unexpected value x` in red. The names come from [`fan_level.h`](fan_level.h) (levels) and [`protocol_ids.h`](protocol_ids.h) (labels and summer ventilation), the same tables the component uses.
+For a known property, the Check tab shows what its value means. Known properties are the fan levels (173–178), fan labels (78–83), summer ventilation (48), date (1), clock (2) and the [time programs](#time-programs-zeitprogramm-ids-101166) (101–166). Each fan card also gets its pair's time program: the enabled mask once, and a row per switch time.
+
+| Property | Shows | `unexpected value x` (in red) when |
+|---|---|---|
+| Fan level, fan label | its name ("level 3", "Burst", "Bad") | the value has no name |
+| Summer ventilation | `0A00` as "on", `0800` as "off" | any other value |
+| Date, clock | the value as sent | never |
+| Enabled mask | "1, 2 enabled" or "none enabled" | not 2 hex digits, or above `1F` |
+| Switch time: time | the value as sent | not `HH:MM:SS` within the day |
+| Switch time: level | its level name | not a level 0–9 |
+| Switch time: enabled | yes or no, from its bit of the mask | the mask is unexpected |
+
+The names come from [`fan_level.h`](fan_level.h) (levels) and [`protocol_ids.h`](protocol_ids.h) (labels and summer ventilation), the same tables the component uses.
 
 | Fan level (173) and label (78) | Summer ventilation (48), date (1) and clock (2) |
 |---|---|
@@ -415,6 +432,9 @@ For a known property, the Check tab shows what its value means. Known properties
 - **HTTP server:** the page needs `web_server_base:`, or `web_server:`, which loads it. Without either the config fails. The port is the server's; the sniffer has no port or auth options of its own.
 - **Sockets:** the page raises the HTTP server's client limit by 2, one for the page's polling and one spare for a reload.
 - **Open on the LAN without auth:** without `web_server: auth:`, anyone on your network can open the page, start or stop a scan, which pauses normal polling, clear the captured records, and **write values to the panel's unknown properties** with a write probe. Set `web_server: auth:` while the sniffer is enabled. When set, `web_server: auth:` and `allowed_origins` also apply to `/sniffer`, `/sniffer/data`, `/sniffer/scan/*`, `/sniffer/clear`, `/sniffer/probe` and `/sniffer/restore`.
+- **Time-program writes during a scan:** starting a scan drops the queued time-program writes (each ends as
+  `timeout`; a running `sec_touch.set_time_program` ends with `on_error`). Writes stay allowed while it scans: one made
+  then, such as a `sec_touch.set_time_program` retried from `on_error`, goes out between the scan's queries.
 - **Captive portal:** while the device runs its captive-portal access point (the Wi-Fi fallback), the portal answers every GET request, so the page may be unreachable until the device is back on your network.
 - **Scripting a scan:** `curl -X POST -H 'Content-Length: 0' 'http://<device>/sniffer/scan/start?goal=discover&from=1&to=208'` (or `?goal=check`, or `/stop`). Without the explicit empty body the server answers `411`. A missing or unknown `goal` means discover; without `from` and `to` discover covers 1–255. Discover with only one of them, a non-numeric one, one above 255 or `from` above `to` gets a `400` and starts nothing; check ignores them. Instead of a range, discover takes `ids=12,40,77` (at most 100 distinct IDs) and queries only those, in ascending order. One run at a time: a scan, write probe or restore start while another runs gets `409` and starts nothing; a stop works during a scan only.
 - **Scripting a write probe:** `curl -X POST -H 'Content-Type: text/plain' --data-binary '03' 'http://<device>/sniffer/probe?id=77'` writes `03` to unknown property 77, reads it back, and restores the original; `/sniffer/restore?id=77` writes its body and checks it without restoring anything, which is how the page puts an original back and how its "Set and keep" works. The value is the exact body, at most 15 bytes; send it as `text/plain` (a form body never reaches the sniffer). The data endpoint, its `probe` result and its JSON are described in the [spec](../../.specs/sniffer.md#devicepage-contract).

@@ -267,9 +267,8 @@ TEST_F(SetTimeProgramTest, WritingGoesOnPastFailuresAndReportsThem) {
   EXPECT_EQ(this->errors_, std::vector<std::string>{failed_prefix(2) + "switch time 3 level refused" +
                                                     BULK_FAILURE_SEPARATOR + "enabled mask mask_unreadable"});
   EXPECT_EQ(this->successes_, 0);
-  // The refused level's read-back differs too: the entity path reports that as well; the bulk report keeps the first.
+  // One event per failed write: the refused level's read-back differs too, but is no second report.
   EXPECT_EQ(this->events_, (std::vector<std::string>{write_failure_name(WriteFailure::REFUSED),
-                                                     write_failure_name(WriteFailure::NOT_KEPT),
                                                      write_failure_name(WriteFailure::MASK_UNREADABLE)}));
   EXPECT_FALSE(this->program_.is_bulk_write_running());
 }

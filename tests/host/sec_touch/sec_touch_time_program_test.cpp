@@ -230,7 +230,7 @@ TEST_F(TimeProgramTest, ANewerWriteReplacesTheQueuedSetAndItsReadBackIsPublished
   EXPECT_TRUE(this->events_.empty());
 }
 
-// AC 6 and 7: a NAK is reported, never retried; the read-back GET shows the truth.
+// AC 6 and 7: a NAK is reported, never retried; the read-back GET shows the truth and is no second report.
 TEST_F(TimeProgramTest, ARefusedSetIsReportedAndNotRetried) {
   this->level_.make_call().set_index(4).perform();
   this->send_next_task();
@@ -240,6 +240,7 @@ TEST_F(TimeProgramTest, ARefusedSetIsReportedAndNotRetried) {
 
   this->panel_answers_get(LEVEL_ID, "2");
   EXPECT_EQ(this->level_.active_index().value_or(NO_INDEX), (size_t) 2);
+  EXPECT_EQ(this->events_, std::vector<std::string>{event_name(WriteFailure::REFUSED)});
 }
 
 TEST_F(TimeProgramTest, AnUnansweredSetIsATimeout) {
@@ -247,6 +248,9 @@ TEST_F(TimeProgramTest, AnUnansweredSetIsATimeout) {
   this->send_next_task();
 
   EXPECT_EQ(this->panel_stays_silent(), get_frame(TIME_ID));
+  EXPECT_EQ(this->events_, std::vector<std::string>{event_name(WriteFailure::TIMEOUT)});
+
+  this->panel_answers_get(TIME_ID, "05:00:00");
   EXPECT_EQ(this->events_, std::vector<std::string>{event_name(WriteFailure::TIMEOUT)});
 }
 

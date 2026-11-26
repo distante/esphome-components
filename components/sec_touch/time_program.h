@@ -86,9 +86,11 @@ class TimeProgram {
 
  protected:
   /// What a write sent, kept until the read-back. `armed` from the SET's end until the next GET of the ID ends.
+  /// `reported` when the SET itself failed: its read-back is then no second report.
   struct ReadBack {
     int expected{-1};
     bool armed{false};
+    bool reported{false};
   };
 
   /// Puts `id` on the pair's poll, once per ID.

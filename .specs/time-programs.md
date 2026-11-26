@@ -163,7 +163,7 @@ flowchart LR
 
 | Rule | Detail |
 |---|---|
-| No SET retry | Nothing is written twice. A failed SET is reported, then the read-back GET publishes the truth. A SET whose ACK arrives corrupted is no failure: its read-back decides (`not_kept` if it didn't land). |
+| No SET retry | Nothing is written twice. A failed SET is reported once; the read-back GET then publishes the truth and fires no second event. A SET whose ACK arrives corrupted is no failure: its read-back decides (`not_kept` if it didn't land). |
 | Scan mode | The sniffer's scan clears the queue. Each time-program SET it drops ends as `timeout`, with no read-back; a mask GET it drops fails as below. |
 | One queued SET per ID | A newer write to an ID with a SET still queued replaces that task's value in place. A SET already in flight isn't touched; the newer write queues behind it. |
 | Time | Written as `HH:MM:00`. Seconds from HA are dropped, never rounded. A call with only the hour or only the minute keeps the other one as shown; while the entity shows no time, such a call writes nothing. |

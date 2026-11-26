@@ -150,7 +150,7 @@ void TimeProgram::check_read_back_(int id, int actual) {
     return;
   }
   read_back->armed = false;
-  if (!matched) {
+  if (!matched && !read_back->reported) {
     this->report_(id, WriteFailure::NOT_KEPT);
   }
 }
@@ -293,6 +293,7 @@ void TimeProgram::on_task_end_(const BaseTask &task, TaskEnd end) {
 
   if (task.get_task_type() == TaskType::SET_DATA) {
     auto failure = set_write_failure(end);
+    read_back->reported = failure.has_value();
     if (failure.has_value()) {
       this->report_(task.property_id, *failure);
     }

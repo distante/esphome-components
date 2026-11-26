@@ -120,6 +120,8 @@ class SecTouchSniffer : public Component
   int pending_query_id_{NO_PENDING_QUERY};
   std::atomic<bool> is_scanning_{false};
   bool scan_retry_pending_{false};
+  /// A scan query waits on its timer (scan_retry or scan_next): a queue-empty from another task schedules none.
+  bool scan_query_scheduled_{false};
 
   /// A probe GET or SET is in flight: on_queue_empty_() hands its outcome to probe_.
   bool probe_request_in_flight_{false};
@@ -132,6 +134,8 @@ class SecTouchSniffer : public Component
   void on_queue_empty_();
   void on_scan_queue_empty_();
   void query_(int property_id);
+  /// Queries the next scan ID after `delay_ms`, on the timer `name`.
+  void schedule_scan_query_(const char *name, uint32_t delay_ms);
   /// The ID to query next; moves current_scan_id_ past it.
   int take_next_scan_id_();
   /// Claims the slot for `run`; the caller holds run_lock_. False when another run holds it.

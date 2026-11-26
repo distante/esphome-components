@@ -479,6 +479,8 @@ The watchdog check runs regardless of whether the task queue is empty: tasks are
 
 Stopping the scan during the 5 s wait cancels the retry and resumes normal polling immediately.
 
+A write that ends during a wait (the 5 s retry wait or the 160 ms gap before the next query), such as an HA SET and its read-back GET, queues no scan query of its own: the waiting query goes out when its wait ends, so each ID is queried once (twice with the retry) and gets its query status.
+
 ### RAM only
 
 Captured data lives in RAM and is lost on restart or flash. The page keeps a copy in browser storage and exports it. Persisting to flash/NVS is out of scope.

@@ -68,8 +68,9 @@ class TimeProgram {
   void set_write_failed_event(event::Event *event) { this->write_failed_ = event; }
 #endif
 
-  /// The entity writes. Each one replaces the field's value of a running bulk write.
-  void write_time(int switch_time, uint8_t hour, uint8_t minute);
+  /// The entity writes. Each one replaces the field's value of a running bulk write. write_time() writes nothing and
+  /// returns false for a time outside the day.
+  bool write_time(int switch_time, uint8_t hour, uint8_t minute);
   void write_level(int switch_time, int level);
   void write_enabled(int switch_time, bool enabled);
   /// Queues one poll of this pair; the regular poll stays on its schedule.

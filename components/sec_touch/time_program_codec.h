@@ -57,7 +57,14 @@ constexpr SwitchTimeTimeText with_written_seconds(std::string_view hh_mm) {
   return text;
 }
 
-/// The raw value a time is written as: `HH:MM:00`. Seconds are dropped, never rounded.
+/// Whether `hour` and `minute` name a time of day, as the time meaning rule reads it.
+constexpr bool is_time_of_day(int hour, int minute) {
+  return hour >= 0 && hour <= known_property_detail::MAX_HOUR && minute >= 0 &&
+         minute <= known_property_detail::MAX_MINUTE;
+}
+
+/// The raw value a time is written as: `HH:MM:00`. Seconds are dropped, never rounded. Only for a time of day
+/// (is_time_of_day).
 constexpr SwitchTimeTimeText format_switch_time_time(uint8_t hour, uint8_t minute) {
   const char hh_mm[HH_MM_LENGTH] = {static_cast<char>('0' + hour / 10), static_cast<char>('0' + hour % 10), ':',
                                     static_cast<char>('0' + minute / 10), static_cast<char>('0' + minute % 10)};

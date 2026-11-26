@@ -193,6 +193,31 @@ TEST_F(TimeProgramTest, ATimeWriteIsPublishedAtOnceAndSentWithZeroSeconds) {
   EXPECT_EQ(this->send_next_task(), set_frame(TIME_ID, "08:30:00"));
 }
 
+// A call that gives only the minute (ESPHome allows it) takes the hour from the entity's state; without a state there
+// is no hour to keep, so nothing is written.
+TEST_F(TimeProgramTest, AMinuteOnlyCallWithoutStateWritesNothing) {
+  this->time_.make_call().set_minute(30).perform();
+
+  EXPECT_TRUE(this->send_next_task().empty());
+  EXPECT_FALSE(this->time_.has_state());
+}
+
+TEST_F(TimeProgramTest, AnHourOnlyCallKeepsTheMinuteShown) {
+  this->panel_replies(data_frame(TIME_ID, "08:30:00"));
+
+  this->time_.make_call().set_hour(9).perform();
+
+  EXPECT_EQ(this->send_next_task(), set_frame(TIME_ID, "09:30:00"));
+}
+
+// A time outside the day is never sent.
+TEST_F(TimeProgramTest, ATimeOutsideTheDayIsNotWritten) {
+  this->program_.write_time(SWITCH_TIME, HOURS_PER_DAY, 0);
+  this->program_.write_time(SWITCH_TIME, 0, MINUTES_PER_HOUR);
+
+  EXPECT_TRUE(this->send_next_task().empty());
+}
+
 // AC 6: one queued SET per ID, the newer value in place; after it ends, one GET of that ID, whose value is shown.
 TEST_F(TimeProgramTest, ANewerWriteReplacesTheQueuedSetAndItsReadBackIsPublished) {
   this->level_.make_call().set_index(4).perform();

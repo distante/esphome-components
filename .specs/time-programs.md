@@ -166,7 +166,7 @@ flowchart LR
 | No SET retry | Nothing is written twice. A failed SET is reported, then the read-back GET publishes the truth. A SET whose ACK arrives corrupted is no failure: its read-back decides (`not_kept` if it didn't land). |
 | Scan mode | The sniffer's scan clears the queue. Each time-program SET it drops ends as `timeout`, with no read-back; a mask GET it drops fails as below. |
 | One queued SET per ID | A newer write to an ID with a SET still queued replaces that task's value in place. A SET already in flight isn't touched; the newer write queues behind it. |
-| Time | Written as `HH:MM:00`. Seconds from HA are dropped, never rounded. |
+| Time | Written as `HH:MM:00`. Seconds from HA are dropped, never rounded. A call with only the hour or only the minute keeps the other one as shown; while the entity shows no time, such a call writes nothing. |
 | Level | The select's index, 0–9, as a decimal string. |
 | Enabled mask | Per pair, the hub keeps the requested bit changes (bits to set, bits to clear). When the write is due: GET the mask fresh, apply only those bits, SET. Bits of switch times outside `switch_times` and any bit above switch time 5's (value `20` and up) stay as they are. Changes merge; per bit, the later request wins. |
 | Mask GET fails | The hub retries a GET only after a dropped reply (`get_retry.h`), not after a timeout or NAK. When the write's own fresh GET fails: write nothing, fire `mask_unreadable`, log a warning, republish the switches from the last good mask. A poll's GET of the mask that fails meanwhile doesn't count. |

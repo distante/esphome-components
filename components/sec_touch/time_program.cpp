@@ -73,9 +73,15 @@ void TimeProgram::refresh() {
   this->hub_->add_time_program_tasks_to_queue(this->pair_);
 }
 
-void TimeProgram::write_time(int switch_time, uint8_t hour, uint8_t minute) {
+bool TimeProgram::write_time(int switch_time, uint8_t hour, uint8_t minute) {
+  if (!is_time_of_day(hour, minute)) {
+    ESP_LOGE(TAG, "Fan pair %d switch time %d time: %d:%d is no time of day, nothing written", this->pair_, switch_time,
+             hour, minute);
+    return false;
+  }
   this->bulk_.replaced(TimeProgramSlot{this->pair_, switch_time, TimeProgramField::TIME});
   this->queue_time_(switch_time, hour, minute);
+  return true;
 }
 
 void TimeProgram::write_level(int switch_time, int level) {
@@ -398,9 +404,17 @@ void TimeProgramTime::clear_state() {
 }
 
 void TimeProgramTime::control(const datetime::TimeCall &call) {
+  // A call may give only the hour or only the minute: the other one is the one shown, so without a state there is none.
+  if ((!call.get_hour().has_value() || !call.get_minute().has_value()) && !this->has_state()) {
+    ESP_LOGW(TAG, "Fan pair %d switch time %d time: shows no time, so a call needs both hour and minute",
+             this->program_->get_pair(), this->switch_time_);
+    return;
+  }
   const uint8_t hour = call.get_hour().value_or(this->hour_);
   const uint8_t minute = call.get_minute().value_or(this->minute_);
-  this->program_->write_time(this->switch_time_, hour, minute);
+  if (!this->program_->write_time(this->switch_time_, hour, minute)) {
+    return;
+  }
   // The panel's seconds are always 00: the written time shows as it lands.
   this->hour_ = hour;
   this->minute_ = minute;

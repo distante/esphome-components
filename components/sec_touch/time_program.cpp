@@ -5,6 +5,8 @@
 #include "esphome/core/controller_registry.h"
 #include "esphome/core/log.h"
 
+#include <utility>
+
 namespace esphome {
 namespace sec_touch {
 
@@ -240,17 +242,17 @@ void TimeProgram::on_mask_(const std::string &raw) {
   this->check_read_back_(id, mask);
   if (mask < 0) {
     ESP_LOGW(TAG, "Fan pair %d enabled mask: unexpected value '%s'", this->pair_, raw.c_str());
-    if (this->mask_read_pending_) {
-      this->fail_mask_write_("its fresh read was unexpected");
-    }
-    return;
+  } else {
+    this->last_good_mask_ = mask;
   }
-  this->last_good_mask_ = mask;
+  // A pending bit request waits for the task end: only the answer of the write's own GET is its fresh mask.
   if (this->mask_read_pending_) {
-    this->write_mask_(static_cast<uint8_t>(mask));
+    this->mask_answer_ = mask;
     return;
   }
-  this->publish_switches_(static_cast<uint8_t>(mask));
+  if (mask >= 0) {
+    this->publish_switches_(static_cast<uint8_t>(mask));
+  }
 }
 
 void TimeProgram::write_mask_(uint8_t fresh) {
@@ -291,6 +293,8 @@ void TimeProgram::publish_switches_(uint8_t mask) {
 }
 
 void TimeProgram::on_task_end_(const BaseTask &task, TaskEnd end) {
+  // A delivered answer comes right before the end of the task it answers, so it is this task's or no one's.
+  const std::optional<int> mask_answer = std::exchange(this->mask_answer_, std::nullopt);
   if (task.targetType != TaskTargetType::TIME_PROGRAM) {
     return;
   }
@@ -339,7 +343,17 @@ void TimeProgram::on_task_end_(const BaseTask &task, TaskEnd end) {
   }
   if (this->hub_->is_scan_mode_active()) {
     this->fail_mask_write_("its fresh read went to the sniffer");
+    return;
   }
+  if (!mask_answer.has_value()) {
+    this->fail_mask_write_("its fresh read brought no mask");
+    return;
+  }
+  if (*mask_answer < 0) {
+    this->fail_mask_write_("its fresh read was unexpected");
+    return;
+  }
+  this->write_mask_(static_cast<uint8_t>(*mask_answer));
 }
 
 void log_bulk_write_refused(int pair, const std::string &error) {

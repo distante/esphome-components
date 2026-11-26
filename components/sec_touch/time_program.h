@@ -140,8 +140,12 @@ class TimeProgram {
   MaskMerge mask_merge_;
   /// A mask GET is wanted: the next fresh mask applies the requested bits.
   bool mask_read_pending_{false};
-  /// The ticket of the switch write's own fresh mask GET: only its failure is mask_unreadable.
+  /// The ticket of the switch write's own fresh mask GET: only its answer is the fresh mask, only its failure
+  /// mask_unreadable.
   uint32_t mask_get_ticket_{0};
+  /// The mask answer delivered while a fresh read is pending, until the task end right after it says whose answer it
+  /// is (on_task_end_()). -1 when it was unexpected.
+  std::optional<int> mask_answer_{};
   int last_good_mask_{-1};
 
   BulkWrite bulk_;

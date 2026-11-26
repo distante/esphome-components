@@ -354,6 +354,21 @@ TEST_F(TimeProgramTest, AFailedPollMaskGetLeavesTheWriteToItsOwnGet) {
   EXPECT_TRUE(this->enabled_.state);
 }
 
+// Only the switch write's own fresh mask GET gives the mask it writes: a poll's answer of the mask, in flight when the
+// switch is written, is older than the write.
+TEST_F(TimeProgramTest, APollMaskAnswerIsNotTheWritesFreshMask) {
+  this->program_.refresh();
+  EXPECT_EQ(this->send_next_task(), get_frame(FIRST_TIME_ID));
+  this->panel_answers_get(FIRST_TIME_ID, "06:00:00");
+  EXPECT_EQ(this->panel_answers_get(FIRST_LEVEL_ID, "2"), concat(ack_frame(), get_frame(MASK_ID)));
+  this->enabled_.turn_on();
+
+  EXPECT_EQ(this->panel_answers_get(MASK_ID, mask_text(switch_time_bit(FIRST_SWITCH_TIME))),
+            concat(ack_frame(), get_frame(MASK_ID)));
+  EXPECT_EQ(this->panel_answers_get(MASK_ID, mask_text(0)),
+            concat(ack_frame(), set_frame(MASK_ID, mask_text(switch_time_bit(SWITCH_TIME)))));
+}
+
 // Entities: an unexpected mask leaves the switches as they were and writes nothing.
 TEST_F(TimeProgramTest, AnUnexpectedFreshMaskWritesNothing) {
   this->enabled_.turn_on();

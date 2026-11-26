@@ -92,6 +92,7 @@ void TimeProgram::write_level(int switch_time, int level) {
 void TimeProgram::write_enabled(int switch_time, bool enabled) {
   this->bulk_.replaced(TimeProgramSlot{this->pair_, 0, TimeProgramField::ENABLED});
   this->request_enabled_(switch_time, enabled);
+  this->read_mask_fresh_();
 }
 
 void TimeProgram::queue_time_(int switch_time, uint8_t hour, uint8_t minute) {
@@ -111,13 +112,20 @@ void TimeProgram::queue_level_(int switch_time, int level) {
 void TimeProgram::request_enabled_(int switch_time, bool enabled) {
   ESP_LOGI(TAG, "Fan pair %d switch time %d enabled -> %s", this->pair_, switch_time, enabled ? "on" : "off");
   this->mask_merge_.request(switch_time, enabled);
+}
+
+void TimeProgram::read_mask_fresh_() {
   if (this->mask_read_pending_) {
     return;
   }
   // Read the mask fresh right before writing it, so bits changed on the panel since the last poll stay as they are.
   this->mask_get_ticket_ =
       this->hub_->add_priority_get_task(TaskTargetType::TIME_PROGRAM, time_program_enabled_id(this->pair_));
-  this->mask_read_pending_ = this->mask_get_ticket_ != 0;
+  if (this->mask_get_ticket_ == 0) {
+    this->fail_mask_write_("no GET could be queued");
+    return;
+  }
+  this->mask_read_pending_ = true;
 }
 
 void TimeProgram::queue_set_(int id, const char *value, int expected) {
@@ -353,6 +361,7 @@ void TimeProgram::write_program(const BulkProgram &program, BulkWriteListener *l
   for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
     this->request_enabled_(n, (program.enabled & switch_time_bit(n)) != 0);
   }
+  this->read_mask_fresh_();
 }
 
 void TimeProgram::finish_bulk_write_if_done_() {

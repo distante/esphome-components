@@ -416,4 +416,14 @@ TEST_F(TimeProgramTest, ASetAckedDuringAScanGetsItsReadBack) {
   EXPECT_EQ(this->panel_replies(ack_frame()), get_frame(LEVEL_ID));
 }
 
+// A switch write whose fresh mask GET can't be queued writes nothing and fires mask_unreadable.
+TEST_F(TimeProgramTest, AMaskGetThatCantBeQueuedFailsTheSwitchWrite) {
+  this->hub_.unqueueable_priority_gets.insert(MASK_ID);
+
+  this->enabled_.turn_on();
+
+  EXPECT_EQ(this->events_, std::vector<std::string>{event_name(WriteFailure::MASK_UNREADABLE)});
+  EXPECT_TRUE(this->send_next_task().empty());
+}
+
 }  // namespace esphome::sec_touch::testing

@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <cstdint>
+#include <set>
 #include <string>
 #include <vector>
 #include "esphome/components/uart/uart_component.h"
@@ -96,6 +97,16 @@ class TestableSECTouch : public SECTouchComponent {
   using SECTouchComponent::last_global_settings_update_ms_;
   using SECTouchComponent::last_time_programs_update_ms_;
   using SECTouchComponent::task_start_time_;
+
+  /// IDs whose priority GET can't be queued: add_priority_get_task() returns 0 for them, as for an ID it doesn't
+  /// accept.
+  std::set<int> unqueueable_priority_gets;
+  uint32_t add_priority_get_task(TaskTargetType target, int property_id) override {
+    if (this->unqueueable_priority_gets.count(property_id) > 0) {
+      return 0;
+    }
+    return SECTouchComponent::add_priority_get_task(target, property_id);
+  }
 };
 
 /// `[STX][NAK][ETX]`: the panel refuses a request.

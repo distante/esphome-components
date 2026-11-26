@@ -382,4 +382,18 @@ TEST_F(SetTimeProgramTest, ARefusedEntitySetInFlightIsNotTheCallsWrite) {
   EXPECT_EQ(this->events_, std::vector<std::string>{write_failure_name(WriteFailure::REFUSED)});
 }
 
+// A call whose fresh mask GET can't be queued still ends: its mask write fails once, and the pair is free again.
+TEST_F(SetTimeProgramTest, AMaskGetThatCantBeQueuedEndsTheCall) {
+  this->hub_.unqueueable_priority_gets.insert(MASK_ID);
+  this->action_.play_complex();
+
+  this->run_panel();
+
+  EXPECT_EQ(this->errors_,
+            std::vector<std::string>{failed_prefix(1) + time_program_field_name(TimeProgramField::ENABLED) + " " +
+                                     write_failure_name(WriteFailure::MASK_UNREADABLE)});
+  EXPECT_EQ(this->events_, std::vector<std::string>{write_failure_name(WriteFailure::MASK_UNREADABLE)});
+  EXPECT_FALSE(this->program_.is_bulk_write_running());
+}
+
 }  // namespace esphome::sec_touch::testing

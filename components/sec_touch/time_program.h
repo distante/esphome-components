@@ -108,8 +108,11 @@ class TimeProgram {
   void check_read_back_(int id, int actual);
   void queue_time_(int switch_time, uint8_t hour, uint8_t minute);
   void queue_level_(int switch_time, int level);
-  /// Requests switch time `switch_time`'s bit; the mask is written from a fresh GET.
+  /// Requests switch time `switch_time`'s bit; the mask is written from a fresh GET (read_mask_fresh_()).
   void request_enabled_(int switch_time, bool enabled);
+  /// Queues the fresh mask GET the requested bits wait for, unless one is pending. One that can't be queued fails the
+  /// mask write.
+  void read_mask_fresh_();
   void queue_set_(int id, const char *value, int expected);
   void write_mask_(uint8_t fresh);
   void fail_mask_write_(const char *why);

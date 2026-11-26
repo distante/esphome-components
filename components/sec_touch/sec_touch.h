@@ -107,8 +107,9 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
    */
   uint32_t add_set_task_latest_wins(TaskTargetType target, int property_id, const char *value);
   /// Queues a GET of `property_id` ahead of every other GET, after the queued SETs. Returns the GET's ticket (never 0),
-  /// which its task carries to the task-end listeners, or 0 for an ID `target` doesn't accept.
-  uint32_t add_priority_get_task(TaskTargetType target, int property_id);
+  /// which its task carries to the task-end listeners, or 0 for an ID `target` doesn't accept. Virtual so a host test
+  /// can refuse one.
+  virtual uint32_t add_priority_get_task(TaskTargetType target, int property_id);
   void add_recursive_tasks_to_get_queue();
   void add_manual_tasks_to_queue();
   void add_global_setting_tasks_to_queue();

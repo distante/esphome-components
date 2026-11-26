@@ -216,9 +216,9 @@ The state words live in the live-state model's header ([Implementation notes](#i
 | The next change is a tie | as normal | as normal | valid / `conflict` |
 | A tie at another time of day | no effect | no effect | no effect |
 | Exactly one enabled switch time | that switch time | its level | itself 24 h later / its level |
-| A needed input (see **Inputs** below) not read once yet (boot) | nothing published | nothing published | nothing published |
+| A needed input (see **Inputs** below) never read well: at boot, or once it becomes needed (Automatik Zeit starts before a good clock read; the mask enables a switch time whose time or level never read well) | no state (unknown): nothing published at boot; a shown value is cleared | same | no state at boot, no value (NaN) once a value was shown / same as Switch time in effect |
 | An input read fails or is unexpected | from the last good value of that input (for the clock: the old anchor), warning logged | same | same |
-| … and that input is needed and never read well yet | as boot | as boot | as boot |
+| … and that input is needed and never read well yet | as a needed input never read well | same | same |
 
 **Inputs:** the pair's enabled mask, its 5 times and 5 levels, its level ID, and the panel clock. The state needs only the inputs it uses; an input it doesn't need never holds it back:
 
@@ -354,7 +354,7 @@ Ships in **v1.5.0** with the sniffer goals and experiments. The work for this se
 6. An HA write follows [Writing](#writing): published at once, one queued SET per ID (a newer value replaces the queued one), after the SET ends one GET whose value is published. No SET is retried.
 7. A switch write GETs the mask, changes only the requested bits and SETs it. A failed GET writes nothing. `write_failed` fires each type of the [event table](#writing) in its case.
 8. Time writes send `HH:MM:00`. A level the [meaning rule](#known-property-catalogue) marks unexpected, read from the panel, leaves the select with no state, and nothing is written.
-9. Live state follows the [model](#live-state) and every row of its cases table, and publishes only on change. Tests cover: exactly one enabled switch time, a failed or unexpected input before and after a good read, each needed input of the [Inputs](#live-state) table never read well (nothing published) and an unneeded one (published), a switch time exactly at the panel time (in effect) and the next change strictly after it. `not running` appears whenever the program isn't [running](#live-state).
+9. Live state follows the [model](#live-state) and every row of its cases table, and publishes only on change. Tests cover: exactly one enabled switch time, a failed or unexpected input before and after a good read, each needed input of the [Inputs](#live-state) table never read well (no state, at boot or after a value was shown) and an unneeded one (published), a switch time exactly at the panel time (in effect) and the next change strictly after it. `not running` appears whenever the program isn't [running](#live-state).
 10. `sec_touch.set_time_program` follows [Bulk-set action](#bulk-set-action): validates everything first, writes times, levels, then the mask, reports `invalid_argument`, `busy` or the failed-field list in `error`, and fires `on_success` only when every read-back matches.
 11. No heap use beyond the [Memory](#memory) table.
 12. The device check is recorded with the heap numbers, and the readme states them.

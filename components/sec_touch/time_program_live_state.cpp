@@ -2,6 +2,7 @@
 
 #include <cmath>
 
+#include "esphome/core/controller_registry.h"
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 
@@ -102,6 +103,7 @@ void TimeProgramLiveState::recompute_() {
   this->next_change_armed_ = false;
   this->next_change_waits_for_time_ = false;
   if (!state.has_value()) {
+    this->clear_entities_();
     return;
   }
   if (state->ms_to_next_change.has_value()) {
@@ -122,6 +124,28 @@ void TimeProgramLiveState::publish_text_(text_sensor::TextSensor *sensor, const 
     return;
   }
   sensor->publish_state(text);
+}
+
+void TimeProgramLiveState::clear_entities_() {
+  this->clear_text_(this->in_effect_);
+  this->clear_text_(this->running_level_);
+  this->clear_text_(this->next_level_);
+#if defined(USE_SENSOR) && defined(USE_TIME)
+  if (this->next_change_ == nullptr || !this->next_change_->has_state() || std::isnan(this->next_change_->state)) {
+    return;
+  }
+  this->next_change_->publish_state(NAN);
+#endif
+}
+
+void TimeProgramLiveState::clear_text_(text_sensor::TextSensor *sensor) {
+  if (sensor == nullptr || !sensor->has_state()) {
+    return;
+  }
+  sensor->set_has_state(false);
+#if defined(USE_CONTROLLER_REGISTRY)
+  ControllerRegistry::notify_text_sensor_update(sensor);
+#endif
 }
 
 void TimeProgramLiveState::publish_next_change_(const LiveState &state) {

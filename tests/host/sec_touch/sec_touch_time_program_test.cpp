@@ -411,7 +411,7 @@ TEST_F(TimeProgramTest, AnUnexpectedTimeLeavesTheTimeWithoutState) {
   EXPECT_FALSE(this->time_.has_state());
 }
 
-// Decisions: scan mode drops the queued SET; it ends as a timeout, and no read-back goes out in scan mode.
+// Decisions: scan mode drops the queued SET; it ends as a timeout and gets no read-back.
 TEST_F(TimeProgramTest, ScanModeTimesOutAQueuedSet) {
   this->level_.make_call().set_index(4).perform();
 

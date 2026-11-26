@@ -282,7 +282,7 @@ The [readme copy block and HA call](https://github.com/distante/esphome-componen
 | Bulk action list arguments | `std::vector`, ESPHome's action argument type; the action keeps a copy of each running call's arguments (one static slot per pair) until it fires `on_success` / `on_error`. A constant list is kept once, from setup. A lambda gets the call's arguments by reference; its result lives only while the call is checked. | HA's `string[]`, `int[]` and `bool[]` arrive as vectors. |
 | Bulk write state | static, per pair: how each of the 11 writes ended; what each sent is in the per-field write path's read-back slot, which compares for both | |
 | Per-pair poll ID lists | static, 6 pairs × 11 IDs | |
-| Task tickets and the dropped mark | static: a `uint32_t` ticket and a `bool` on each task, and the latest SET's ticket in each read-back slot | |
+| Task tickets and the dropped mark | a `uint32_t` ticket and a `bool` in each queued task (the heap queue above), no new allocation; the latest SET's ticket static in each read-back slot | |
 | Entities | static: ESPHome codegen builds each with placement new into a `static` buffer (`esphome/esphome/cpp_generator.py`, `Pvariable`) | Worst case 6 pairs × (15 + 4 + 2) = 126. Estimated 30–60 B each ([research](https://github.com/distante/esphome-components/blob/research/time-program-entities/.specs/research/time-program-entities.md#cost-of-90-extra-entities)), measured in the device check. No cap until then. |
 
 ---

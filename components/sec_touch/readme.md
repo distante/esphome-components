@@ -386,7 +386,7 @@ The sniffer records every data message the SEC-Touch sends, registered property 
 Two modes are available:
 
 - **Passive** (always on): unknown IDs that arrive during normal polling are captured automatically.
-- **Active scan** (optional): queries property IDs one at a time, in one of two goals. **Discover** goes through a range (1–255 unless the start names one) and skips the known properties; **check** queries exactly the known properties, registered ones included. Normal polling is paused while scanning. After a stop it resumes once the last query's reply arrives or times out. Every start begins at the goal's first ID; a stopped scan does not resume.
+- **Active scan** (optional): queries property IDs one at a time, in one of two goals. **Discover** goes through a range (1–255 unless the start names one) and skips the known properties; **check** queries exactly the known properties, registered ones included. Normal polling is paused while scanning. A start or stop waits for the request in flight: the first query (after a start) or polling (after a stop) goes out once its reply arrives or times out. Every start begins at the goal's first ID; a stopped scan does not resume.
 
 Results are shown on the [sniffer page](#sniffer-page), every captured ID included, registered ones too. Scans are started and stopped there.
 

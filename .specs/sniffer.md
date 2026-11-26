@@ -46,13 +46,14 @@ Decided in [How do the sniffer goal and the catalogue reach the device–page co
 
 **When started** (with a goal):
 - Regular polling stops completely. Tasks already queued (e.g. pending fan SET commands) are discarded.
+- A request still in flight is dropped too. The first query waits until its reply arrives or times out, so a late reply ends no query.
 - Registered component listeners stop receiving updates.
 - The sniffer queries the goal's IDs one at a time, from the goal's first ID. A discover start with an **ID list** (a narrowed capture, [contract](#devicepage-contract)) queries only the listed IDs, in ascending order. The next query is issued only after the previous answer (or timeout) is processed.
 - In discover, known IDs are skipped. Their query status is left as it is.
 
 **When stopped**, or when the run completes:
 - Scanning stops immediately.
-- Regular polling resumes at once, without waiting for the next poll cycle.
+- Regular polling resumes at once, without waiting for the next poll cycle. Its first request waits until the reply to a query still in flight arrives or times out.
 
 **One run at a time.** The device has one exclusive slot for a scan (plain or capture), a write probe and a restore. A start of any of them while another runs is refused with 409 ([contract](#devicepage-contract)). Decided in [How do capture scans and write probes reach the device–page contract?](https://github.com/distante/esphome-components/issues/99).
 

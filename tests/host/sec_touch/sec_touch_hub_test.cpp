@@ -367,6 +367,35 @@ TEST_F(SECTouchGetRetryTest, ALateReplyAfterScanStoppedEndsTheDroppedQuery) {
   EXPECT_TRUE(this->labels_.empty());
 }
 
+// Entering scan mode drops the task in flight too. Without a reply, the watchdog ends it, and only then does the
+// scan's first query go out.
+TEST_F(SECTouchGetRetryTest, WatchdogEndsATaskStillInFlightAfterScanStarted) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(UNANSWERED_PROPERTY_ID);
+
+  this->send_next_task();
+  EXPECT_TRUE(this->uart_.tx.empty());
+
+  this->hub_.age_task_past_watchdog();
+  this->hub_.loop();
+
+  EXPECT_EQ(this->uart_.tx, get_frame(UNANSWERED_PROPERTY_ID));
+}
+
+// The late reply to the task dropped at scan start ends that task, not the scan's first query.
+TEST_F(SECTouchGetRetryTest, ALateReplyAfterScanStartedEndsTheDroppedTask) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(UNANSWERED_PROPERTY_ID);
+  this->send_next_task();
+
+  EXPECT_EQ(this->panel_answers(data_frame(LABEL_1_ID, "3")), concat(ack_frame(), get_frame(UNANSWERED_PROPERTY_ID)));
+  EXPECT_TRUE(this->labels_.empty());
+}
+
 TEST_F(SECTouchGetRetryTest, QueuedTasksKeepTheirOrderBehindTheRetry) {
   this->queue_label_reads({LABEL_1_ID, LABEL_2_ID, LABEL_3_ID});
   this->send_next_task();

@@ -185,8 +185,8 @@ void SecTouchSniffer::begin_scan_(const ScanRun &run) {
   this->running_ = Running::RUNNING_SCAN;
   this->is_scanning_ = true;
   this->parent_->enter_scan_mode();
-  // First task is submitted by on_queue_empty_() which fires immediately because
-  // enter_scan_mode() cleared the queue and reset the running task state
+  // First task is submitted by on_queue_empty_(): enter_scan_mode() cleared the queue, so it fires once the line is
+  // free (at once, or after the reply or watchdog of the task it dropped in flight).
 }
 
 void SecTouchSniffer::stop_scan() {

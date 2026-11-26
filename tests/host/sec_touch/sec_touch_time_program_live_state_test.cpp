@@ -239,6 +239,58 @@ TEST_F(LiveStateTest, NotRunningNeedsOnlyThePairLevel) {
   EXPECT_EQ(this->next_level_.get_state(), LIVE_STATE_NOT_RUNNING);
 }
 
+// Spec "Live state", cases: a needed input that was never read well shows no state, also after a value was shown.
+TEST_F(LiveStateTest, EnteringAutomatikZeitBeforeAnyClockReadClearsTheState) {
+  this->hub_.add_recursive_tasks_to_get_queue();
+  this->send_next_task();
+  this->panel_answers_get(PAIR_LEVEL_ID, std::to_string(MAX_NORMAL_LEVEL));
+  ASSERT_EQ(this->in_effect_.get_state(), LIVE_STATE_NOT_RUNNING);
+  this->hub_.add_time_program_tasks_to_queue(PAIR);
+  for (int id : block_ids()) {
+    this->send_next_task();
+    this->panel_answers_get(id, panel_value(id, RUNNING));
+  }
+
+  this->hub_.add_recursive_tasks_to_get_queue();
+  this->send_next_task();
+  this->panel_answers_get(PAIR_LEVEL_ID, RUNNING);
+
+  EXPECT_FALSE(this->in_effect_.has_state());
+  EXPECT_FALSE(this->running_level_.has_state());
+  EXPECT_FALSE(this->next_level_.has_state());
+  EXPECT_TRUE(std::isnan(this->next_change_.get_state()));
+}
+
+// Spec "Live state", cases: enabling a switch time whose time never read well leaves a needed input unknown.
+TEST_F(LiveStateTest, EnablingASwitchTimeWhoseTimeNeverReadWellClearsTheState) {
+  constexpr int NEVER_READ = 3;
+  const int never_read_time_id = time_program_time_id(PAIR, NEVER_READ);
+  this->hub_.add_recursive_tasks_to_get_queue();
+  this->hub_.add_global_setting_tasks_to_queue();
+  this->hub_.add_time_program_tasks_to_queue(PAIR);
+  for (int id : boot_poll_ids()) {
+    this->send_next_task();
+    this->panel_answers_get(id, id == never_read_time_id ? "not a time" : panel_value(id, RUNNING));
+  }
+  ASSERT_EQ(this->in_effect_.get_state(), switch_time_name(1));
+  ASSERT_FALSE(std::isnan(this->next_change_.get_state()));
+  const uint8_t enabled = switch_time_bit(1) | switch_time_bit(2) | switch_time_bit(NEVER_READ);
+
+  // Read twice: the second read finds the state already cleared and publishes nothing.
+  for (int read = 0; read < 2; read++) {
+    this->hub_.add_time_program_tasks_to_queue(PAIR);
+    this->send_next_task();  // the mask GET
+    this->panel_answers_get(time_program_enabled_id(PAIR), format_enabled_mask(enabled).data());
+    this->drain();
+  }
+
+  EXPECT_FALSE(this->in_effect_.has_state());
+  EXPECT_FALSE(this->running_level_.has_state());
+  EXPECT_FALSE(this->next_level_.has_state());
+  EXPECT_TRUE(std::isnan(this->next_change_.get_state()));
+  EXPECT_EQ(this->next_change_publishes_, 2) << "the value, then one NaN";
+}
+
 TEST_F(LiveStateTest, NotRunningOutsideAutomatikZeit) {
   this->panel_answers_every_input(std::to_string(MAX_NORMAL_LEVEL));
 

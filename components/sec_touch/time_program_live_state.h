@@ -53,6 +53,9 @@ class TimeProgramLiveState : public Component {
   void recompute_();
   void publish_text_(text_sensor::TextSensor *sensor, const char *text);
   void publish_next_change_(const LiveState &state);
+  /// A needed input was never read well: each entity with a state goes back to none (unknown), as at boot.
+  void clear_entities_();
+  void clear_text_(text_sensor::TextSensor *sensor);
 
   SECTouchComponent *hub_;
   int pair_;

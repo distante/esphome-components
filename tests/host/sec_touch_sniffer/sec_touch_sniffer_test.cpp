@@ -276,6 +276,42 @@ TEST(SecTouchSnifferTest, AWriteEndingAfterATimedOutScanQueryLeavesItTimedOut) {
   EXPECT_FALSE(rig.sniffer.is_scanning());
 }
 
+// A write (SET, then its read-back GET) that ends during the retry wait empties the queue with no scan query in
+// flight: the scan still sends only the retry, then the next ID, and records each one's status. Waits out
+// SCAN_RETRY_DELAY_MS on the real clock.
+TEST(SecTouchSnifferTest, AWriteEndingDuringTheRetryWaitQueuesNoExtraScanQuery) {
+  SnifferRig rig;
+  rig.hub.set_inter_task_delay(0);
+  TimeProgram program{&rig.hub, WRITTEN_PAIR};
+  TimeProgramLevelSelect level{&program, WRITTEN_SWITCH_TIME};
+  const int level_id = time_program_level_id(WRITTEN_PAIR, WRITTEN_SWITCH_TIME);
+  const std::string level_text(format_switch_time_level(WRITTEN_LEVEL).data());
+  rig.start_scan(discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID));
+  rig.send_scan_query(SecTouchSniffer::SCAN_NEXT_DELAY_MS);
+  rig.time_out_scan_query();  // the retry wait begins
+
+  level.make_call().set_index(WRITTEN_LEVEL).perform();
+  rig.loop_hub();  // the write's SET goes out
+  ASSERT_EQ(rig.hub.current_running_task_type, TaskType::SET_DATA);
+  rig.uart.push_rx(ack_frame());
+  rig.loop_hub();                     // its read-back GET goes out
+  rig.receive(level_id, level_text);  // the queue runs empty inside the retry wait
+  rig.send_scan_query(SecTouchSniffer::SCAN_NEXT_DELAY_MS);
+  ASSERT_EQ(rig.gets_sent_for(UNREGISTERED_ID), 1) << "the retry went out before its wait ended";
+
+  rig.send_scan_query(SCAN_RETRY_DELAY_MS - SecTouchSniffer::SCAN_NEXT_DELAY_MS);
+  rig.receive(UNREGISTERED_ID, "10");
+  rig.answer_scan_query(NEXT_UNREGISTERED_ID, "11");
+
+  EXPECT_EQ(rig.gets_sent_for(UNREGISTERED_ID), 2);
+  EXPECT_EQ(rig.gets_sent_for(NEXT_UNREGISTERED_ID), 1);
+  const std::string ok = scan_outcome_name(ScanOutcome::SCAN_OUTCOME_OK);
+  EXPECT_EQ(query_status_name(rig.sniffer.store().fields(UNREGISTERED_ID)), ok);
+  EXPECT_EQ(query_status_name(rig.sniffer.store().fields(NEXT_UNREGISTERED_ID)), ok);
+  // The scan must have ended: else the rig's stop would call the listeners of the already destroyed program and level.
+  EXPECT_FALSE(rig.sniffer.is_scanning());
+}
+
 // --- Scan goals ---
 
 TEST(SecTouchSnifferTest, ACheckScanQueriesExactlyTheKnownIdsInAscendingOrder) {

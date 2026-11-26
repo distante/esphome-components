@@ -43,6 +43,15 @@ Enforces [Error handling](../coding-standards/SKILL.md#c-style): a task that end
 
 Done when each end path has its listener call, and each pending state has a clearing end on every path.
 
+## A result that goes back to unknown clears what it showed
+
+Enforces [Error handling](../coding-standards/SKILL.md#c-style): a state that turns unknown leaves no stale value on display.
+
+1. List every function the diff lets return "nothing" (nullopt, no state, an empty result) after it returned a value, such as a model that loses a needed input.
+2. For each, follow its caller and check that the entities or state built from the earlier value are cleared, and that any timer armed from it is disarmed. Example: after live state began needing only some inputs, enabling a switch time whose time never read well made `compute()` return nullopt, and `recompute_()` returned early, leaving `not running` shown.
+
+Done when each listed function has its caller traced, and each stale display is reported with its `file:line`.
+
 ## No restated rules in skills and docs for agents
 
 Enforces [coding-standards](../coding-standards/SKILL.md)' single source: every rule lives there once.

@@ -100,7 +100,7 @@ inline std::optional<std::string> read_bulk_program(const std::vector<std::strin
   }
   for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
     const std::size_t i = static_cast<std::size_t>(n - 1);
-    if (levels[i] < OFF_LEVEL || levels[i] > MAX_SWITCH_TIME_LEVEL) {
+    if (!is_switch_time_level(levels[i])) {
       return bulk_detail::invalid_argument(bulk_detail::switch_time_field(n, TimeProgramField::LEVEL) + " " +
                                            std::to_string(levels[i]) + " not in " + std::to_string(OFF_LEVEL) +
                                            RANGE_DASH + std::to_string(MAX_SWITCH_TIME_LEVEL));

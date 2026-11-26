@@ -86,9 +86,15 @@ bool TimeProgram::write_time(int switch_time, uint8_t hour, uint8_t minute) {
   return true;
 }
 
-void TimeProgram::write_level(int switch_time, int level) {
+bool TimeProgram::write_level(int switch_time, int level) {
+  if (!is_switch_time_level(level)) {
+    ESP_LOGE(TAG, "Fan pair %d switch time %d level: %d is no switch time level, nothing written", this->pair_,
+             switch_time, level);
+    return false;
+  }
   this->bulk_.replaced(TimeProgramSlot{this->pair_, switch_time, TimeProgramField::LEVEL});
   this->queue_level_(switch_time, level);
+  return true;
 }
 
 void TimeProgram::write_enabled(int switch_time, bool enabled) {
@@ -483,7 +489,9 @@ void TimeProgramLevelSelect::clear_state() {
 
 void TimeProgramLevelSelect::control(size_t index) {
   // Option index = level (SWITCH_TIME_LEVEL_OPTIONS).
-  this->program_->write_level(this->switch_time_, static_cast<int>(index));
+  if (!this->program_->write_level(this->switch_time_, static_cast<int>(index))) {
+    return;
+  }
   this->publish_state(index);
 }
 

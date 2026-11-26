@@ -213,6 +213,14 @@ TEST_F(TimeProgramTest, ATimeOutsideTheDayIsNotWritten) {
   EXPECT_TRUE(this->send_next_task().empty());
 }
 
+// A level outside the switch time levels is never sent.
+TEST_F(TimeProgramTest, ALevelOutsideTheSwitchTimeLevelsIsNotWritten) {
+  this->program_.write_level(SWITCH_TIME, OFF_LEVEL - 1);
+  this->program_.write_level(SWITCH_TIME, MAX_SWITCH_TIME_LEVEL + 1);
+
+  EXPECT_TRUE(this->send_next_task().empty());
+}
+
 // AC 6: one queued SET per ID, the newer value in place; after it ends, one GET of that ID, whose value is shown.
 TEST_F(TimeProgramTest, ANewerWriteReplacesTheQueuedSetAndItsReadBackIsPublished) {
   this->level_.make_call().set_index(4).perform();

@@ -67,6 +67,9 @@ constexpr int max_known_property_id() {
   return max;
 }
 
+/// Whether `level` is a level a switch time takes: OFF_LEVEL..MAX_SWITCH_TIME_LEVEL.
+constexpr bool is_switch_time_level(int level) { return level >= OFF_LEVEL && level <= MAX_SWITCH_TIME_LEVEL; }
+
 /// The bit of switch time `switch_time` (1-based) in a pair's enabled mask.
 constexpr uint8_t switch_time_bit(int switch_time) { return static_cast<uint8_t>(1 << (switch_time - 1)); }
 
@@ -149,7 +152,7 @@ constexpr KnownMeaning name_or_unexpected(const char *name, std::string_view tri
 /// The name of a switch time's level: a fan level name for OFF_LEVEL..MAX_SWITCH_TIME_LEVEL, else nullptr.
 constexpr const char *switch_time_level_name(std::string_view trimmed) {
   const int level = whole_decimal(trimmed);
-  if (level < OFF_LEVEL || level > MAX_SWITCH_TIME_LEVEL) {
+  if (!is_switch_time_level(level)) {
     return nullptr;
   }
   return level_name(level);

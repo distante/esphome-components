@@ -410,4 +410,17 @@ TEST_F(SetTimeProgramTest, AMaskGetThatCantBeQueuedEndsTheCall) {
   EXPECT_FALSE(this->program_.is_bulk_write_running());
 }
 
+// AC 10: a read-back GET that can't be queued fails its write as a timeout: nothing was compared, so no on_success.
+TEST_F(SetTimeProgramTest, AReadBackGetThatCantBeQueuedFailsItsWrite) {
+  this->hub_.unqueueable_priority_gets.insert(time_program_time_id(PAIR, 1));
+  this->action_.play_complex();
+
+  this->run_panel();
+
+  EXPECT_EQ(this->errors_, std::vector<std::string>{failed_prefix(1) +
+                                                    failed_write(1, TimeProgramField::TIME, WriteFailure::TIMEOUT)});
+  EXPECT_EQ(this->successes_, 0);
+  EXPECT_FALSE(this->program_.is_bulk_write_running());
+}
+
 }  // namespace esphome::sec_touch::testing

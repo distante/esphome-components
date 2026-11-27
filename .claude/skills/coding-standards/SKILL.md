@@ -97,6 +97,20 @@ Every change lands with tests in one of five layers:
 - **Page JS and HTML** have no formatter in pre-commit. Format them by hand like the surrounding code: a space after each comma, the same wrapping and indentation.
 - **Git hooks.** Commit with the hooks running. Never bypass them: no `--no-verify`, no `PRE_COMMIT_ALLOW_NO_CONFIG`.
 
+### Code comments
+
+A comment in `components/` or `tests/` is allowed only for one of these:
+
+- **What the code can't say.** The code or the function's name doesn't explain what it does. A comment that repeats the code, a name or the test name goes.
+- **A hardware quirk.** How the panel, the UART or the ESP32 behaves (a reply comes about 1 s late, IDs 209–255 time out).
+- **Why a non-obvious decision.** The reason behind a choice a reader would question, such as a static buffer to keep memory low.
+
+Every allowed comment is also:
+
+- **Timeless.** It describes the code as it stands. History (issue and item numbers, "now", "no longer") lives in git and the PR. A spec criterion (`// AC 9:`) is a reference, not history.
+- **Once.** A rule is explained at its definition (the constant, the function); other places use its name.
+- **Counts that can't go stale.** Name the parts ("the headers below"), not their number ("six headers").
+
 ### Docs and PR text
 
 Readmes, reports, PR bodies and issue comments are read by a skimming human and by agents paying per token. Write them short and visual:

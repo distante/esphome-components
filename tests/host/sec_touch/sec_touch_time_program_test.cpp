@@ -139,6 +139,13 @@ TEST_F(TimeProgramTest, APollThatRanBeforeTheMillisWrapIsDueOnlyAfterItsInterval
   EXPECT_TRUE(this->send_next_task().empty());
 }
 
+// Both switches watch the mask ID.
+TEST_F(TimeProgramTest, AnIdWatchedTwiceIsPolledOnce) {
+  const auto &poll = this->hub_.time_program_polls_[PAIR - 1];
+
+  EXPECT_EQ(std::count(poll.begin(), poll.end(), MASK_ID), 1);
+}
+
 // AC 5: the global-settings poll sends its own IDs only.
 // sec-touch: a task creation that refuses an ID returns null. A poll ID it refuses is skipped, not queued as null.
 TEST_F(TimeProgramTest, APollIdWithNoTaskIsSkipped) {
@@ -175,6 +182,21 @@ TEST_F(TimeProgramTest, RefreshQueuesOnePollAndKeepsTheSchedule) {
 
   EXPECT_EQ(this->drain(), one_poll());
   EXPECT_EQ(this->hub_.last_time_programs_update_ms_, scheduled);
+}
+
+TEST_F(TimeProgramTest, ARefreshDuringAScanQueuesNothing) {
+  this->hub_.enter_scan_mode();
+
+  this->program_.refresh();
+
+  EXPECT_TRUE(this->hub_.data_task_queue.empty());
+}
+
+TEST_F(TimeProgramTest, TwoRefreshesQueueEachIdOnce) {
+  this->program_.refresh();
+  this->program_.refresh();
+
+  EXPECT_EQ(this->drain(), one_poll());
 }
 
 // AC 6 and 8: published at once; written as HH:MM:00, the seconds dropped.
@@ -434,6 +456,35 @@ TEST_F(TimeProgramTest, ASetAckedDuringAScanGetsItsReadBack) {
   EXPECT_EQ(this->panel_replies(ack_frame()), get_frame(LEVEL_ID));
 }
 
+TEST_F(TimeProgramTest, ASetWhoseReadBackCantBeQueuedIsATimeout) {
+  this->hub_.unqueueable_priority_gets.insert(LEVEL_ID);
+  this->level_.make_call().set_index(4).perform();
+  ASSERT_EQ(this->send_next_task(), set_frame(LEVEL_ID, text(format_switch_time_level(4).data())));
+
+  this->panel_replies(ack_frame());
+  EXPECT_EQ(this->events_, std::vector<std::string>{event_name(WriteFailure::TIMEOUT)});
+
+  // The next poll's answer is no read-back of it: no second report.
+  this->program_.refresh();
+  this->send_next_task();
+  this->panel_answers_get(FIRST_TIME_ID, "08:00:00");
+  this->panel_answers_get(FIRST_LEVEL_ID, "2");
+  this->panel_answers_get(MASK_ID, mask_text(0));
+  this->panel_answers_get(TIME_ID, "08:00:00");
+  this->panel_answers_get(LEVEL_ID, "2");
+  EXPECT_EQ(this->events_, std::vector<std::string>{event_name(WriteFailure::TIMEOUT)});
+}
+
+TEST_F(TimeProgramTest, ARefusedSetWhoseReadBackCantBeQueuedIsReportedOnce) {
+  this->hub_.unqueueable_priority_gets.insert(LEVEL_ID);
+  this->level_.make_call().set_index(4).perform();
+  this->send_next_task();
+
+  this->panel_replies(nak_frame());
+
+  EXPECT_EQ(this->events_, std::vector<std::string>{event_name(WriteFailure::REFUSED)});
+}
+
 // A switch write whose fresh mask GET can't be queued writes nothing and fires mask_unreadable.
 TEST_F(TimeProgramTest, AMaskGetThatCantBeQueuedFailsTheSwitchWrite) {
   this->hub_.unqueueable_priority_gets.insert(MASK_ID);
@@ -453,6 +504,15 @@ TEST_F(TimeProgramTest, AFailedSwitchWriteShowsTheLastGoodMask) {
   this->enabled_.turn_on();
 
   EXPECT_FALSE(this->enabled_.state);
+}
+
+TEST_F(TimeProgramTest, AFailedSwitchWriteBeforeAnyGoodMaskLeavesTheSwitchesWithoutState) {
+  this->hub_.unqueueable_priority_gets.insert(MASK_ID);
+
+  this->enabled_.turn_on();
+
+  EXPECT_FALSE(this->enabled_.has_state());
+  EXPECT_FALSE(this->first_enabled_.has_state());
 }
 
 }  // namespace esphome::sec_touch::testing

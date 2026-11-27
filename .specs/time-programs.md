@@ -142,11 +142,11 @@ Optional per pair: `refresh` (button), `write_failed` (event), and the [live-sta
 
 Decided in [Should sec_touch compute which switch time is in effect, and how is it shown?](https://github.com/distante/esphome-components/issues/120).
 
-- **Own poll:** every `time_programs_update_interval` (default 5 min), the hub queues GETs for each listed pair. This is separate from the 5 s fan poll and the 30 s global-settings poll.
+- **Own poll:** every `time_programs_update_interval` (default 5 min), the hub queues GETs for each listed pair. It skips an ID whose GET is already queued, and queues none during a scan. This is separate from the 5 s fan poll and the 30 s global-settings poll.
 - **Which IDs:** the enabled ID and the time and level IDs of the listed switch times. With any live-state entity, the pair's **whole block** (11 IDs), whatever `switch_times` says.
 - **Panel clock:** with any live-state entity on any pair, ID 2 (clock) is polled on the global-settings poll, as for `clock_drift`. ID 1 (date) only with `clock_drift`; the hub polls it right before ID 2, whatever the registration order.
 - **First poll:** right after boot, like the global settings.
-- **`refresh` button:** one press queues the same GETs as one poll of that pair. The regular poll stays on its schedule.
+- **`refresh` button:** one press queues the same GETs as one poll of that pair. During a scan it queues none; the poll after the scan reads the pair. The regular poll stays on its schedule.
 - Results reach the entities through the hub's existing update listeners.
 
 ---
@@ -174,8 +174,8 @@ flowchart LR
 | Time | Written as `HH:MM:00`. Seconds from HA are dropped, never rounded. A call with only the hour or only the minute keeps the other one as shown; while the entity shows no time, such a call writes nothing. |
 | Level | The select's index, 0–9, as a decimal string. |
 | Enabled mask | Per pair, the hub keeps the requested bit changes (bits to set, bits to clear). When the write is due: GET the mask fresh, apply only those bits, SET. Only that GET's own answer is the fresh mask, not a poll's answer that arrives meanwhile. Bits of switch times outside `switch_times` stay as they are; a mask the [meaning rule](#known-property-catalogue) marks unexpected is never written over (Mask GET fails, below). Changes merge; per bit, the later request wins. |
-| Mask GET fails | The hub retries a GET only after a dropped reply (`get_retry.h`), not after a timeout or NAK. When the write's own fresh GET fails, can't be queued, or answers a mask the [meaning rule](#known-property-catalogue) marks unexpected: write nothing, fire `mask_unreadable`, log a warning, republish the switches from the last good mask. A poll's GET of the mask that fails meanwhile doesn't count. |
-| Read-back | A `not_kept` is a read-back that differs from what was sent; seconds are ignored when comparing times. Live-state entities recompute from the read-back. |
+| Mask GET fails | The hub retries a GET only after a dropped reply (`get_retry.h`), not after a timeout or NAK. When the write's own fresh GET fails, can't be queued, or answers a mask the [meaning rule](#known-property-catalogue) marks unexpected: write nothing, fire `mask_unreadable`, log a warning, republish the switches from the last good mask (with none read yet, clear their states). A poll's GET of the mask that fails meanwhile doesn't count. |
+| Read-back | A `not_kept` is a read-back that differs from what was sent; seconds are ignored when comparing times. A read-back GET that can't be queued ends the write as `timeout`, unless the SET already failed. Live-state entities recompute from the read-back. |
 
 **`write_failed` event types** (an ESPHome event carries only its type; the log names the field, and in HA the entity that jumped back shows it):
 
@@ -199,7 +199,7 @@ Decided in [Should sec_touch compute which switch time is in effect, and how is 
 - **In effect:** as defined in the [glossary](../GLOSSARY.md#language) (Switch time in effect). "At or before" includes the panel time itself.
 - **Next change:** the first enabled switch time strictly after the panel time, wrapping to the next day.
 - **Assumption:** the panel never shows the level it runs, so this model can't be checked on the device. The readme says so.
-- **Clock:** the panel clock (ID 2), which is what fires the switch times. Advanced with `millis()` between reads, re-anchored on each good read. Drift needs no handling.
+- **Clock:** the panel clock (ID 2), which is what fires the switch times. Advanced with `millis()` between reads and re-anchored on each good read. Exception: a read that moves it back by less than 2 s across an enabled switch time it just passed arrived late. It is ignored, so the change doesn't flip back and forward again. Drift needs no handling.
 - **Running:** the program runs only when the pair's level ID reads `AUTOMATIC_TIME_LEVEL` (10).
 
 **Entities** (each optional, under the pair's `time_programs` entry):
@@ -264,7 +264,7 @@ Position *i* is switch time *i*. HA's `string[]`, `int[]` and `bool[]` pass stra
 | Overlap | A second call for the same pair while one runs → `busy`, nothing written. An entity write that replaces a bulk value shows up as `not_kept` in the bulk report. An entity SET still in flight when the call starts is not the call's: its failure isn't in the report. |
 | Deadline | None. HA waits 30 s for a response by default (aioesphomeapi); past it the writes still finish and the entities show the truth. The readme notes it. |
 | In an automation | Fire and forget: the action queues the writes and the next action runs at once. `on_success` / `on_error` fire later, with the call's arguments. A call that writes nothing (bad argument, `busy`) fires `on_error` at once. |
-| One failure per field | The report names each failed field once, with its first failure, in write order. A read-back GET that fails, can't be queued, or whose answer can't be compared, leaves the field unconfirmed: `timeout` (or `not_kept` when a newer SET of it was queued, or a scan took the answer). These two appear only in the report; `write_failed` fires as for an entity write. |
+| One failure per field | The report names each failed field once, with its first failure, in write order. A read-back GET that fails, can't be queued, or whose answer can't be compared, leaves the field unconfirmed: `timeout` (or `not_kept` when a newer SET of it was queued, or a scan took the answer). These appear only in the report, except a read-back GET that can't be queued, which also fires `write_failed` (Read-back in [Writing](#writing)). |
 | Scan mode | The scan's dropped tasks end each pending field as in [Writing](#writing); the call ends with `on_error` naming them and frees the pair. |
 | Config time | Only the list shapes are checked (`times` strings, `levels` integers, `enabled` booleans). Counts and ranges are checked at run time for constants and lambdas alike. |
 

@@ -5,6 +5,8 @@
 #include "sec_touch/time_units.h"
 
 using esphome::sec_touch::millis_reached;
+using esphome::sec_touch::SECONDS_PER_DAY;
+using esphome::sec_touch::SECONDS_PER_HOUR;
 
 namespace {
 
@@ -28,6 +30,11 @@ TEST(MillisReached, AMomentBeforeTheWrapIsReachedAfterIt) {
 
 TEST(MillisReached, AMomentAfterTheWrapIsNotReachedBeforeIt) {
   EXPECT_FALSE(millis_reached(BEFORE_WRAP_MS, BEFORE_WRAP_MS + ACROSS_WRAP_MS));
+}
+
+TEST(TimeUnits, AnHourAndADayInSeconds) {
+  EXPECT_EQ(SECONDS_PER_HOUR, 3600);
+  EXPECT_EQ(SECONDS_PER_DAY, 86400);
 }
 
 int main(int argc, char **argv) {

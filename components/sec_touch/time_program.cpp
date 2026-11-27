@@ -56,19 +56,7 @@ void TimeProgram::attach_enabled(int switch_time, TimeProgramEnabledSwitch *enti
   this->watch_(time_program_enabled_id(this->pair_));
 }
 
-void TimeProgram::watch_(int id) {
-  auto slot = time_program_slot(id);
-  if (!slot.has_value() || slot->pair != this->pair_) {
-    ESP_LOGE(TAG, "Property ID %d is not part of fan pair %d's time program", id, this->pair_);
-    return;
-  }
-  bool &watched = this->watched_[time_program_block_index(*slot)];
-  if (watched) {
-    return;
-  }
-  watched = true;
-  this->hub_->add_time_program_poll_id(this->pair_, id);
-}
+void TimeProgram::watch_(int id) { this->hub_->add_time_program_poll_id(this->pair_, id); }
 
 void TimeProgram::refresh() {
   ESP_LOGD(TAG, "Refreshing fan pair %d's time program", this->pair_);
@@ -290,6 +278,13 @@ void TimeProgram::fail_mask_write_(const char *why) {
   this->report_(time_program_enabled_id(this->pair_), WriteFailure::MASK_UNREADABLE);
   if (this->last_good_mask_ >= 0) {
     this->publish_switches_(static_cast<uint8_t>(this->last_good_mask_));
+    return;
+  }
+  // No good mask yet: show no state rather than the unwritten one.
+  for (TimeProgramEnabledSwitch *entity : this->switches_) {
+    if (entity != nullptr) {
+      entity->clear_state();
+    }
   }
 }
 
@@ -341,9 +336,13 @@ void TimeProgram::on_task_end_(const BaseTask &task, TaskEnd end) {
     }
     read_back->armed = true;
     const uint32_t read_back_ticket = this->hub_->add_priority_get_task(TaskTargetType::TIME_PROGRAM, task.property_id);
-    // No read-back GET, nothing to compare: the bulk write fails.
+    // No read-back, nothing to compare: a timeout, unless the SET already reported.
     if (read_back_ticket == 0) {
+      read_back->armed = false;
       this->bulk_.fail(*slot, WriteFailure::TIMEOUT);
+      if (!read_back->reported) {
+        this->report_(task.property_id, WriteFailure::TIMEOUT);
+      }
     }
     this->bulk_.set_ended(*slot, read_back_ticket != 0);
     return;
@@ -498,6 +497,13 @@ void TimeProgramLevelSelect::control(size_t index) {
 TimeProgramEnabledSwitch::TimeProgramEnabledSwitch(TimeProgram *program, int switch_time)
     : program_(program), switch_time_(switch_time) {
   this->program_->attach_enabled(switch_time, this);
+}
+
+void TimeProgramEnabledSwitch::clear_state() {
+  this->set_has_state(false);
+#if defined(USE_CONTROLLER_REGISTRY)
+  ControllerRegistry::notify_switch_update(this);
+#endif
 }
 
 void TimeProgramEnabledSwitch::write_state(bool state) {

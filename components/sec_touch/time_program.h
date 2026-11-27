@@ -95,7 +95,7 @@ class TimeProgram {
     uint32_t set_ticket{0};
   };
 
-  /// Puts `id` on the pair's poll, once per ID.
+  /// Puts `id` on the pair's poll; the hub drops a foreign or repeated ID.
   void watch_(int id);
   void on_value_(int id, const std::string &raw);
   void on_time_(int switch_time, const std::string &raw);
@@ -134,8 +134,6 @@ class TimeProgram {
 
   /// By time_program_block_index().
   std::array<ReadBack, TIME_PROGRAM_IDS_PER_PAIR> read_backs_{};
-  /// Which IDs watch_() has put on the poll, by time_program_block_index().
-  std::array<bool, TIME_PROGRAM_IDS_PER_PAIR> watched_{};
 
   MaskMerge mask_merge_;
   /// A mask GET is wanted: the next fresh mask applies the requested bits.
@@ -182,6 +180,7 @@ class TimeProgramLevelSelect : public select::Select {
 class TimeProgramEnabledSwitch : public switch_::Switch {
  public:
   TimeProgramEnabledSwitch(TimeProgram *program, int switch_time);
+  void clear_state();
 
  protected:
   void write_state(bool state) override;

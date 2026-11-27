@@ -29,6 +29,7 @@ FAN_LEVEL = "fan_level.h"
 PROPERTY_SLOTS = "property_slots.h"
 SCAN_GOAL = "scan_goal.h"
 DATA_MESSAGE = "data_message.h"
+TIME_UNITS = "time_units.h"
 
 
 @pytest.fixture
@@ -39,6 +40,7 @@ def header_dir(tmp_path: Path) -> Path:
     shutil.copy(HEADER_DIR / PROTOCOL_IDS, copy / PROTOCOL_IDS)
     shutil.copy(HEADER_DIR / FAN_LEVEL, copy / FAN_LEVEL)
     shutil.copy(HEADER_DIR / DATA_MESSAGE, copy / DATA_MESSAGE)
+    shutil.copy(HEADER_DIR / TIME_UNITS, copy / TIME_UNITS)
     return copy
 
 
@@ -105,6 +107,10 @@ def test_parses_the_switch_time_rules() -> None:
     # A switch time takes the fan levels up to Automatic CO2 (9).
     assert catalogue.get("maxSwitchTimeLevel") == 9
     assert catalogue.get("enabledMaskNames") == {"none": "none enabled", "separator": ", ", "suffix": " enabled"}
+
+
+def test_parses_the_time_units() -> None:
+    assert parse_catalogue().get("timeUnits") == {"hoursPerDay": 24, "minutesPerHour": 60, "secondsPerMinute": 60}
 
 
 def test_parses_a_name_for_every_level_including_not_connected() -> None:
@@ -295,7 +301,8 @@ def test_a_missing_name_names_the_headers_it_was_looked_for_in(header_dir: Path)
     with pytest.raises(
         ValueError,
         match=re.escape(
-            "no LEVEL_NAMES in the parsed headers (fan_level.h, protocol_ids.h, data_message.h, property_slots.h, scan_goal.h)"
+            "no LEVEL_NAMES in the parsed headers"
+            " (fan_level.h, protocol_ids.h, data_message.h, time_units.h, property_slots.h, scan_goal.h)"
         ),
     ):
         parse_catalogue(header_dir)

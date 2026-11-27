@@ -61,6 +61,14 @@ Enforces [Error handling](../coding-standards/SKILL.md#c-style): a state that tu
 
 Done when each listed function has its caller traced, and each stale display is reported with its `file:line`.
 
+## A published number fits its type
+
+Enforces [Error handling](../coding-standards/SKILL.md#c-style): an entity shows the value the code computed.
+
+1. For each value the diff publishes through a `float` (a `sensor` state) or converts to a narrower type, take the largest value its range allows and check that the type holds it to the precision the entity promises. Example: `next_change` published a Unix timestamp (about 1.8e9) as a sensor `float`, which holds steps of 128 s there, so 14:00:00 showed as 14:00:48 (#148).
+
+Done when each such value names its range and the type's step at that range, and each loss is reported with its `file:line`.
+
 ## No restated rules in skills and docs for agents
 
 Enforces [coding-standards](../coding-standards/SKILL.md)' single source: every rule lives there once.
@@ -86,6 +94,14 @@ Enforces the Page JS and HTML bullet of [Tooling](../coding-standards/SKILL.md#t
 1. Read every added or changed line in `components/*/web/` against its neighbours: spacing after commas, wrapping, indentation. Example: `download(CSV_FILE_NAME,exportCsv(` missing the space after the comma.
 
 Done when each hit is reported with its `file:line`.
+
+## Every comment is an allowed kind
+
+Enforces [Code comments](../coding-standards/SKILL.md#code-comments).
+
+1. Read every comment the diff adds or changes in `components/` and `tests/` against the rule. Example: #149 tagged seven tests `// #139 item N:` and explained the late clock read on its constant, two methods and a test.
+
+Done when each hit is reported with its `file:line`, the bullet it breaks, and its trimmed text or "delete".
 
 ## Docs and PR text are short and visual
 

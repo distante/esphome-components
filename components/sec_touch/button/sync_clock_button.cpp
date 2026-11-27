@@ -2,6 +2,7 @@
 #ifdef USE_TIME
 
 #include "esphome/core/log.h"
+#include "../time_units.h"
 
 namespace esphome {
 namespace sec_touch {
@@ -15,13 +16,15 @@ void SecTouchSyncClockButton::press_action() {
     return;
   }
   // The panel drops the seconds on write, so write on the next minute boundary.
-  ESP_LOGI(TAG, "Setting panel clock in %d s (next full minute)", 60 - now.second);
-  this->set_timeout("sync_clock", (60 - now.second) * 1000, [this]() { this->write_clock_(); });
+  const int wait_s = SECONDS_PER_MINUTE - now.second;
+  ESP_LOGI(TAG, "Setting panel clock in %d s (next full minute)", wait_s);
+  this->set_timeout("sync_clock", wait_s * MS_PER_S, [this]() { this->write_clock_(); });
 }
 
 void SecTouchSyncClockButton::write_clock_() {
   // Round instead of truncating: the timeout may fire a few ms before the boundary.
-  ESPTime minute = ESPTime::from_epoch_local((this->time_->timestamp_now() + 30) / 60 * 60);
+  ESPTime minute = ESPTime::from_epoch_local((this->time_->timestamp_now() + SECONDS_PER_MINUTE / 2) /
+                                             SECONDS_PER_MINUTE * SECONDS_PER_MINUTE);
   char clock[9], date[9];
   minute.strftime(clock, sizeof(clock), "%H:%M:00");
   minute.strftime(date, sizeof(date), "%d.%m.%y");

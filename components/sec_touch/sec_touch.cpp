@@ -193,8 +193,12 @@ esphome::optional<text_sensor::TextSensor *> SECTouchComponent::get_text_sensor(
 void SECTouchComponent::register_fan(int level_id, SecTouchFan *fan) { this->fans_[level_id] = fan; }
 
 bool SECTouchComponent::has_pending_set_task_for(int property_id) const {
+  return this->has_queued_task_(TaskType::SET_DATA, property_id);
+}
+
+bool SECTouchComponent::has_queued_task_(TaskType type, int property_id) const {
   for (const auto &task : this->data_task_queue) {
-    if (task->get_task_type() == TaskType::SET_DATA && task->property_id == property_id) {
+    if (task->get_task_type() == type && task->property_id == property_id) {
       return true;
     }
   }
@@ -391,7 +395,15 @@ void SECTouchComponent::add_time_program_tasks_to_queue(int pair) {
     ESP_LOGE(TAG, "Fan pair %d has no time program", pair);
     return;
   }
+  // The sniffer takes every answer during a scan.
+  if (this->scan_mode_active_) {
+    ESP_LOGD(TAG, "Scan mode active, fan pair %d's time program is read after the scan", pair);
+    return;
+  }
   for (int id : this->time_program_polls_[pair - 1]) {
+    if (this->has_queued_task_(TaskType::GET_DATA, id)) {
+      continue;
+    }
     auto task = GetDataTask::create(TaskTargetType::TIME_PROGRAM, id);
     if (task == nullptr) {
       ESP_LOGE(TAG, "No GET of property_id %d as a time program", id);

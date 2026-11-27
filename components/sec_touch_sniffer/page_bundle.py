@@ -8,11 +8,11 @@ anything else fails the build rather than shipping a page that breaks in the bro
 - `import { a, b } from "./name.mjs";` (may span lines; no `as` renames)
 - `export function`, `export async function`, `export const`, `export let`, `export class`
 
-`catalogue.mjs` is virtual: no file in web/. The resolver serves it from memory, built at every bundle from five C++
-headers: the known-property catalogue (.specs/sniffer.md) from sec_touch's protocol_ids.h and fan_level.h, the write
-probe's value rules from sec_touch's data_message.h, and the default discover range, the goal names and the cap on a
-scan's ID list from this component's property_slots.h and scan_goal.h. Only the page may import it; the tested modules
-take the catalogue as an argument.
+`catalogue.mjs` is virtual: no file in web/. The resolver serves it from memory, built at every bundle from C++ headers: the
+known-property catalogue (.specs/sniffer.md) from sec_touch's protocol_ids.h and fan_level.h, the units a time of day
+is checked against from sec_touch's time_units.h, the write probe's value rules from sec_touch's data_message.h, and
+the default discover range, the goal names and the cap on a scan's ID list from this component's property_slots.h and
+scan_goal.h. Only the page may import it; the tested modules take the catalogue as an argument.
 
 sec_touch's header_reader.py reads the headers; its docstring lists the declaration forms it can read. Anything the
 catalogue uses that it cannot read fails the build.
@@ -36,12 +36,12 @@ _EXPORT = re.compile(r"^export (?=(?:async )?function |const |let |class )", re.
 _LEFTOVER = re.compile(r"^[ \t]*(?:import|export)\b", re.M)
 _TOP_LEVEL_NAME = re.compile(r"^(?:async )?(?:function\*?|const|let|class) (\w+)", re.M)
 
-# The five parsed headers.
 PROTOCOL_IDS_FILE = "protocol_ids.h"
 FAN_LEVEL_FILE = "fan_level.h"
 PROPERTY_SLOTS_FILE = "property_slots.h"
 SCAN_GOAL_FILE = "scan_goal.h"
 DATA_MESSAGE_FILE = "data_message.h"
+TIME_UNITS_FILE = "time_units.h"
 # NUL: the SET frames a probe's value with `%s`, so the value ends at its first NUL. The wire bytes come from
 # data_message.h.
 NUL_BYTE = 0
@@ -92,11 +92,12 @@ def _names_by(header: HeaderReader, name: str, key_type: type) -> dict:
 
 
 def parse_catalogue(header_dir: Path = HEADER_DIR, sniffer_header_dir: Path = SNIFFER_HEADER_DIR) -> dict:
-    """The contents of catalogue.mjs, read from the five headers the module docstring names."""
+    """The contents of catalogue.mjs, read from the headers the module docstring names."""
     header = HeaderReader()
     header.read(header_dir / FAN_LEVEL_FILE)
     header.read(header_dir / PROTOCOL_IDS_FILE)
     header.read(header_dir / DATA_MESSAGE_FILE)
+    header.read(header_dir / TIME_UNITS_FILE)
     header.read(sniffer_header_dir / PROPERTY_SLOTS_FILE)
     header.read(sniffer_header_dir / SCAN_GOAL_FILE)
     return {
@@ -110,6 +111,11 @@ def parse_catalogue(header_dir: Path = HEADER_DIR, sniffer_header_dir: Path = SN
         "timeProgramLevelIds": header.get(header.int_arrays, "TIME_PROGRAM_LEVEL_IDS"),
         "switchTimeCount": header.get(header.ints, "SWITCH_TIME_COUNT"),
         "maxSwitchTimeLevel": header.get(header.ints, "MAX_SWITCH_TIME_LEVEL"),
+        "timeUnits": {
+            "hoursPerDay": header.get(header.ints, "HOURS_PER_DAY"),
+            "minutesPerHour": header.get(header.ints, "MINUTES_PER_HOUR"),
+            "secondsPerMinute": header.get(header.ints, "SECONDS_PER_MINUTE"),
+        },
         "enabledMaskNames": {
             "none": header.get(header.strings, "ENABLED_MASK_NONE_NAME"),
             "separator": header.get(header.strings, "ENABLED_MASK_SEPARATOR"),

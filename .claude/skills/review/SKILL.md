@@ -61,6 +61,14 @@ Enforces [Error handling](../coding-standards/SKILL.md#c-style): a state that tu
 
 Done when each listed function has its caller traced, and each stale display is reported with its `file:line`.
 
+## A published number fits its type
+
+Enforces [Error handling](../coding-standards/SKILL.md#c-style): an entity shows the value the code computed.
+
+1. For each value the diff publishes through a `float` (a `sensor` state) or converts to a narrower type, take the largest value its range allows and check that the type holds it to the precision the entity promises. Example: `next_change` published a Unix timestamp (about 1.8e9) as a sensor `float`, which holds steps of 128 s there, so 14:00:00 showed as 14:00:48 (#148).
+
+Done when each such value names its range and the type's step at that range, and each loss is reported with its `file:line`.
+
 ## No restated rules in skills and docs for agents
 
 Enforces [coding-standards](../coding-standards/SKILL.md)' single source: every rule lives there once.

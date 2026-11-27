@@ -1,0 +1,28 @@
+# expect-error: value must be at most 6.
+
+esphome:
+  name: sec-touch-bad-select-fan-number
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+
+select:
+  - platform: sec_touch
+    fan_number: 7
+    mode_select:
+      name: "Fan 7 Mode"

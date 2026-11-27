@@ -290,6 +290,13 @@ void TimeProgram::fail_mask_write_(const char *why) {
   this->report_(time_program_enabled_id(this->pair_), WriteFailure::MASK_UNREADABLE);
   if (this->last_good_mask_ >= 0) {
     this->publish_switches_(static_cast<uint8_t>(this->last_good_mask_));
+    return;
+  }
+  // No good mask read yet: nothing to show again, so no switch shows the state it never wrote.
+  for (TimeProgramEnabledSwitch *entity : this->switches_) {
+    if (entity != nullptr) {
+      entity->clear_state();
+    }
   }
 }
 
@@ -498,6 +505,13 @@ void TimeProgramLevelSelect::control(size_t index) {
 TimeProgramEnabledSwitch::TimeProgramEnabledSwitch(TimeProgram *program, int switch_time)
     : program_(program), switch_time_(switch_time) {
   this->program_->attach_enabled(switch_time, this);
+}
+
+void TimeProgramEnabledSwitch::clear_state() {
+  this->set_has_state(false);
+#if defined(USE_CONTROLLER_REGISTRY)
+  ControllerRegistry::notify_switch_update(this);
+#endif
 }
 
 void TimeProgramEnabledSwitch::write_state(bool state) {

@@ -472,4 +472,15 @@ TEST_F(TimeProgramTest, AFailedSwitchWriteShowsTheLastGoodMask) {
   EXPECT_FALSE(this->enabled_.state);
 }
 
+// #139 item 5: with no good mask read yet there is nothing to show again, so the switches show no state, as a select
+// or a time does after a failed read.
+TEST_F(TimeProgramTest, AFailedSwitchWriteBeforeAnyGoodMaskLeavesTheSwitchesWithoutState) {
+  this->hub_.unqueueable_priority_gets.insert(MASK_ID);
+
+  this->enabled_.turn_on();
+
+  EXPECT_FALSE(this->enabled_.has_state());
+  EXPECT_FALSE(this->first_enabled_.has_state());
+}
+
 }  // namespace esphome::sec_touch::testing

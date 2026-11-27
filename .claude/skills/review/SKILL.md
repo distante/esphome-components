@@ -43,6 +43,15 @@ Enforces [Error handling](../coding-standards/SKILL.md#c-style): a task that end
 
 Done when each end path has its listener call, and each pending state has a clearing end on every path.
 
+## Every codegen path builds next to every platform
+
+Enforces the Config compile layer of [Tests](../coding-standards/SKILL.md#tests): a codegen path has a fixture that builds it.
+
+1. For each `to_code` path the diff adds or changes, find a compiled valid fixture that enables it together with every platform of the same component. Example: time-program codegen called `select.new_select`, but once a YAML also had `select: - platform: sec_touch`, Python bound the package's `select` to `sec_touch/select/` and the build crashed; the time-program fixtures had no sec_touch platforms and `sec_touch_all_platforms` had no time programs.
+2. Check that no module name a component's `__init__.py` imports matches one of its own sub-folders or `.py` files.
+
+Done when each codegen path names its fixture, and each import that shares a name with a sub-module is reported with its `file:line`.
+
 ## A result that goes back to unknown clears what it showed
 
 Enforces [Error handling](../coding-standards/SKILL.md#c-style): a state that turns unknown leaves no stale value on display.

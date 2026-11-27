@@ -345,6 +345,7 @@ sec_touch:
 - **Computed, not read.** The panel never says which switch time it runs. sec_touch computes it from the program, the pair's level and the panel clock (ID 2, polled as [Global Settings](#global-settings) lists). The model is an assumption the panel can't confirm.
 - **Needs the pair's `fan:` entry**, which polls the pair's level. Without it the config fails.
 - **Polling:** with any live-state entity, the pair's whole block of 11 IDs is polled, whatever `switch_times` lists.
+- **`next_change` shows Unknown** whenever the other three show `not running` or `none`: a timestamp can't hold a state word, so it has no value then.
 - **`next_change` precision:** rounded to the minute, but HA gets it as a float, so it can be off by up to ±64 s.
 - The fan entity isn't changed: in Automatik Zeit it still shows on, preset Automatic Time.
 

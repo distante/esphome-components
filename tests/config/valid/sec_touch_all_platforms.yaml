@@ -1,5 +1,7 @@
 # Every sec_touch platform in one build: fan, text_sensor, switch, select,
-# button (both buttons) and sensor, with a time source for the clock entities.
+# button (both buttons) and sensor, with a time source for the clock entities,
+# plus a time program with every optional entity: its codegen must build next to
+# every platform folder that shares a name with an ESPHome component.
 # The web_server setup follows components/sec_touch/examples/webserver-fallback.yaml,
 # with sntp as the readme suggests when there is no Home Assistant.
 # The wifi credentials are placeholders: the build never connects.
@@ -43,6 +45,20 @@ uart:
 
 sec_touch:
   uart_id: sec_touch_uart
+  time_programs:
+    - fan_number: 1
+      refresh:
+        name: "Fan 1 Refresh"
+      write_failed:
+        name: "Fan 1 Write failed"
+      switch_time_in_effect:
+        name: "Fan 1 Switch time in effect"
+      running_level:
+        name: "Fan 1 Running level"
+      next_level:
+        name: "Fan 1 Next level"
+      next_change:
+        name: "Fan 1 Next change"
 
 fan:
   - platform: sec_touch

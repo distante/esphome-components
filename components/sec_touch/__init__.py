@@ -4,13 +4,13 @@ from esphome import automation
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import (
-    button,
+    button as esphome_button,
     datetime,
     event,
-    select,
-    sensor,
-    switch,
-    text_sensor,
+    select as esphome_select,
+    sensor as esphome_sensor,
+    switch as esphome_switch,
+    text_sensor as esphome_text_sensor,
     time,
     uart,
 )
@@ -86,12 +86,12 @@ SWITCH_TIME_COUNT = _PROTOCOL_IDS.get(_PROTOCOL_IDS.ints, "SWITCH_TIME_COUNT")
 
 TimeProgram = sec_touch_ns.class_("TimeProgram")
 TimeProgramTime = sec_touch_ns.class_("TimeProgramTime", datetime.TimeEntity)
-TimeProgramLevelSelect = sec_touch_ns.class_("TimeProgramLevelSelect", select.Select)
+TimeProgramLevelSelect = sec_touch_ns.class_("TimeProgramLevelSelect", esphome_select.Select)
 TimeProgramEnabledSwitch = sec_touch_ns.class_(
-    "TimeProgramEnabledSwitch", switch.Switch
+    "TimeProgramEnabledSwitch", esphome_switch.Switch
 )
 TimeProgramRefreshButton = sec_touch_ns.class_(
-    "TimeProgramRefreshButton", button.Button
+    "TimeProgramRefreshButton", esphome_button.Button
 )
 TimeProgramWriteFailedEvent = sec_touch_ns.class_(
     "TimeProgramWriteFailedEvent", event.Event
@@ -159,8 +159,8 @@ FIELD_ENTITIES_SCHEMA = cv.Schema(
     {
         cv.Required(CONF_SWITCH_TIME): cv.int_range(min=1, max=SWITCH_TIME_COUNT),
         cv.Required(CONF_TIME): datetime.time_schema(TimeProgramTime),
-        cv.Required(CONF_LEVEL): select.select_schema(TimeProgramLevelSelect),
-        cv.Required(CONF_ENABLED): switch.switch_schema(TimeProgramEnabledSwitch),
+        cv.Required(CONF_LEVEL): esphome_select.select_schema(TimeProgramLevelSelect),
+        cv.Required(CONF_ENABLED): esphome_switch.switch_schema(TimeProgramEnabledSwitch),
     }
 )
 
@@ -173,7 +173,7 @@ TIME_PROGRAM_SCHEMA = cv.Schema(
         cv.Optional(
             CONF_SWITCH_TIMES, default=list(range(1, SWITCH_TIME_COUNT + 1))
         ): SWITCH_TIMES_SCHEMA,
-        cv.Optional(CONF_REFRESH): button.button_schema(
+        cv.Optional(CONF_REFRESH): esphome_button.button_schema(
             TimeProgramRefreshButton, entity_category=ENTITY_CATEGORY_CONFIG
         ),
         cv.Optional(CONF_WRITE_FAILED): event.event_schema(
@@ -182,10 +182,10 @@ TIME_PROGRAM_SCHEMA = cv.Schema(
         cv.Required(CONF_FIELD_ENTITIES): cv.ensure_list(FIELD_ENTITIES_SCHEMA),
         cv.Optional(CONF_LIVE_STATE_ID): cv.declare_id(TimeProgramLiveState),
         **{
-            cv.Optional(key): text_sensor.text_sensor_schema()
+            cv.Optional(key): esphome_text_sensor.text_sensor_schema()
             for key in LIVE_STATE_TEXT_KEYS
         },
-        cv.Optional(CONF_NEXT_CHANGE): sensor.sensor_schema(
+        cv.Optional(CONF_NEXT_CHANGE): esphome_sensor.sensor_schema(
             device_class=DEVICE_CLASS_TIMESTAMP
         ).extend({cv.GenerateID(CONF_TIME_ID): cv.use_id(time.RealTimeClock)}),
     }
@@ -465,10 +465,10 @@ async def _time_program_to_code(hub, entry):
         n = fields[CONF_SWITCH_TIME]
         await datetime.new_datetime(fields[CONF_TIME], program, n)
         # The options come from C++ (SWITCH_TIME_LEVEL_OPTIONS), the one list of level names.
-        await select.new_select(fields[CONF_LEVEL], program, n, options=[])
-        await switch.new_switch(fields[CONF_ENABLED], program, n)
+        await esphome_select.new_select(fields[CONF_LEVEL], program, n, options=[])
+        await esphome_switch.new_switch(fields[CONF_ENABLED], program, n)
     if refresh := entry.get(CONF_REFRESH):
-        await button.new_button(refresh, program)
+        await esphome_button.new_button(refresh, program)
     if write_failed := entry.get(CONF_WRITE_FAILED):
         # The event types come from C++ (WRITE_FAILURE_NAMES).
         failed = cg.new_Pvariable(write_failed[CONF_ID], program)
@@ -481,16 +481,16 @@ async def _live_state_to_code(hub, entry):
     live_state = cg.new_Pvariable(entry[CONF_LIVE_STATE_ID], hub, entry[CONF_FAN_NUMBER])
     await cg.register_component(live_state, {})
     if conf := entry.get(CONF_SWITCH_TIME_IN_EFFECT):
-        sens = await text_sensor.new_text_sensor(conf)
+        sens = await esphome_text_sensor.new_text_sensor(conf)
         cg.add(live_state.set_switch_time_in_effect(sens))
     if conf := entry.get(CONF_RUNNING_LEVEL):
-        sens = await text_sensor.new_text_sensor(conf)
+        sens = await esphome_text_sensor.new_text_sensor(conf)
         cg.add(live_state.set_running_level(sens))
     if conf := entry.get(CONF_NEXT_LEVEL):
-        sens = await text_sensor.new_text_sensor(conf)
+        sens = await esphome_text_sensor.new_text_sensor(conf)
         cg.add(live_state.set_next_level(sens))
     if conf := entry.get(CONF_NEXT_CHANGE):
-        sens = await sensor.new_sensor(conf)
+        sens = await esphome_sensor.new_sensor(conf)
         time_source = await cg.get_variable(conf[CONF_TIME_ID])
         cg.add(live_state.set_next_change(sens, time_source))
 

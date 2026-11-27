@@ -50,11 +50,11 @@ CONF_SEC_TOUCH_ID = "sec_touch_id"
 CONF_INTER_TASK_DELAY = "inter_task_delay_ms"
 CONF_GLOBAL_SETTINGS_UPDATE_INTERVAL = "global_settings_update_interval"
 CONF_OPTIONAL_CRC = "optional_crc"
+CONF_FAN_NUMBER = "fan_number"
 
 # Time programs (.specs/time-programs.md, "Configuration").
 CONF_TIME_PROGRAMS = "time_programs"
 CONF_TIME_PROGRAMS_UPDATE_INTERVAL = "time_programs_update_interval"
-CONF_FAN_NUMBER = "fan_number"
 CONF_SWITCH_TIMES = "switch_times"
 CONF_WRITE_FAILED = "write_failed"
 # Generated from switch_times before validation, never written by the user: one item per listed switch time.

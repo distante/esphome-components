@@ -1,5 +1,5 @@
-# One sub-device per fan pair for its time-program entities. Include it as a package, then give a pair's
-# `time_programs` entry the matching `device_id`:
+# Package, not a standalone example: include it from your own YAML. It declares one sub-device per fan pair for
+# its time-program entities. Include it, then give a pair's `time_programs` entry the matching `device_id`:
 #
 #   packages:
 #     sec_touch_devices: github://distante/esphome-components/components/sec_touch/examples/time-program-devices.yaml@stable

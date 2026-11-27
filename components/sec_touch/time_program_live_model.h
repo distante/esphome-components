@@ -7,6 +7,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <ctime>
 #include <optional>
 #include <string_view>
 
@@ -314,6 +315,26 @@ class LiveStateModel {
 constexpr int64_t next_change_timestamp(int64_t now_s, uint32_t ms_to_next_change) {
   const int64_t at_ms = now_s * MS_PER_S + ms_to_next_change;
   return (at_ms + MS_PER_MINUTE / 2) / MS_PER_MINUTE * SECONDS_PER_MINUTE;
+}
+
+/// Room for `YYYY-MM-DDTHH:MM:SSZ` and the NUL.
+constexpr std::size_t NEXT_CHANGE_ISO_CAPACITY = 21;
+
+struct NextChangeIso {
+  std::array<char, NEXT_CHANGE_ISO_CAPACITY> text{};
+};
+
+/// The `next_change` state: Unix time `timestamp_s` in ISO 8601 UTC, empty when no calendar date holds it. A text, not
+/// a sensor float: a float near 1.8e9 holds steps of 128 s.
+inline NextChangeIso next_change_iso(int64_t timestamp_s) {
+  NextChangeIso iso;
+  const auto time = static_cast<std::time_t>(timestamp_s);
+  std::tm utc{};
+  if (gmtime_r(&time, &utc) == nullptr) {
+    return iso;
+  }
+  std::strftime(iso.text.data(), iso.text.size(), "%Y-%m-%dT%H:%M:%SZ", &utc);
+  return iso;
 }
 
 }  // namespace sec_touch

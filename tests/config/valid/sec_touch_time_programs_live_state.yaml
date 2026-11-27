@@ -1,5 +1,5 @@
-# Every live-state entity on pair 1, one on its own device. next_change comes with no sensor: section, so the hub's
-# AUTO_LOAD must load sensor. The wifi credentials are placeholders: the build never connects.
+# Every live-state entity on pair 1, one on its own device. They come with no text_sensor: section, so the hub's
+# AUTO_LOAD must load text_sensor. The wifi credentials are placeholders: the build never connects.
 
 esphome:
   name: sec-touch-tp-live-state

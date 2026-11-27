@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#include <cmath>
 #include <ctime>
 #include <string>
 #include <vector>
@@ -12,8 +11,8 @@
 #include "esphome/components/sec_touch/time_program_live_state.h"
 #include "esphome/core/hal.h"
 
-#if !defined(USE_SENSOR) || !defined(USE_TIME)
-#error "next_change needs sensor and time in the host build (tests/host/sec_touch/sensor/ and benchmark.yaml)"
+#ifndef USE_TIME
+#error "next_change needs time in the host build (benchmark.yaml)"
 #endif
 
 namespace esphome::sec_touch::testing {
@@ -99,7 +98,7 @@ class LiveStateTest : public ::testing::Test {
     this->in_effect_.add_on_state_callback([this](const std::string &) { this->in_effect_publishes_++; });
     this->running_level_.add_on_state_callback([this](const std::string &) { this->running_level_publishes_++; });
     this->next_level_.add_on_state_callback([this](const std::string &) { this->next_level_publishes_++; });
-    this->next_change_.add_on_state_callback([this](float) { this->next_change_publishes_++; });
+    this->next_change_.add_on_state_callback([this](const std::string &) { this->next_change_publishes_++; });
   }
 
   /// Sends the first queued task. Returns what went out.
@@ -156,7 +155,7 @@ class LiveStateTest : public ::testing::Test {
   text_sensor::TextSensor in_effect_;
   text_sensor::TextSensor running_level_;
   text_sensor::TextSensor next_level_;
-  sensor::Sensor next_change_;
+  text_sensor::TextSensor next_change_;
   int in_effect_publishes_{0};
   int running_level_publishes_{0};
   int next_level_publishes_{0};
@@ -214,7 +213,7 @@ TEST_F(LiveStateTest, PublishesOnceEveryInputWasRead) {
   EXPECT_EQ(this->running_level_.get_state(), level_name(1));
   EXPECT_EQ(this->next_level_.get_state(), level_name(2));
   // The next change is a second away: now, rounded to the minute.
-  EXPECT_FLOAT_EQ(this->next_change_.get_state(), static_cast<float>(NOW_S));
+  EXPECT_EQ(this->next_change_.get_state(), next_change_iso(NOW_S).text.data());
 }
 
 // Spec "Live state": an entity publishes only when its value changes.
@@ -258,7 +257,7 @@ TEST_F(LiveStateTest, EnteringAutomatikZeitBeforeAnyClockReadClearsTheState) {
   EXPECT_FALSE(this->in_effect_.has_state());
   EXPECT_FALSE(this->running_level_.has_state());
   EXPECT_FALSE(this->next_level_.has_state());
-  EXPECT_TRUE(std::isnan(this->next_change_.get_state()));
+  EXPECT_FALSE(this->next_change_.has_state());
 }
 
 // Spec "Live state", cases: enabling a switch time whose time never read well leaves a needed input unknown.
@@ -273,7 +272,7 @@ TEST_F(LiveStateTest, EnablingASwitchTimeWhoseTimeNeverReadWellClearsTheState) {
     this->panel_answers_get(id, id == never_read_time_id ? "not a time" : panel_value(id, RUNNING));
   }
   ASSERT_EQ(this->in_effect_.get_state(), switch_time_name(1));
-  ASSERT_FALSE(std::isnan(this->next_change_.get_state()));
+  ASSERT_TRUE(this->next_change_.has_state());
   const uint8_t enabled = switch_time_bit(1) | switch_time_bit(2) | switch_time_bit(NEVER_READ);
 
   // Read twice: the second read finds the state already cleared and publishes nothing.
@@ -287,8 +286,8 @@ TEST_F(LiveStateTest, EnablingASwitchTimeWhoseTimeNeverReadWellClearsTheState) {
   EXPECT_FALSE(this->in_effect_.has_state());
   EXPECT_FALSE(this->running_level_.has_state());
   EXPECT_FALSE(this->next_level_.has_state());
-  EXPECT_TRUE(std::isnan(this->next_change_.get_state()));
-  EXPECT_EQ(this->next_change_publishes_, 2) << "the value, then one NaN";
+  EXPECT_FALSE(this->next_change_.has_state());
+  EXPECT_EQ(this->next_change_publishes_, 1) << "the value; a clear calls no state callback";
 }
 
 TEST_F(LiveStateTest, NotRunningOutsideAutomatikZeit) {
@@ -297,7 +296,20 @@ TEST_F(LiveStateTest, NotRunningOutsideAutomatikZeit) {
   EXPECT_EQ(this->in_effect_.get_state(), LIVE_STATE_NOT_RUNNING);
   EXPECT_EQ(this->running_level_.get_state(), LIVE_STATE_NOT_RUNNING);
   EXPECT_EQ(this->next_level_.get_state(), LIVE_STATE_NOT_RUNNING);
-  EXPECT_TRUE(std::isnan(this->next_change_.get_state()));
+  EXPECT_FALSE(this->next_change_.has_state());
+}
+
+// Spec "Live state", cases: not running has no next change, also after one was shown.
+TEST_F(LiveStateTest, LeavingAutomatikZeitClearsTheNextChange) {
+  this->panel_answers_every_input();
+  ASSERT_TRUE(this->next_change_.has_state());
+
+  this->hub_.add_recursive_tasks_to_get_queue();
+  this->send_next_task();
+  this->panel_answers_get(PAIR_LEVEL_ID, std::to_string(MAX_NORMAL_LEVEL));
+
+  EXPECT_EQ(this->in_effect_.get_state(), LIVE_STATE_NOT_RUNNING);
+  EXPECT_FALSE(this->next_change_.has_state());
 }
 
 // Spec "Live state": one timeout set for the next change recomputes.
@@ -343,7 +355,7 @@ TEST_F(LiveStateTest, NextChangeWaitsForTheTimeSource) {
   this->clock_.now_s = NOW_S;
   this->live_.loop();
 
-  EXPECT_FLOAT_EQ(this->next_change_.get_state(), static_cast<float>(NOW_S));
+  EXPECT_EQ(this->next_change_.get_state(), next_change_iso(NOW_S).text.data());
 }
 
 }  // namespace esphome::sec_touch::testing

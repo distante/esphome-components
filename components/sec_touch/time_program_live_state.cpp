@@ -1,7 +1,5 @@
 #include "time_program_live_state.h"
 
-#include <cmath>
-
 #include "esphome/core/controller_registry.h"
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
@@ -38,7 +36,7 @@ TimeProgramLiveState::TimeProgramLiveState(SECTouchComponent *hub, int pair) : h
 }
 
 void TimeProgramLiveState::loop() {
-#if defined(USE_SENSOR) && defined(USE_TIME)
+#ifdef USE_TIME
   if (this->next_change_waits_for_time_ && this->time_->now().is_valid()) {
     this->recompute_();
     return;
@@ -55,8 +53,8 @@ void TimeProgramLiveState::dump_config() {
   LOG_TEXT_SENSOR("  ", "Switch time in effect", this->in_effect_);
   LOG_TEXT_SENSOR("  ", "Running level", this->running_level_);
   LOG_TEXT_SENSOR("  ", "Next level", this->next_level_);
-#if defined(USE_SENSOR) && defined(USE_TIME)
-  LOG_SENSOR("  ", "Next change", this->next_change_);
+#ifdef USE_TIME
+  LOG_TEXT_SENSOR("  ", "Next change", this->next_change_);
 #endif
 }
 
@@ -130,11 +128,8 @@ void TimeProgramLiveState::clear_entities_() {
   this->clear_text_(this->in_effect_);
   this->clear_text_(this->running_level_);
   this->clear_text_(this->next_level_);
-#if defined(USE_SENSOR) && defined(USE_TIME)
-  if (this->next_change_ == nullptr || !this->next_change_->has_state() || std::isnan(this->next_change_->state)) {
-    return;
-  }
-  this->next_change_->publish_state(NAN);
+#ifdef USE_TIME
+  this->clear_text_(this->next_change_);
 #endif
 }
 
@@ -149,24 +144,26 @@ void TimeProgramLiveState::clear_text_(text_sensor::TextSensor *sensor) {
 }
 
 void TimeProgramLiveState::publish_next_change_(const LiveState &state) {
-#if defined(USE_SENSOR) && defined(USE_TIME)
+#ifdef USE_TIME
   if (this->next_change_ == nullptr) {
     return;
   }
-  float value = NAN;
-  if (state.ms_to_next_change.has_value()) {
-    if (!this->time_->now().is_valid()) {
-      ESP_LOGD(TAG, "Time source not synced yet, next change waits");
-      this->next_change_waits_for_time_ = true;
-      return;
-    }
-    value = static_cast<float>(next_change_timestamp(this->time_->timestamp_now(), *state.ms_to_next_change));
-  }
-  const bool same = std::isnan(value) ? std::isnan(this->next_change_->state) : this->next_change_->state == value;
-  if (this->next_change_->has_state() && same) {
+  if (!state.ms_to_next_change.has_value()) {
+    this->clear_text_(this->next_change_);
     return;
   }
-  this->next_change_->publish_state(value);
+  if (!this->time_->now().is_valid()) {
+    ESP_LOGD(TAG, "Time source not synced yet, next change waits");
+    this->next_change_waits_for_time_ = true;
+    return;
+  }
+  const auto iso = next_change_iso(next_change_timestamp(this->time_->timestamp_now(), *state.ms_to_next_change));
+  if (iso.text[0] == '\0') {
+    ESP_LOGW(TAG, "Time source gives a time no calendar date holds, next change unknown");
+    this->clear_text_(this->next_change_);
+    return;
+  }
+  this->publish_text_(this->next_change_, iso.text.data());
 #else
   (void) state;
 #endif

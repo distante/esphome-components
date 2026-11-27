@@ -68,7 +68,7 @@ sec_touch:
         name: "Running level"
       next_level:                 # optional text_sensor
         name: "Next level"
-      next_change:                # optional timestamp sensor
+      next_change:                # optional timestamp text_sensor
         name: "Next change"
         time_id: ha_time          # optional with a single time source
 ```
@@ -209,19 +209,19 @@ Decided in [Should sec_touch compute which switch time is in effect, and how is 
 | Switch time in effect | text_sensor | `switch time N` (N 1–5), or a state word from the cases table |
 | Running level | text_sensor | a level name ([meaning rule](#known-property-catalogue)), or a state word from the cases table |
 | Next level | text_sensor | a level name ([meaning rule](#known-property-catalogue)), or a state word from the cases table |
-| Next change | timestamp sensor | time source now + (next switch time − panel now), rounded to the minute; no value (NaN) when there is none. HA gets a float, so it can be off by up to ±64 s (readme). While the time source isn't synced, it waits. |
+| Next change | timestamp text_sensor | time source now + (next switch time − panel now), rounded to the minute, as ISO 8601 UTC; no state (unknown) when there is none. While the time source isn't synced, it waits. |
 
 The state words live in the live-state model's header ([Implementation notes](#implementation-notes)), the one definition code and tests use ([Reuse existing definitions](../.claude/skills/coding-standards/SKILL.md#reuse-existing-definitions)). `not running` is used, not `off`, because `off` is level 0's name.
 
 | Case | Switch time in effect | Running level | Next change / Next level |
 |---|---|---|---|
-| Not running (see **Running** above) | `not running` | `not running` | no value (NaN) / `not running` |
-| Automatik Zeit, no switch time enabled | `none` | `none` | no value (NaN) / `none` |
+| Not running (see **Running** above) | `not running` | `not running` | no state / `not running` |
+| Automatik Zeit, no switch time enabled | `none` | `none` | no state / `none` |
 | Two enabled switch times tied at the time in effect | `conflict` | `conflict` | as normal |
 | The next change is a tie | as normal | as normal | valid / `conflict` |
 | A tie at another time of day | no effect | no effect | no effect |
 | Exactly one enabled switch time | that switch time | its level | itself 24 h later / its level |
-| A needed input (see **Inputs** below) never read well: at boot, or once it becomes needed (Automatik Zeit starts before a good clock read; the mask enables a switch time whose time or level never read well) | no state (unknown): nothing published at boot; a shown value is cleared | same | no state at boot, no value (NaN) once a value was shown / same as Switch time in effect |
+| A needed input (see **Inputs** below) never read well: at boot, or once it becomes needed (Automatik Zeit starts before a good clock read; the mask enables a switch time whose time or level never read well) | no state (unknown): nothing published at boot; a shown value is cleared | same | same / same |
 | An input read fails or is unexpected | from the last good value of that input (for the clock: the old anchor), warning logged | same | same |
 | … and that input is needed and never read well yet | as a needed input never read well | same | same |
 

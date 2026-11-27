@@ -11,8 +11,7 @@
 
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/component.h"
-#if defined(USE_SENSOR) && defined(USE_TIME)
-#include "esphome/components/sensor/sensor.h"
+#ifdef USE_TIME
 #include "esphome/components/time/real_time_clock.h"
 #endif
 
@@ -34,8 +33,8 @@ class TimeProgramLiveState : public Component {
   void set_switch_time_in_effect(text_sensor::TextSensor *sensor) { this->in_effect_ = sensor; }
   void set_running_level(text_sensor::TextSensor *sensor) { this->running_level_ = sensor; }
   void set_next_level(text_sensor::TextSensor *sensor) { this->next_level_ = sensor; }
-#if defined(USE_SENSOR) && defined(USE_TIME)
-  void set_next_change(sensor::Sensor *sensor, time::RealTimeClock *time) {
+#ifdef USE_TIME
+  void set_next_change(text_sensor::TextSensor *sensor, time::RealTimeClock *time) {
     this->next_change_ = sensor;
     this->time_ = time;
   }
@@ -64,8 +63,8 @@ class TimeProgramLiveState : public Component {
   text_sensor::TextSensor *in_effect_{nullptr};
   text_sensor::TextSensor *running_level_{nullptr};
   text_sensor::TextSensor *next_level_{nullptr};
-#if defined(USE_SENSOR) && defined(USE_TIME)
-  sensor::Sensor *next_change_{nullptr};
+#ifdef USE_TIME
+  text_sensor::TextSensor *next_change_{nullptr};
   time::RealTimeClock *time_{nullptr};
 #endif
 

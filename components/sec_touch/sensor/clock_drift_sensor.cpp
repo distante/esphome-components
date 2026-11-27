@@ -5,6 +5,7 @@
 #include <cstdio>
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
+#include "../time_units.h"
 
 namespace esphome {
 namespace sec_touch {
@@ -48,8 +49,8 @@ void SecTouchClockDriftSensor::on_panel_clock_(const std::string &clock) {
   }
   // If the panel passed midnight since the date was read, that date is still yesterday's.
   // Rounded up, so a reading right at the boundary is skipped too.
-  uint32_t since_date_s = (millis() - this->panel_date_ms_) / 1000 + 1;
-  if (static_cast<uint32_t>(hour * 3600 + minute * 60 + second) < since_date_s) {
+  uint32_t since_date_s = (millis() - this->panel_date_ms_) / MS_PER_S + 1;
+  if (static_cast<uint32_t>(hour * SECONDS_PER_HOUR + minute * SECONDS_PER_MINUTE + second) < since_date_s) {
     ESP_LOGD(TAG, "Panel clock just passed midnight, skipping drift");
     return;
   }

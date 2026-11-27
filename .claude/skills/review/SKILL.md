@@ -95,6 +95,14 @@ Enforces the Page JS and HTML bullet of [Tooling](../coding-standards/SKILL.md#t
 
 Done when each hit is reported with its `file:line`.
 
+## Comments say why, once
+
+Enforces [Code comments](../coding-standards/SKILL.md#code-comments).
+
+1. Read every comment the diff adds or changes in `components/` and `tests/` against each bullet of the rule. Example: #149 tagged seven tests `// #139 item N:` and explained the late clock read on its constant, two methods and a test.
+
+Done when each hit is reported with its `file:line`, the bullet it breaks, and its trimmed text or "delete".
+
 ## Docs and PR text are short and visual
 
 Enforces [Docs and PR text](../coding-standards/SKILL.md#docs-and-pr-text) on the lines the diff adds or changes in every `.md`, plus the PR body and issue comments. Its bullets are the criteria.

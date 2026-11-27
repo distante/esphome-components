@@ -57,16 +57,7 @@ void TimeProgram::attach_enabled(int switch_time, TimeProgramEnabledSwitch *enti
 }
 
 void TimeProgram::watch_(int id) {
-  auto slot = time_program_slot(id);
-  if (!slot.has_value() || slot->pair != this->pair_) {
-    ESP_LOGE(TAG, "Property ID %d is not part of fan pair %d's time program", id, this->pair_);
-    return;
-  }
-  bool &watched = this->watched_[time_program_block_index(*slot)];
-  if (watched) {
-    return;
-  }
-  watched = true;
+  // The hub checks the ID belongs to the pair, and its poll list keeps each ID once.
   this->hub_->add_time_program_poll_id(this->pair_, id);
 }
 

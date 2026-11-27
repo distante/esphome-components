@@ -139,6 +139,13 @@ TEST_F(TimeProgramTest, APollThatRanBeforeTheMillisWrapIsDueOnlyAfterItsInterval
   EXPECT_TRUE(this->send_next_task().empty());
 }
 
+// #139 item 8: both switches watch the mask ID; the poll lists it once.
+TEST_F(TimeProgramTest, AnIdWatchedTwiceIsPolledOnce) {
+  const auto &poll = this->hub_.time_program_polls_[PAIR - 1];
+
+  EXPECT_EQ(std::count(poll.begin(), poll.end(), MASK_ID), 1);
+}
+
 // AC 5: the global-settings poll sends its own IDs only.
 // sec-touch: a task creation that refuses an ID returns null. A poll ID it refuses is skipped, not queued as null.
 TEST_F(TimeProgramTest, APollIdWithNoTaskIsSkipped) {

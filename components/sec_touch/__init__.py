@@ -50,7 +50,6 @@ CONF_SEC_TOUCH_ID = "sec_touch_id"
 CONF_INTER_TASK_DELAY = "inter_task_delay_ms"
 CONF_GLOBAL_SETTINGS_UPDATE_INTERVAL = "global_settings_update_interval"
 CONF_OPTIONAL_CRC = "optional_crc"
-# The total of fan pairs that the SEC-Touch shows in the screen
 
 # Time programs (.specs/time-programs.md, "Configuration").
 CONF_TIME_PROGRAMS = "time_programs"
@@ -72,6 +71,7 @@ LIVE_STATE_KEYS = LIVE_STATE_TEXT_KEYS + (CONF_NEXT_CHANGE,)
 # Generated before validation when a pair has a live-state entity, never written by the user.
 CONF_LIVE_STATE_ID = "live_state_id"
 
+# The total of fan pairs that the SEC-Touch shows in the screen
 FAN_PAIR_COUNT = len(FAN_LEVEL_IDS)
 
 

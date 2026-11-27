@@ -71,7 +71,6 @@ LIVE_STATE_KEYS = LIVE_STATE_TEXT_KEYS + (CONF_NEXT_CHANGE,)
 # Generated before validation when a pair has a live-state entity, never written by the user.
 CONF_LIVE_STATE_ID = "live_state_id"
 
-# The fan pairs the panel's screen shows
 FAN_PAIR_COUNT = len(FAN_LEVEL_IDS)
 
 
@@ -134,6 +133,7 @@ def AUTO_LOAD(config):
 
 
 FAN_NUMBER_SCHEMA = cv.int_range(min=1, max=FAN_PAIR_COUNT)
+FAN_PAIR_SCHEMA = cv.Schema({cv.Required(CONF_FAN_NUMBER): FAN_NUMBER_SCHEMA})
 
 
 def unique(what):
@@ -162,10 +162,9 @@ FIELD_ENTITIES_SCHEMA = cv.Schema(
     }
 )
 
-TIME_PROGRAM_SCHEMA = cv.Schema(
+TIME_PROGRAM_SCHEMA = FAN_PAIR_SCHEMA.extend(
     {
         cv.GenerateID(): cv.declare_id(TimeProgram),
-        cv.Required(CONF_FAN_NUMBER): FAN_NUMBER_SCHEMA,
         cv.Optional(CONF_NAME): cv.string,
         cv.Optional(CONF_DEVICE_ID): cv.sub_device_id,
         cv.Optional(

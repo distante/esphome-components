@@ -5,7 +5,7 @@ import esphome.final_validate as fv
 from .. import (
     CONF_FAN_NUMBER,
     CONF_SEC_TOUCH_ID,
-    FAN_NUMBER_SCHEMA,
+    FAN_PAIR_SCHEMA,
     sec_touch_ns,
     SECTouchComponent,
     FAN_LEVEL_IDS,
@@ -32,10 +32,9 @@ MODE_OPTIONS = [
 ]
 
 CONFIG_SCHEMA = cv.All(
-    cv.COMPONENT_SCHEMA.extend(
+    cv.COMPONENT_SCHEMA.extend(FAN_PAIR_SCHEMA).extend(
         {
             cv.GenerateID(CONF_SEC_TOUCH_ID): cv.use_id(SECTouchComponent),
-            cv.Required(CONF_FAN_NUMBER): FAN_NUMBER_SCHEMA,
             cv.Required(CONF_MODE_SELECT): select.select_schema(
                 SecTouchModeSelect,
                 icon="mdi:tune",

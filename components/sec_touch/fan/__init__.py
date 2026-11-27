@@ -6,7 +6,7 @@ from esphome.const import CONF_OUTPUT_ID
 from .. import (
     CONF_FAN_NUMBER,
     CONF_SEC_TOUCH_ID,
-    FAN_NUMBER_SCHEMA,
+    FAN_PAIR_SCHEMA,
     sec_touch_ns,
     SECTouchComponent,
     FAN_LEVEL_IDS,
@@ -26,10 +26,10 @@ CONFIG_SCHEMA = cv.All(
         {
             cv.GenerateID(CONF_OUTPUT_ID): cv.declare_id(SecTouchFan),
             cv.GenerateID(CONF_SEC_TOUCH_ID): cv.use_id(SECTouchComponent),
-            cv.Required(CONF_FAN_NUMBER): FAN_NUMBER_SCHEMA,
             cv.Optional(CONF_SPLIT_SPECIAL_MODES, default=False): cv.boolean,
         }
     )
+    .extend(FAN_PAIR_SCHEMA)
     .extend(cv.COMPONENT_SCHEMA),
 )
 

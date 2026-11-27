@@ -6,11 +6,10 @@
 #include <cstdint>
 #include <string_view>
 
+#include "../sec_touch/time_units.h"
+
 namespace esphome {
 namespace sec_touch {
-
-/// Uptime is stored in seconds and sent to the page in milliseconds.
-constexpr uint32_t MS_PER_S = 1000;
 
 /// Bytes of JSON buffered before each send.
 constexpr size_t JSON_CHUNK_BYTES = 256;

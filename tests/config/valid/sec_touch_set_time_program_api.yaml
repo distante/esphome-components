@@ -1,0 +1,70 @@
+# sec_touch.set_time_program wrapped in an api action with api.respond, as the readme's copy block does
+# (.specs/time-programs.md, "Bulk-set action"), plus a constant call from a template button.
+# The wifi credentials are placeholders: the build never connects.
+
+esphome:
+  name: sec-touch-set-time-program-api
+
+esp32:
+  board: esp32dev
+
+logger:
+  # Compiles every ESP_LOG* call, so the compile test sees -Wformat warnings.
+  level: VERY_VERBOSE
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+wifi:
+  ssid: "fixture"
+  password: "fixture-password"
+
+api:
+  actions:
+    - action: set_time_program
+      variables:
+        pair: int
+        times: string[]
+        levels: int[]
+        enabled: bool[]
+      then:
+        - sec_touch.set_time_program:
+            fan_number: !lambda return pair;
+            times: !lambda return times;
+            levels: !lambda return levels;
+            enabled: !lambda return enabled;
+            on_success:
+              - api.respond:
+            on_error:
+              - api.respond:
+                  success: false
+                  error_message: !lambda return error;
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+  time_programs:
+    - fan_number: 1
+      switch_times: [1]
+
+button:
+  - platform: template
+    name: "Winter program"
+    on_press:
+      - sec_touch.set_time_program:
+          fan_number: 1
+          times: ["06:00", "08:30", "17:00", "22:00", "00:00:00"]
+          levels: [4, 2, 4, 1, 0]
+          enabled: [true, true, true, true, false]
+          on_error:
+            - logger.log:
+                format: "set_time_program failed: %s"
+                args: [error.c_str()]

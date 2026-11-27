@@ -1,0 +1,27 @@
+# Package, not a standalone example: include it from your own YAML. It declares one sub-device per fan pair for
+# its time-program entities. Include it, then give a pair's `time_programs` entry the matching `device_id`:
+#
+#   packages:
+#     sec_touch_devices: github://distante/esphome-components/components/sec_touch/examples/time-program-devices.yaml@stable
+#
+# For other names or fewer devices, copy the devices you want into your own `esphome: devices:` instead.
+esphome:
+  devices:
+    - id: sec_touch_pair_1_time_program
+      name: "Fan pair 1 time program"
+      relation: child
+    - id: sec_touch_pair_2_time_program
+      name: "Fan pair 2 time program"
+      relation: child
+    - id: sec_touch_pair_3_time_program
+      name: "Fan pair 3 time program"
+      relation: child
+    - id: sec_touch_pair_4_time_program
+      name: "Fan pair 4 time program"
+      relation: child
+    - id: sec_touch_pair_5_time_program
+      name: "Fan pair 5 time program"
+      relation: child
+    - id: sec_touch_pair_6_time_program
+      name: "Fan pair 6 time program"
+      relation: child

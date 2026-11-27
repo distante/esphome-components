@@ -8,6 +8,8 @@
 #include <functional>
 #include "protocol_ids.h"
 #include "data_message.h"
+#include "scan_outcome.h"
+#include "time_program_ids.h"
 
 namespace esphome {
 namespace sec_touch {
@@ -33,10 +35,22 @@ using StringUpdateCallbackListener = std::function<void(int property_id, const s
 // Called when the task queue is empty and no task is awaiting a response
 using QueueEmptyListener = std::function<void()>;
 
+struct BaseTask;
+/// Called once for every task that ends: answered, refused, malformed (after its one retry, if any), timed out, or
+/// dropped from the queue when scan mode starts (as a timeout). The task is gone once the listener returns.
+using TaskEndListener = std::function<void(const BaseTask &task, TaskEnd end)>;
+
 /**
  * Used to couple `SetDataTask->id` with the level_id or label_id for example
  */
-enum class TaskTargetType { LEVEL, LABEL, GLOBAL_SETTING };
+enum class TaskTargetType {
+  LEVEL,
+  LABEL,
+  GLOBAL_SETTING,
+  TIME_PROGRAM,
+  /// The sniffer's own task (create_unchecked): a scan query or a write probe step. Only these set the scan outcome.
+  SNIFFER,
+};
 enum class TaskType {
   SET_DATA,
   GET_DATA,
@@ -59,6 +73,10 @@ class EnumToString {
         return "LABEL";
       case TaskTargetType::GLOBAL_SETTING:
         return "GLOBAL_SETTING";
+      case TaskTargetType::TIME_PROGRAM:
+        return "TIME_PROGRAM";
+      case TaskTargetType::SNIFFER:
+        return "SNIFFER";
       default:
         return "UNKNOWN";
     }
@@ -141,6 +159,11 @@ struct BaseTask {
   int property_id;
   /// Already sent once more after its reply was dropped (should_retry_get).
   bool retried{false};
+  /// Dropped by the hub when scan mode started or stopped: it ends as a timeout, unsent or with its answer cut off.
+  bool dropped{false};
+  /// Tells the task apart from other tasks of its ID when it ends: a priority GET (add_priority_get_task) and a
+  /// latest-wins SET (add_set_task_latest_wins) carry one; 0 for other tasks.
+  uint32_t ticket{0};
 };
 
 struct SetDataTask : public BaseTask {
@@ -149,26 +172,31 @@ struct SetDataTask : public BaseTask {
   static std::unique_ptr<SetDataTask> create(TaskTargetType targetType, int property_id, const char *value) {
     if ((targetType == TaskTargetType::LEVEL && contains(FAN_LEVEL_IDS, property_id)) ||
         (targetType == TaskTargetType::LABEL && contains(FAN_LABEL_IDS, property_id)) ||
-        (targetType == TaskTargetType::GLOBAL_SETTING && contains(GLOBAL_SETTING_IDS, property_id))) {
+        (targetType == TaskTargetType::GLOBAL_SETTING && contains(GLOBAL_SETTING_IDS, property_id)) ||
+        (targetType == TaskTargetType::TIME_PROGRAM && time_program_slot(property_id).has_value())) {
       return std::unique_ptr<SetDataTask>(new SetDataTask(targetType, property_id, value));  // Valid task
     }
     return nullptr;  // Null unique_ptr if validation fails
   }
 
-  // Bypasses ID validation — for the sniffer's write probe only. A value over SET_VALUE_CAP is cut there. The LEVEL
-  // target type is a placeholder: no SET reads it.
+  // Bypasses ID validation — for the sniffer's write probe only. A value over SET_VALUE_CAP is cut there.
   static std::unique_ptr<SetDataTask> create_unchecked(int property_id, const char *value) {
-    return std::unique_ptr<SetDataTask>(new SetDataTask(TaskTargetType::LEVEL, property_id, value));
+    return std::unique_ptr<SetDataTask>(new SetDataTask(TaskTargetType::SNIFFER, property_id, value));
   }
 
   TaskType get_task_type() const override { return TaskType::SET_DATA; }
+
+  /// Replaces the value to send; one over SET_VALUE_CAP is cut.
+  void set_value(const char *value) {
+    std::strncpy(this->value, value, sizeof(this->value) - 1);
+    this->value[sizeof(this->value) - 1] = '\0';  // Ensure null termination
+  }
 
  private:
   SetDataTask(TaskTargetType targetType, int property_id, const char *value) {
     this->targetType = targetType;
     this->property_id = property_id;
-    std::strncpy(this->value, value, sizeof(this->value) - 1);
-    this->value[sizeof(this->value) - 1] = '\0';  // Ensure null termination
+    this->set_value(value);
   }
 };
 
@@ -176,7 +204,8 @@ struct GetDataTask : public BaseTask {
   static std::unique_ptr<GetDataTask> create(TaskTargetType targetType, int property_id) {
     if ((targetType == TaskTargetType::LEVEL && contains(FAN_LEVEL_IDS, property_id)) ||
         (targetType == TaskTargetType::LABEL && contains(FAN_LABEL_IDS, property_id)) ||
-        (targetType == TaskTargetType::GLOBAL_SETTING && contains(GLOBAL_SETTING_IDS, property_id))) {
+        (targetType == TaskTargetType::GLOBAL_SETTING && contains(GLOBAL_SETTING_IDS, property_id)) ||
+        (targetType == TaskTargetType::TIME_PROGRAM && time_program_slot(property_id).has_value())) {
       return std::unique_ptr<GetDataTask>(new GetDataTask(targetType, property_id));  // Valid task
     }
     return nullptr;  // Null unique_ptr if validation fails
@@ -184,7 +213,7 @@ struct GetDataTask : public BaseTask {
 
   // Bypasses ID validation — for sniffer/discovery use only
   static std::unique_ptr<GetDataTask> create_unchecked(int property_id) {
-    return std::unique_ptr<GetDataTask>(new GetDataTask(TaskTargetType::LEVEL, property_id));
+    return std::unique_ptr<GetDataTask>(new GetDataTask(TaskTargetType::SNIFFER, property_id));
   }
 
   TaskType get_task_type() const override { return TaskType::GET_DATA; }

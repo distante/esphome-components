@@ -1,0 +1,41 @@
+# Time programs on the node's device: pair 1 takes its fan entry's name, pair 6 has no fan entry. The refresh button
+# and the write_failed event come with no button: or event: section, so the hub's AUTO_LOAD must load them.
+
+esphome:
+  name: sec-touch-time-programs
+
+esp32:
+  board: esp32dev
+
+logger:
+  # Compiles every ESP_LOG* call, so the compile test sees -Wformat warnings.
+  level: VERY_VERBOSE
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+  time_programs_update_interval: 10min
+  time_programs:
+    - fan_number: 1
+      switch_times: [1, 2]
+      refresh:
+        name: "Kellerraum time program refresh"
+      write_failed:
+        name: "Kellerraum time program write failed"
+    - fan_number: 6
+
+fan:
+  - platform: sec_touch
+    fan_number: 1
+    name: "Kellerraum"

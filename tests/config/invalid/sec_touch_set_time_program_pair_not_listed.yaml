@@ -1,0 +1,34 @@
+# expect-error: fan_number 2 is not listed in sec_touch time_programs
+# A constant fan_number is checked at config time (.specs/time-programs.md, "Bulk-set action").
+
+esphome:
+  name: sec-touch-bulk-pair-not-listed
+  on_boot:
+    - sec_touch.set_time_program:
+        fan_number: 2
+        times: ["06:00", "08:30", "17:00", "22:00", "00:00"]
+        levels: [4, 2, 4, 1, 0]
+        enabled: [true, true, true, true, false]
+
+esp32:
+  board: esp32dev
+
+logger:
+  level: VERY_VERBOSE
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+  time_programs:
+    - fan_number: 1

@@ -1,0 +1,31 @@
+# expect-error: Duplicate datetime entity with name 'Switch time 1 time' found on device 'sec_touch_pair_1_time_program'
+# Two pairs on one device: their field entities' names repeat on it.
+
+esphome:
+  name: tp-name-twice-one-device
+
+packages:
+  sec_touch_devices: !include ../../../components/sec_touch/examples/time-program-devices.yaml
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+  time_programs:
+    - fan_number: 1
+      device_id: sec_touch_pair_1_time_program
+    - fan_number: 2
+      device_id: sec_touch_pair_1_time_program

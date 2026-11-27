@@ -76,6 +76,37 @@ def test_parses_the_known_property_ids() -> None:
     assert catalogue["clockId"] == 2
 
 
+def test_parses_the_time_program_ids_pair_major() -> None:
+    catalogue = parse_catalogue()
+
+    assert catalogue.get("timeProgramEnabledIds") == [101, 112, 123, 134, 145, 156]
+    assert catalogue.get("timeProgramTimeIds") == [
+        102, 103, 104, 105, 106,
+        113, 114, 115, 116, 117,
+        124, 125, 126, 127, 128,
+        135, 136, 137, 138, 139,
+        146, 147, 148, 149, 150,
+        157, 158, 159, 160, 161,
+    ]
+    assert catalogue.get("timeProgramLevelIds") == [
+        107, 108, 109, 110, 111,
+        118, 119, 120, 121, 122,
+        129, 130, 131, 132, 133,
+        140, 141, 142, 143, 144,
+        151, 152, 153, 154, 155,
+        162, 163, 164, 165, 166,
+    ]
+
+
+def test_parses_the_switch_time_rules() -> None:
+    catalogue = parse_catalogue()
+
+    assert catalogue.get("switchTimeCount") == 5
+    # A switch time takes the fan levels up to Automatic CO2 (9).
+    assert catalogue.get("maxSwitchTimeLevel") == 9
+    assert catalogue.get("enabledMaskNames") == {"none": "none enabled", "separator": ", ", "suffix": " enabled"}
+
+
 def test_parses_a_name_for_every_level_including_not_connected() -> None:
     level_names = parse_catalogue()["levelNames"]
 

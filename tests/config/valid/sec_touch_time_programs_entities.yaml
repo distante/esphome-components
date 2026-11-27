@@ -1,0 +1,61 @@
+# One pair on its own device with every time-program entity, so the entity test can check each one's category and
+# device. `fan:` is a single entry, not a list, as ESPHome allows. The wifi credentials are placeholders: the build
+# never connects.
+
+esphome:
+  name: sec-touch-tp-entities
+  devices:
+    - id: pair_1_device
+      name: "Kellerraum time program"
+      relation: child
+
+esp32:
+  board: esp32dev
+
+logger:
+  # Compiles every ESP_LOG* call, so the compile test sees -Wformat warnings.
+  level: VERY_VERBOSE
+
+wifi:
+  ssid: "fixture"
+  password: "fixture-password"
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+time:
+  - platform: sntp
+    id: sntp_time
+
+sec_touch:
+  uart_id: sec_touch_uart
+  time_programs:
+    - fan_number: 1
+      device_id: pair_1_device
+      switch_times: [1, 2]
+      refresh:
+        name: "Refresh"
+      write_failed:
+        name: "Write failed"
+      switch_time_in_effect:
+        name: "Switch time in effect"
+      running_level:
+        name: "Running level"
+      next_level:
+        name: "Next level"
+      next_change:
+        name: "Next change"
+
+fan:
+  platform: sec_touch
+  fan_number: 1
+  name: "Kellerraum"

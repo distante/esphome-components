@@ -46,13 +46,14 @@ Decided in [How do the sniffer goal and the catalogue reach the device–page co
 
 **When started** (with a goal):
 - Regular polling stops completely. Tasks already queued (e.g. pending fan SET commands) are discarded.
+- A request still in flight is dropped too. The first query waits until its reply arrives or times out, so a late reply ends no query.
 - Registered component listeners stop receiving updates.
 - The sniffer queries the goal's IDs one at a time, from the goal's first ID. A discover start with an **ID list** (a narrowed capture, [contract](#devicepage-contract)) queries only the listed IDs, in ascending order. The next query is issued only after the previous answer (or timeout) is processed.
 - In discover, known IDs are skipped. Their query status is left as it is.
 
 **When stopped**, or when the run completes:
 - Scanning stops immediately.
-- Regular polling resumes at once, without waiting for the next poll cycle.
+- Regular polling resumes at once, without waiting for the next poll cycle. Its first request waits until the reply to a query still in flight arrives or times out.
 
 **One run at a time.** The device has one exclusive slot for a scan (plain or capture), a write probe and a restore. A start of any of them while another runs is refused with 409 ([contract](#devicepage-contract)). Decided in [How do capture scans and write probes reach the device–page contract?](https://github.com/distante/esphome-components/issues/99).
 
@@ -446,7 +447,7 @@ Decided in [What is the contract between the device and the page?](https://githu
 Decided in [How do raw strings and registered IDs reach the sniffer from the hub?](https://github.com/distante/esphome-components/issues/25).
 
 1. **Message tap replaces the raw listener.** `RawMessageCallbackListener (command_id, property_id, int)` becomes a tap `(command_id, property_id, const std::string &raw_value)`, registered with e.g. `register_message_tap`. It fires for **every** data message in every mode, **before** the hub routes to entity listeners. In scan mode routing stops after the tap, as today. The sniffer is the only user.
-2. **Scan outcome from the hub.** `get_last_scan_task_timed_out()` becomes `get_last_scan_outcome()` → `ok` / `nak` / `timeout`, set by `cleanup_after_task_complete` only while scan mode is active. A reply that arrives but can't be parsed counts as `timeout`, so the sniffer retries it once like a missing reply. `enter_scan_mode()` resets the outcome to `ok`, so a scan stopped during its retry wait can't hand a stale `timeout` to the next scan. The sniffer reads it in `on_queue_empty_`, so the queue-empty scan loop stays.
+2. **Scan outcome from the hub.** `get_last_scan_task_timed_out()` becomes `get_last_scan_outcome()` → `ok` / `nak` / `timeout`, set by `cleanup_after_task_complete` only while scan mode is active. Only the sniffer's own tasks set it: those built by `create_unchecked` (target `SNIFFER`). A write that runs during a scan (a fan or time-program SET, its read-back GET) and the late reply to a dropped task leave it alone. A reply that arrives but can't be parsed counts as `timeout`, so the sniffer retries it once like a missing reply. `enter_scan_mode()` resets the outcome to `ok`, so a scan stopped during its retry wait can't hand a stale `timeout` to the next scan. The sniffer reads it in `on_queue_empty_`, so the queue-empty scan loop stays.
 3. **`No listener for property_id` warning** fires only when no entity listener matched **and** no tap is registered.
 4. **Registered flag** comes from `is_property_registered()` when data is served; the tap does not carry it.
 5. **Unchecked SET.** `SetDataTask::create_unchecked(id, value)`, like `GetDataTask::create_unchecked`, and `add_discovery_set_task(id, value)` let the write probe SET an unknown ID. The value fits the existing 16-byte buffer. **It works only in scan mode:** outside it, `add_discovery_set_task` queues nothing, logs a warning and returns `false`, so outside scan mode nothing can write an unknown ID. In scan mode `cleanup_after_task_complete` records the SET's outcome in `get_last_scan_outcome()` (ACK = `ok`), and the sniffer's queue-empty loop drives the probe's steps from it. Decided in [How do capture scans and write probes reach the device–page contract?](https://github.com/distante/esphome-components/issues/99); the scan-mode guard in [How do the decisions become the updated sniffer spec, and how is it sliced?](https://github.com/distante/esphome-components/issues/101).
@@ -477,6 +478,8 @@ A write probe's timed-out SET (the probe's or the restore's) waits the same 5 s 
 The watchdog check runs regardless of whether the task queue is empty: tasks are popped when dispatched, so the queue is empty while waiting. The check must be unconditional in `loop()`.
 
 Stopping the scan during the 5 s wait cancels the retry and resumes normal polling immediately.
+
+A write that ends during a wait (the 5 s retry wait or the 160 ms gap before the next query), such as an HA SET and its read-back GET, queues no scan query of its own: the waiting query goes out when its wait ends, so each ID is queried once (twice with the retry) and gets its query status.
 
 ### RAM only
 

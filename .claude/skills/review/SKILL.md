@@ -33,6 +33,34 @@ Enforces [Tests](../coding-standards/SKILL.md#tests): a removal is a change, so 
 
 Done when every removed piece of state has its readers listed, and each reader the removal changes has a test.
 
+## Every task end reaches its listeners
+
+Enforces [Error handling](../coding-standards/SKILL.md#c-style): a task that ends any way but the usual one still leaves no state behind.
+
+1. List every path in the diff that ends, drops, clears or replaces a queued or in-flight task: answer, NAK, timeout, retry give-up, scan entry and exit, queue clear. Check that each one tells the task-end listeners. Example: `exit_scan_mode` reset the in-flight task without notifying, so a bulk call stayed `busy` and a pending mask read blocked every later switch write until reboot.
+2. For each pending flag or busy state the diff adds, name the task end that clears it on every path in step 1. A state with no clearing end on some path is a finding.
+3. For each path that skips a step the usual end performs (a read-back, a compare), check that the outcome reports that the step was skipped, not success.
+
+Done when each end path has its listener call, and each pending state has a clearing end on every path.
+
+## Every codegen path builds next to every platform
+
+Enforces the Config compile layer of [Tests](../coding-standards/SKILL.md#tests): a codegen path has a fixture that builds it.
+
+1. For each `to_code` path the diff adds or changes, find a compiled valid fixture that enables it together with every platform of the same component. Example: time-program codegen called `select.new_select`, but once a YAML also had `select: - platform: sec_touch`, Python bound the package's `select` to `sec_touch/select/` and the build crashed; the time-program fixtures had no sec_touch platforms and `sec_touch_all_platforms` had no time programs.
+2. Check that no module name a component's `__init__.py` imports matches one of its own sub-folders or `.py` files.
+
+Done when each codegen path names its fixture, and each import that shares a name with a sub-module is reported with its `file:line`.
+
+## A result that goes back to unknown clears what it showed
+
+Enforces [Error handling](../coding-standards/SKILL.md#c-style): a state that turns unknown leaves no stale value on display.
+
+1. List every function the diff lets return "nothing" (nullopt, no state, an empty result) after it returned a value, such as a model that loses a needed input.
+2. For each, follow its caller and check that the entities or state built from the earlier value are cleared, and that any timer armed from it is disarmed. Example: after live state began needing only some inputs, enabling a switch time whose time never read well made `compute()` return nullopt, and `recompute_()` returned early, leaving `not running` shown.
+
+Done when each listed function has its caller traced, and each stale display is reported with its `file:line`.
+
 ## No restated rules in skills and docs for agents
 
 Enforces [coding-standards](../coding-standards/SKILL.md)' single source: every rule lives there once.
@@ -76,3 +104,12 @@ Enforces the "Facts match their source" bullet of [Docs and PR text](../coding-s
 2. Look up every config key the text calls optional, recommended or required in its schema: the component's `__init__.py`, or the vendored ESPHome under `esphome/`. Example: "ideally with `relation: child`" while ESPHome 2026.11.0 has `relation` as `cv.Required`.
 
 Done when each stated number has its recount and each key its schema line, and each mismatch is reported with its `file:line` and the source it contradicts.
+
+## Every doc names an ID's current readers
+
+Enforces the "Facts match their source" bullet of [Docs and PR text](../coding-standards/SKILL.md#docs-and-pr-text) for docs the diff leaves untouched.
+
+1. List every property ID whose pollers, readers or writers the diff changes (a feature starts or stops polling it, a listener moves, a write path is added).
+2. For each, grep every `.md` in the repo (readmes, `RAW_VALUES.md`, `.specs/`, skills) for the ID and its name, and read each mention's claim about who polls, reads or writes it. Example: live state stopped polling the panel date, yet `RAW_VALUES.md` and the readme's "Date and Clock" line still named only `clock_drift` as reading IDs 1 and 2.
+
+Done when each listed ID has its grep, and each mention naming old readers or writers is reported with its `file:line`.

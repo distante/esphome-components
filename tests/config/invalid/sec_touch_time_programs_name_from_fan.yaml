@@ -1,0 +1,35 @@
+# expect-error: Duplicate switch entity with name 'Kellerraum Switch time 4 enabled'
+# No device_id or name: the fan entry's name prefixes the field names.
+
+esphome:
+  name: tp-name-from-fan
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+  time_programs:
+    - fan_number: 2
+
+fan:
+  - platform: sec_touch
+    fan_number: 2
+    name: "Kellerraum"
+
+switch:
+  - platform: template
+    name: "Kellerraum Switch time 4 enabled"
+    optimistic: true

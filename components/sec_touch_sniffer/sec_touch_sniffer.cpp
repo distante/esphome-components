@@ -181,12 +181,13 @@ void SecTouchSniffer::begin_scan_(const ScanRun &run) {
   this->scan_completed_ = false;
   this->scan_ran_ = true;
   this->scan_retry_pending_ = false;
+  this->scan_query_scheduled_ = false;
   this->pending_query_id_ = NO_PENDING_QUERY;
   this->running_ = Running::RUNNING_SCAN;
   this->is_scanning_ = true;
   this->parent_->enter_scan_mode();
-  // First task is submitted by on_queue_empty_() which fires immediately because
-  // enter_scan_mode() cleared the queue and reset the running task state
+  // First task is submitted by on_queue_empty_(): enter_scan_mode() cleared the queue, so it fires once the line is
+  // free (at once, or after the reply or watchdog of the task it dropped in flight).
 }
 
 void SecTouchSniffer::stop_scan() {
@@ -201,6 +202,7 @@ void SecTouchSniffer::end_scan_(bool completed) {
   this->cancel_timeout("scan_retry");
   this->cancel_timeout("scan_next");
   this->scan_retry_pending_ = false;
+  this->scan_query_scheduled_ = false;
   this->pending_query_id_ = NO_PENDING_QUERY;
   this->scan_completed_ = completed;
   this->is_scanning_ = false;
@@ -219,6 +221,17 @@ void SecTouchSniffer::query_(int property_id) {
   ESP_LOGD(TAG, "Scan: queuing GET for property_id %d", property_id);
   this->pending_query_id_ = property_id;
   this->parent_->add_discovery_get_task(property_id);
+}
+
+void SecTouchSniffer::schedule_scan_query_(const char *name, uint32_t delay_ms) {
+  this->scan_query_scheduled_ = true;
+  this->set_timeout(name, delay_ms, [this]() {
+    this->scan_query_scheduled_ = false;
+    if (!this->is_scanning_) {
+      return;
+    }
+    this->query_(this->take_next_scan_id_());
+  });
 }
 
 void SecTouchSniffer::on_queue_empty_() {
@@ -244,6 +257,10 @@ void SecTouchSniffer::on_queue_empty_() {
 }
 
 void SecTouchSniffer::on_scan_queue_empty_() {
+  // Another task (an HA write and its read-back) ended while the next scan query waits: that query still goes out.
+  if (this->scan_query_scheduled_) {
+    return;
+  }
   if (this->pending_query_id_ != NO_PENDING_QUERY) {
     const int queried = this->pending_query_id_;
     this->pending_query_id_ = NO_PENDING_QUERY;
@@ -254,12 +271,7 @@ void SecTouchSniffer::on_scan_queue_empty_() {
       this->scan_retry_pending_ = true;
       // Back at the timed-out ID for the wait, so the page's `next` names the ID the retry queries.
       this->current_scan_id_ = queried;
-      this->set_timeout("scan_retry", SCAN_RETRY_DELAY_MS, [this]() {
-        if (!this->is_scanning_) {
-          return;
-        }
-        this->query_(this->take_next_scan_id_());
-      });
+      this->schedule_scan_query_("scan_retry", SCAN_RETRY_DELAY_MS);
       return;
     }
     if (outcome == ScanOutcome::SCAN_OUTCOME_TIMEOUT) {
@@ -276,12 +288,7 @@ void SecTouchSniffer::on_scan_queue_empty_() {
     return;
   }
   // current_scan_id_ stays at the ID for the wait, so the page's `next` names it until the query is queued.
-  this->set_timeout("scan_next", SCAN_NEXT_DELAY_MS, [this]() {
-    if (!this->is_scanning_) {
-      return;
-    }
-    this->query_(this->take_next_scan_id_());
-  });
+  this->schedule_scan_query_("scan_next", SCAN_NEXT_DELAY_MS);
 }
 
 // --- Write probes ---

@@ -9,6 +9,8 @@
 #include <vector>
 
 #include "../sec_touch/common.h"
+#include "esphome/components/sec_touch/time_program.h"
+#include "esphome/components/sec_touch/time_program_ids.h"
 #include "esphome/components/sec_touch_sniffer/sec_touch_sniffer.h"
 #include "esphome/components/sec_touch_sniffer/scan_goal.h"
 #include "esphome/components/sec_touch_sniffer/write_probe.h"
@@ -19,13 +21,22 @@ namespace esphome::sec_touch::testing {
 
 namespace {
 
-/// An ID no entity registers.
-constexpr int UNREGISTERED_ID = 133;
+/// An ID no entity registers, and unknown: the one after the time programs.
+constexpr int UNREGISTERED_ID = TIME_PROGRAM_LEVEL_IDS.back() + 1;
 /// An ID an entity registers: fan pair 1's level.
 constexpr int REGISTERED_ID = FAN_LEVEL_IDS[0];
 
 /// Another ID no entity registers, scanned right after UNREGISTERED_ID.
 constexpr int NEXT_UNREGISTERED_ID = UNREGISTERED_ID + 1;
+// Tests scan UNREGISTERED_ID up to NEXT_UNREGISTERED_ID + 1 as three unknown IDs in a row.
+static_assert(!is_known_property(UNREGISTERED_ID) && !is_known_property(NEXT_UNREGISTERED_ID) &&
+                  !is_known_property(NEXT_UNREGISTERED_ID + 1),
+              "the unregistered test IDs must be unknown properties");
+
+/// The switch time an entity writes during a scan: fan pair 1, switch time 1, level index 4.
+constexpr int WRITTEN_PAIR = 1;
+constexpr int WRITTEN_SWITCH_TIME = 1;
+constexpr size_t WRITTEN_LEVEL = 4;
 
 /// What the panel holds before a probe (probe_fixture.h's ORIGINAL).
 const std::string PROBE_ORIGINAL = "01";
@@ -41,6 +52,9 @@ std::vector<int> known_ids_ascending() {
   std::vector<int> ids(FAN_LEVEL_IDS.begin(), FAN_LEVEL_IDS.end());
   ids.insert(ids.end(), FAN_LABEL_IDS.begin(), FAN_LABEL_IDS.end());
   ids.insert(ids.end(), GLOBAL_SETTING_IDS.begin(), GLOBAL_SETTING_IDS.end());
+  ids.insert(ids.end(), TIME_PROGRAM_ENABLED_IDS.begin(), TIME_PROGRAM_ENABLED_IDS.end());
+  ids.insert(ids.end(), TIME_PROGRAM_TIME_IDS.begin(), TIME_PROGRAM_TIME_IDS.end());
+  ids.insert(ids.end(), TIME_PROGRAM_LEVEL_IDS.begin(), TIME_PROGRAM_LEVEL_IDS.end());
   std::sort(ids.begin(), ids.end());
   return ids;
 }
@@ -86,11 +100,7 @@ struct SnifferRig {
     this->sniffer.setup();
   }
 
-  void loop_hub() {
-    for (int i = 0; i < 3; i++) {
-      this->hub.loop();
-    }
-  }
+  void loop_hub() { this->hub.loop_times(3); }
 
   void receive(int property_id, const std::string &value) {
     this->uart.push_rx(data_frame(property_id, value));
@@ -129,7 +139,7 @@ struct SnifferRig {
 
   /// Lets the GET in flight run into the hub's watchdog, as if the panel never answered.
   void time_out_scan_query() {
-    this->hub.task_start_time_ = millis() - (TASK_TIMEOUT_MS + 1);
+    this->hub.age_task_past_watchdog();
     this->loop_hub();
   }
 
@@ -236,6 +246,70 @@ TEST(SecTouchSnifferTest, ATimedOutScanQueryIsRetriedOnceThenSkipped) {
   EXPECT_EQ(rig.gets_sent_for(UNREGISTERED_ID), 2);
   EXPECT_FALSE(rig.sniffer.is_scanning());
   EXPECT_EQ(rig.sniffer.store().fields(UNREGISTERED_ID).query_status, ScanOutcome::SCAN_OUTCOME_TIMEOUT);
+}
+
+// Writes stay allowed during a scan: a time-program write (SET, then its read-back GET) that ends after a timed-out
+// scan query leaves that query timed out, so the scan retries it. Waits out SCAN_RETRY_DELAY_MS on the real clock.
+TEST(SecTouchSnifferTest, AWriteEndingAfterATimedOutScanQueryLeavesItTimedOut) {
+  SnifferRig rig;
+  rig.hub.set_inter_task_delay(0);
+  TimeProgram program{&rig.hub, WRITTEN_PAIR};
+  TimeProgramLevelSelect level{&program, WRITTEN_SWITCH_TIME};
+  const int level_id = time_program_level_id(WRITTEN_PAIR, WRITTEN_SWITCH_TIME);
+  const std::string level_text(format_switch_time_level(WRITTEN_LEVEL).data());
+  rig.start_scan(discover(UNREGISTERED_ID, UNREGISTERED_ID));
+  rig.send_scan_query(SecTouchSniffer::SCAN_NEXT_DELAY_MS);
+  level.make_call().set_index(WRITTEN_LEVEL).perform();
+
+  rig.time_out_scan_query();  // the write's SET goes out next
+  ASSERT_EQ(rig.hub.current_running_task_type, TaskType::SET_DATA);
+  rig.uart.push_rx(ack_frame());
+  rig.loop_hub();                     // its read-back GET goes out
+  rig.receive(level_id, level_text);  // the queue runs empty
+
+  rig.send_scan_query(SCAN_RETRY_DELAY_MS);
+  rig.time_out_scan_query();
+
+  EXPECT_EQ(rig.gets_sent_for(UNREGISTERED_ID), 2);
+  EXPECT_EQ(rig.sniffer.store().fields(UNREGISTERED_ID).query_status, ScanOutcome::SCAN_OUTCOME_TIMEOUT);
+  // The scan must have ended: else the rig's stop would call the listeners of the already destroyed program and level.
+  EXPECT_FALSE(rig.sniffer.is_scanning());
+}
+
+// A write (SET, then its read-back GET) that ends during the retry wait empties the queue with no scan query in
+// flight: the scan still sends only the retry, then the next ID, and records each one's status. Waits out
+// SCAN_RETRY_DELAY_MS on the real clock.
+TEST(SecTouchSnifferTest, AWriteEndingDuringTheRetryWaitQueuesNoExtraScanQuery) {
+  SnifferRig rig;
+  rig.hub.set_inter_task_delay(0);
+  TimeProgram program{&rig.hub, WRITTEN_PAIR};
+  TimeProgramLevelSelect level{&program, WRITTEN_SWITCH_TIME};
+  const int level_id = time_program_level_id(WRITTEN_PAIR, WRITTEN_SWITCH_TIME);
+  const std::string level_text(format_switch_time_level(WRITTEN_LEVEL).data());
+  rig.start_scan(discover(UNREGISTERED_ID, NEXT_UNREGISTERED_ID));
+  rig.send_scan_query(SecTouchSniffer::SCAN_NEXT_DELAY_MS);
+  rig.time_out_scan_query();  // the retry wait begins
+
+  level.make_call().set_index(WRITTEN_LEVEL).perform();
+  rig.loop_hub();  // the write's SET goes out
+  ASSERT_EQ(rig.hub.current_running_task_type, TaskType::SET_DATA);
+  rig.uart.push_rx(ack_frame());
+  rig.loop_hub();                     // its read-back GET goes out
+  rig.receive(level_id, level_text);  // the queue runs empty inside the retry wait
+  rig.send_scan_query(SecTouchSniffer::SCAN_NEXT_DELAY_MS);
+  ASSERT_EQ(rig.gets_sent_for(UNREGISTERED_ID), 1) << "the retry went out before its wait ended";
+
+  rig.send_scan_query(SCAN_RETRY_DELAY_MS - SecTouchSniffer::SCAN_NEXT_DELAY_MS);
+  rig.receive(UNREGISTERED_ID, "10");
+  rig.answer_scan_query(NEXT_UNREGISTERED_ID, "11");
+
+  EXPECT_EQ(rig.gets_sent_for(UNREGISTERED_ID), 2);
+  EXPECT_EQ(rig.gets_sent_for(NEXT_UNREGISTERED_ID), 1);
+  const std::string ok = scan_outcome_name(ScanOutcome::SCAN_OUTCOME_OK);
+  EXPECT_EQ(query_status_name(rig.sniffer.store().fields(UNREGISTERED_ID)), ok);
+  EXPECT_EQ(query_status_name(rig.sniffer.store().fields(NEXT_UNREGISTERED_ID)), ok);
+  // The scan must have ended: else the rig's stop would call the listeners of the already destroyed program and level.
+  EXPECT_FALSE(rig.sniffer.is_scanning());
 }
 
 // --- Scan goals ---
@@ -549,11 +623,6 @@ struct ProbeRig : SnifferRig {
   ~ProbeRig() { this->hub.exit_scan_mode(); }
 };
 
-std::vector<uint8_t> concat(std::vector<uint8_t> a, const std::vector<uint8_t> &b) {
-  a.insert(a.end(), b.begin(), b.end());
-  return a;
-}
-
 }  // namespace
 
 // The whole sequence on the wire: GET the original, SET the value, read it back, restore, verify.
@@ -586,6 +655,23 @@ TEST(SecTouchSnifferTest, AWritableProbeRunsOnTheWireAndRestores) {
   // The probe's GETs pass the tap like any data message.
   EXPECT_EQ(rig.sniffer.store().raw_value(UNREGISTERED_ID), PROBE_ORIGINAL);
   EXPECT_FALSE(rig.sniffer.is_probing());
+}
+
+// A write the panel refuses during a probe (a fan SET; writes stay allowed in scan mode) leaves the probe's answered
+// GET ok, so the probe goes on to its SET.
+TEST(SecTouchSnifferTest, AWriteRefusedDuringAProbeLeavesItsGetOk) {
+  ProbeRig rig;
+  rig.start(ProbeKind::PROBE_KIND_PROBE, PROBE_VALUE);
+  const std::string fan_level = "5";
+  rig.hub.add_set_task(SetDataTask::create(TaskTargetType::LEVEL, REGISTERED_ID, fan_level.c_str()));
+  rig.take_sent();
+
+  rig.receive(UNREGISTERED_ID, PROBE_ORIGINAL);
+  ASSERT_EQ(rig.take_sent(), concat(ack_frame(), set_frame(REGISTERED_ID, fan_level)));
+  rig.uart.push_rx(nak_frame());
+  rig.loop_hub();
+
+  EXPECT_EQ(rig.take_sent(), set_frame(UNREGISTERED_ID, PROBE_VALUE));
 }
 
 TEST(SecTouchSnifferTest, AProbePausesPollingUntilItEnds) {

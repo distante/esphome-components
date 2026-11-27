@@ -9,6 +9,13 @@ export const FIXTURE_CATALOGUE = {
   summerVentilationId: 30,
   dateId: 31,
   clockId: 32,
+  // Two pairs of two switch times each: enabled mask, times, levels per pair, as in protocol_ids.h.
+  timeProgramEnabledIds: [60, 65],
+  timeProgramTimeIds: [61, 62, 66, 67],
+  timeProgramLevelIds: [63, 64, 68, 69],
+  switchTimeCount: 2,
+  maxSwitchTimeLevel: 7,
+  enabledMaskNames: { none: "none enabled", separator: ", ", suffix: " enabled" },
   levelNames: { 0: "off", 3: "level 3", 7: "Burst", 255: "not connected" },
   labelNames: ["-", "Bad", "Küche"],
   summerVentilationNames: { "0A00": "on", "0800": "off" },

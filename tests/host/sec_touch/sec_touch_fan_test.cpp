@@ -28,7 +28,7 @@ class SecTouchFanTest : public ::testing::Test {
   void send_next_task() { this->hub_.loop(); }
 
   FakeUART uart_;
-  SECTouchComponent hub_;
+  TestableSECTouch hub_;
   SecTouchFan fan_{&this->hub_, LEVEL_ID, LABEL_ID};
 };
 

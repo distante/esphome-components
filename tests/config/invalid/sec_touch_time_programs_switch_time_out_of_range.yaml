@@ -1,0 +1,26 @@
+# expect-error: value must be at most 5.
+# Switch times are 1-5.
+
+esphome:
+  name: tp-switch-time-range
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+  time_programs:
+    - fan_number: 1
+      switch_times: [1, 6]

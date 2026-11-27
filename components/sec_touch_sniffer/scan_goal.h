@@ -1,8 +1,8 @@
 #pragma once
 
 // Plain C++, no ESPHome includes: built on the host by tests/cpp/test_scan_goal.
-// page_bundle.py (beside this header) parses it at every build: keep its declarations in the forms that file's
-// docstring lists.
+// ../sec_touch/header_reader.py parses it for page_bundle.py at every build: keep its declarations in the forms that
+// file's docstring lists.
 //
 // The sniffer goals' scans (.specs/sniffer.md, "Sniffer goals" and "Active scan"): which IDs a run queries, in what
 // order, and the start request that picks them ("Device/page contract", start parameters).

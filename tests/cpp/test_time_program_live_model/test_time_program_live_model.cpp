@@ -341,6 +341,18 @@ TEST_F(LiveStateModelTest, ALateClockReadAcrossAChangeThatJustPassedIsIgnored) {
   expect_state(this->state(after), switch_time_name(2), running(2), running(3), hours(6) - 400);
 }
 
+TEST_F(LiveStateModelTest, ALateClockReadAcrossMidnightIsIgnored) {
+  this->time(1, "00:00:00");
+  this->ready(bit(1) | bit(2), "23:59:59");
+  const uint32_t after = seconds(1) + 400;  // the clock shows 00:00:00.4: switch time 1 took effect
+  ASSERT_STREQ(this->state(after).in_effect, switch_time_name(1));
+
+  // 1.4 s back, across midnight.
+  EXPECT_TRUE(this->model_.take_clock("23:59:59", READ_MS + after));
+
+  EXPECT_STREQ(this->state(after).in_effect, switch_time_name(1));
+}
+
 TEST_F(LiveStateModelTest, ALargerStepBackAcrossAChangeStillMovesTheClock) {
   this->ready(bit(1) | bit(2) | bit(3), "11:59:59");
   const uint32_t after = seconds(1) + 400;

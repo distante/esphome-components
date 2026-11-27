@@ -56,10 +56,7 @@ void TimeProgram::attach_enabled(int switch_time, TimeProgramEnabledSwitch *enti
   this->watch_(time_program_enabled_id(this->pair_));
 }
 
-void TimeProgram::watch_(int id) {
-  // The hub checks the ID belongs to the pair, and its poll list keeps each ID once.
-  this->hub_->add_time_program_poll_id(this->pair_, id);
-}
+void TimeProgram::watch_(int id) { this->hub_->add_time_program_poll_id(this->pair_, id); }
 
 void TimeProgram::refresh() {
   ESP_LOGD(TAG, "Refreshing fan pair %d's time program", this->pair_);

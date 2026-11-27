@@ -10,8 +10,9 @@ anything else fails the build rather than shipping a page that breaks in the bro
 
 `catalogue.mjs` is virtual: no file in web/. The resolver serves it from memory, built at every bundle from six C++
 headers: the known-property catalogue (.specs/sniffer.md) from sec_touch's protocol_ids.h and fan_level.h, the units a
-time of day is checked against from sec_touch's time_units.h, the write probe's value rules from sec_touch's data_message.h, and the default discover range, the goal names and the cap on a
-scan's ID list from this component's property_slots.h and scan_goal.h. Only the page may import it; the tested modules
+time of day is checked against from sec_touch's time_units.h, the write probe's value rules from sec_touch's
+data_message.h, and the default discover range, the goal names and the cap on a scan's ID list from this component's
+property_slots.h and scan_goal.h. Only the page may import it; the tested modules
 take the catalogue as an argument.
 
 sec_touch's header_reader.py reads the headers; its docstring lists the declaration forms it can read. Anything the

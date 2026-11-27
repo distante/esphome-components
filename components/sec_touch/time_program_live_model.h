@@ -69,7 +69,11 @@ constexpr uint32_t MS_PER_DAY = static_cast<uint32_t>(SECONDS_PER_DAY) * MS_PER_
 
 /// How much later than the panel says a clock read can arrive. A read that would move the clock back by less, across
 /// an enabled switch time, is that lateness: it is ignored, so the change it crosses doesn't flip back and forward.
+/// Reads arrive up to about 1 s late (the panel drops the milliseconds, then the reply travels); 2 s leaves a margin.
 constexpr uint32_t LATE_CLOCK_READ_MS = 2 * MS_PER_S;
+
+/// Milliseconds forward from `from` to `to`, both times of day: across midnight when `to` is earlier. 0 when equal.
+constexpr uint32_t ms_forward(uint32_t from, uint32_t to) { return (to + MS_PER_DAY - from) % MS_PER_DAY; }
 
 /// What the live-state entities show at one moment.
 struct LiveState {
@@ -258,7 +262,7 @@ class LiveStateModel {
       return false;
     }
     const uint32_t from = read.ms_of_day(now_ms);
-    const uint32_t back = (this->clock_.ms_of_day(now_ms) + MS_PER_DAY - from) % MS_PER_DAY;
+    const uint32_t back = ms_forward(from, this->clock_.ms_of_day(now_ms));
     if (back == 0 || back >= LATE_CLOCK_READ_MS) {
       return false;
     }
@@ -268,7 +272,7 @@ class LiveStateModel {
         continue;
       }
       // The switch time lies in (from, the old clock]: the old clock has passed it, the read has not.
-      const uint32_t after_from = (static_cast<uint32_t>(t) + MS_PER_DAY - from) % MS_PER_DAY;
+      const uint32_t after_from = ms_forward(from, static_cast<uint32_t>(t));
       if (after_from > 0 && after_from <= back) {
         return true;
       }

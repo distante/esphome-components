@@ -1,6 +1,7 @@
 from esphome.components import fan
 import esphome.config_validation as cv
 import esphome.codegen as cg
+import esphome.final_validate as fv
 from esphome.const import CONF_OUTPUT_ID
 from .. import (
     CONF_SEC_TOUCH_ID,
@@ -8,6 +9,7 @@ from .. import (
     SECTouchComponent,
     FAN_LEVEL_IDS,
     FAN_LABEL_IDS,
+    _unique,
 )
 
 DEPENDENCIES = ["sec_touch"]
@@ -29,6 +31,23 @@ CONFIG_SCHEMA = cv.All(
     )
     .extend(cv.COMPONENT_SCHEMA),
 )
+
+
+def _final_validate(config):
+    fan_numbers = [
+        entry[FAN_NUMBER]
+        for entry in fv.full_config.get().get("fan", [])
+        if entry.get("platform") == "sec_touch"
+    ]
+    try:
+        _unique(FAN_NUMBER)(fan_numbers)
+    except cv.Invalid as err:
+        err.prepend([FAN_NUMBER])
+        raise
+    return config
+
+
+FINAL_VALIDATE_SCHEMA = _final_validate
 
 
 async def to_code(config):

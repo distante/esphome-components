@@ -9,7 +9,7 @@ from .. import (
     SECTouchComponent,
     FAN_LEVEL_IDS,
     FAN_LABEL_IDS,
-    _unique,
+    sec_touch_fans,
 )
 
 DEPENDENCIES = ["sec_touch"]
@@ -34,16 +34,12 @@ CONFIG_SCHEMA = cv.All(
 
 
 def _final_validate(config):
-    fan_numbers = [
-        entry[FAN_NUMBER]
-        for entry in fv.full_config.get().get("fan", [])
-        if entry.get("platform") == "sec_touch"
-    ]
-    try:
-        _unique(FAN_NUMBER)(fan_numbers)
-    except cv.Invalid as err:
-        err.prepend([FAN_NUMBER])
-        raise
+    fan_number = config[FAN_NUMBER]
+    fans = sec_touch_fans(fv.full_config.get().get("fan"))
+    if [fan[FAN_NUMBER] for fan in fans].count(fan_number) > 1:
+        raise cv.Invalid(
+            f"{FAN_NUMBER} {fan_number} is listed twice in fan", path=[FAN_NUMBER]
+        )
     return config
 
 

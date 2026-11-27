@@ -136,7 +136,7 @@ def AUTO_LOAD(config):
 FAN_NUMBER_SCHEMA = cv.int_range(min=1, max=FAN_PAIR_COUNT)
 
 
-def _unique(what):
+def unique(what):
     def validator(values):
         seen = set()
         for value in values:
@@ -150,7 +150,7 @@ def _unique(what):
 
 SWITCH_TIMES_SCHEMA = cv.All(
     cv.ensure_list(cv.int_range(min=1, max=SWITCH_TIME_COUNT)),
-    _unique("switch time"),
+    unique("switch time"),
 )
 
 FIELD_ENTITIES_SCHEMA = cv.Schema(
@@ -193,12 +193,19 @@ TIME_PROGRAM_SCHEMA = cv.Schema(
 OPTIONAL_ENTITY_KEYS = (CONF_REFRESH, CONF_WRITE_FAILED) + LIVE_STATE_KEYS
 
 
+def sec_touch_fans(fans):
+    """The sec_touch entries of a `fan:` list, raw or validated."""
+    return [
+        fan
+        for fan in _as_list(fans)
+        if isinstance(fan, dict) and fan.get("platform") == "sec_touch"
+    ]
+
+
 def _fan_entries(hub_config, fan_number):
     """This hub's `fan:` entries for `fan_number`."""
     hub_id = hub_config.get(CONF_ID)
-    for fan in _as_list((CORE.raw_config or {}).get("fan")):
-        if not isinstance(fan, dict) or fan.get("platform") != "sec_touch":
-            continue
+    for fan in sec_touch_fans((CORE.raw_config or {}).get("fan")):
         if fan.get(CONF_FAN_NUMBER) != fan_number:
             continue
         if fan.get(CONF_SEC_TOUCH_ID) not in (None, hub_id):

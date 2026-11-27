@@ -52,6 +52,15 @@ Enforces the Config compile layer of [Tests](../coding-standards/SKILL.md#tests)
 
 Done when each codegen path names its fixture, and each import that shares a name with a sub-module is reported with its `file:line`.
 
+## A per-entry validation reports its own entry
+
+Enforces [Error handling](../coding-standards/SKILL.md#c-style) and the YAML config layer of [Tests](../coding-standards/SKILL.md#tests): the error lands on the entry that is wrong, and a fixture pins where.
+
+1. For each validation the diff adds that ESPHome runs once per entry but that reads every entry (a `FINAL_VALIDATE_SCHEMA` over `fv.full_config`, a read of `CORE.raw_config`), check that it raises only for the entry it is validating. Example: the duplicate `fan_number` check scanned the whole `fan:` list, so with `fan_number: 2` first and two `fan_number: 1` fans, the error showed under the fan 2 entry.
+2. Check that its invalid fixture puts a valid entry first and has an `# expect-error:` line with `<fixture>.yaml:<line>]`, the source line ESPHome prints for an offending entry.
+
+Done when each such validation is reported with its `file:line` and whether it raises for other entries, and its fixture pins the location.
+
 ## A result that goes back to unknown clears what it showed
 
 Enforces [Error handling](../coding-standards/SKILL.md#c-style): a state that turns unknown leaves no stale value on display.

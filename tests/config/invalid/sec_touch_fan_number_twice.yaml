@@ -1,4 +1,5 @@
-# expect-error: fan_number 1 is listed twice
+# expect-error: fan_number 1 is listed twice in fan
+# expect-error: sec_touch_fan_number_twice.yaml:29]
 
 esphome:
   name: sec-touch-fan-number-twice
@@ -22,6 +23,9 @@ sec_touch:
   uart_id: sec_touch_uart
 
 fan:
+  - platform: sec_touch
+    fan_number: 2
+    name: "Other"
   - platform: sec_touch
     fan_number: 1
     name: "Kellerraum A"

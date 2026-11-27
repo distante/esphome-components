@@ -157,4 +157,10 @@ inline std::vector<uint8_t> nak_frame() { return frame(std::string(1, static_cas
 /// The panel's ACK with one bit flipped (issue #50): `02 07 0A`, too short to be a data frame.
 inline std::vector<uint8_t> corrupted_ack() { return frame(std::string(1, static_cast<char>(ACK ^ 0x01))); }
 
+/// The reply's STX as the controller received it, garbled to 0x00, so every byte reads as noise.
+inline std::vector<uint8_t> without_stx(std::vector<uint8_t> f) {
+  f[0] = 0x00;
+  return f;
+}
+
 }  // namespace esphome::sec_touch::testing

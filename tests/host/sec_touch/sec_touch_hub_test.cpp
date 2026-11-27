@@ -95,16 +95,20 @@ class SECTouchGetRetryTest : public SECTouchHubTest {
     return this->uart_.tx;
   }
 
+  /// Feeds `bytes` to the hub, one loop() per discarded byte plus slack for the ACK and the next dispatch. Returns what
+  /// the hub sent meanwhile.
+  std::vector<uint8_t> feed_noise(const std::vector<uint8_t> &bytes) {
+    this->uart_.tx.clear();
+    this->uart_.push_rx(bytes);
+    this->hub_.loop_times(static_cast<int>(bytes.size()) + 3);
+    return this->uart_.tx;
+  }
+
   /// The panel answers the GET in flight with its ACK, then a data frame whose STX arrives garbled, so every byte of
   /// it reads as noise. Returns what the hub sent meanwhile.
   std::vector<uint8_t> panel_answers_with_corrupted_stx(int property_id, const std::string &value) {
-    std::vector<uint8_t> data = data_frame(property_id, value);
-    data[0] = 0x00;
-    this->uart_.tx.clear();
     this->uart_.push_rx(ack_frame());
-    this->uart_.push_rx(data);
-    this->hub_.loop_times(static_cast<int>(data.size()) + 3);
-    return this->uart_.tx;
+    return this->feed_noise(without_stx(data_frame(property_id, value)));
   }
 
   std::vector<std::string> labels_;
@@ -350,6 +354,18 @@ TEST_F(SECTouchGetRetryTest, MalformedReplyDuringScanIsNotRetried) {
   EXPECT_EQ(this->hub_.get_last_scan_outcome(), ScanOutcome::SCAN_OUTCOME_TIMEOUT);
 }
 
+// A scan query is never retried, whatever ended its reply.
+TEST_F(SECTouchGetRetryTest, ReplyWithALostStxDuringScanIsNotRetried) {
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
+  this->hub_.add_discovery_get_task(UNANSWERED_PROPERTY_ID);
+  this->send_next_task();
+
+  EXPECT_EQ(this->panel_answers_with_corrupted_stx(FAN_1_LEVEL_ID, "10"),
+            concat(ack_frame(), get_frame(UNANSWERED_PROPERTY_ID)));
+  EXPECT_EQ(this->hub_.get_last_scan_outcome(), ScanOutcome::SCAN_OUTCOME_TIMEOUT);
+}
+
 // The sniffer's stop can end scan mode while a scan query is still in flight. Its late reply belongs to the scan.
 TEST_F(SECTouchGetRetryTest, MalformedReplyAfterScanStoppedIsNotRetried) {
   this->hub_.enter_scan_mode();
@@ -535,12 +551,7 @@ TEST_F(SECTouchTaskEndTest, AnAckWithACorruptedStxLeavesItsGetOpen) {
   this->queue_label_reads({LABEL_1_ID});
   this->send_next_task();
 
-  std::vector<uint8_t> garbled_ack = ack_frame();
-  garbled_ack[0] = 0x00;
-  this->uart_.tx.clear();
-  this->uart_.push_rx(garbled_ack);
-  this->hub_.loop_times(4);
-  EXPECT_TRUE(this->uart_.tx.empty());
+  EXPECT_TRUE(this->feed_noise(without_stx(ack_frame())).empty());
 
   this->uart_.push_rx(data_frame(LABEL_1_ID, "3"));
   this->hub_.loop_times(2);

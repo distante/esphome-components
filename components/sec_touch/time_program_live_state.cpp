@@ -159,7 +159,7 @@ void TimeProgramLiveState::publish_next_change_(const LiveState &state) {
   }
   const auto iso = next_change_iso(next_change_timestamp(this->time_->timestamp_now(), *state.ms_to_next_change));
   if (iso.text[0] == '\0') {
-    ESP_LOGW(TAG, "Time source gives a time no calendar date holds, next change unknown");
+    ESP_LOGW(TAG, "Next change does not fit an ISO time, next change unknown");
     this->clear_text_(this->next_change_);
     return;
   }

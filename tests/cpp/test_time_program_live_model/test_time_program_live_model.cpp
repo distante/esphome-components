@@ -527,6 +527,11 @@ TEST(NextChangeIso, KeepsTheCalendarDate) {
 
 TEST(NextChangeIso, IsEmptyForATimeNoCalendarHolds) { EXPECT_STREQ(next_change_iso(INT64_MAX).text.data(), ""); }
 
+TEST(NextChangeIso, IsEmptyForAYearThatDoesNotFitTheLayout) {
+  constexpr int64_t YEAR_10000_S = 253402300800;
+  EXPECT_STREQ(next_change_iso(YEAR_10000_S).text.data(), "");
+}
+
 }  // namespace
 
 int main(int argc, char **argv) {

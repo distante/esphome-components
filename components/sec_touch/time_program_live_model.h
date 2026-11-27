@@ -317,15 +317,14 @@ constexpr int64_t next_change_timestamp(int64_t now_s, uint32_t ms_to_next_chang
   return (at_ms + MS_PER_MINUTE / 2) / MS_PER_MINUTE * SECONDS_PER_MINUTE;
 }
 
-/// Room for `YYYY-MM-DDTHH:MM:SSZ` and the NUL.
-constexpr std::size_t NEXT_CHANGE_ISO_CAPACITY = 21;
+inline constexpr char NEXT_CHANGE_ISO_LAYOUT[] = "YYYY-MM-DDTHH:MM:SSZ";
 
 struct NextChangeIso {
-  std::array<char, NEXT_CHANGE_ISO_CAPACITY> text{};
+  std::array<char, sizeof(NEXT_CHANGE_ISO_LAYOUT)> text{};
 };
 
-/// The `next_change` state: Unix time `timestamp_s` in ISO 8601 UTC, empty when no calendar date holds it. A text, not
-/// a sensor float: a float near 1.8e9 holds steps of 128 s.
+/// The `next_change` state: Unix time `timestamp_s` in ISO 8601 UTC, empty when it doesn't fit
+/// `NEXT_CHANGE_ISO_LAYOUT`. A text, not a sensor float: a float near 1.8e9 holds steps of 128 s.
 inline NextChangeIso next_change_iso(int64_t timestamp_s) {
   NextChangeIso iso;
   const auto time = static_cast<std::time_t>(timestamp_s);
@@ -333,7 +332,10 @@ inline NextChangeIso next_change_iso(int64_t timestamp_s) {
   if (gmtime_r(&time, &utc) == nullptr) {
     return iso;
   }
-  std::strftime(iso.text.data(), iso.text.size(), "%Y-%m-%dT%H:%M:%SZ", &utc);
+  // strftime leaves the buffer undefined when the text doesn't fit.
+  if (std::strftime(iso.text.data(), iso.text.size(), "%Y-%m-%dT%H:%M:%SZ", &utc) == 0) {
+    iso.text[0] = '\0';
+  }
   return iso;
 }
 

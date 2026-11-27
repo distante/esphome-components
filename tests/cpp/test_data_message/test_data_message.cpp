@@ -88,6 +88,7 @@ TEST(DataMessageCheckReason, NamesEachRejection) {
   EXPECT_STREQ(data_message_check_reason(DataMessageCheck::DATA_MISSING_FIELDS), "Not enough TABs in message");
   EXPECT_STREQ(data_message_check_reason(DataMessageCheck::DATA_CRC_MISMATCH), "CRC mismatch");
   EXPECT_STREQ(data_message_check_reason(DataMessageCheck::DATA_CRC_NOT_A_NUMBER), "CRC field is not a number");
+  EXPECT_STREQ(data_message_check_reason(DataMessageCheck::DATA_STX_LOST), "STX lost, the frame read as noise");
 }
 TEST(DataMessageCheckReason, IsEmptyForRoutedMessages) {
   EXPECT_STREQ(data_message_check_reason(DataMessageCheck::DATA_ROUTE), "");

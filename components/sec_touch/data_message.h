@@ -56,6 +56,8 @@ enum class DataMessageCheck : uint8_t {
   DATA_CRC_MISMATCH,
   /// The CRC field is empty, not decimal digits, or above 65535.
   DATA_CRC_NOT_A_NUMBER,
+  /// After the panel's ACK of a GET, an ETX ended bytes that never began with STX: the data frame lost its STX.
+  DATA_STX_LOST,
 };
 
 /// Finds the first three TABs in `buf[0..len)`.
@@ -110,6 +112,8 @@ inline const char *data_message_check_reason(DataMessageCheck check) {
       return "CRC mismatch";
     case DataMessageCheck::DATA_CRC_NOT_A_NUMBER:
       return "CRC field is not a number";
+    case DataMessageCheck::DATA_STX_LOST:
+      return "STX lost, the frame read as noise";
   }
   return "";
 }

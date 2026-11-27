@@ -95,6 +95,18 @@ class SECTouchGetRetryTest : public SECTouchHubTest {
     return this->uart_.tx;
   }
 
+  /// The panel answers the GET in flight with its ACK, then a data frame whose STX arrives garbled, so every byte of
+  /// it reads as noise. Returns what the hub sent meanwhile.
+  std::vector<uint8_t> panel_answers_with_corrupted_stx(int property_id, const std::string &value) {
+    std::vector<uint8_t> data = data_frame(property_id, value);
+    data[0] = 0x00;
+    this->uart_.tx.clear();
+    this->uart_.push_rx(ack_frame());
+    this->uart_.push_rx(data);
+    this->hub_.loop_times(static_cast<int>(data.size()) + 3);
+    return this->uart_.tx;
+  }
+
   std::vector<std::string> labels_;
 };
 
@@ -287,6 +299,18 @@ TEST_F(SECTouchGetRetryTest, MalformedLabelReplyIsAckedThenTheSameGetIsSentAgain
   ASSERT_EQ(this->uart_.tx, get_frame(LABEL_1_ID));
 
   EXPECT_EQ(this->panel_answers(data_frame_with_bad_crc(LABEL_1_ID, "3")), concat(ack_frame(), get_frame(LABEL_1_ID)));
+
+  this->panel_answers(data_frame(LABEL_1_ID, "3"));
+  EXPECT_EQ(this->labels_, std::vector<std::string>{std::to_string(LABEL_1_ID) + "=3"});
+}
+
+// After the panel's ACK, an ETX that ends only noise ended the data frame the GET waits for: it is dropped like any
+// malformed reply, at once rather than at the watchdog.
+TEST_F(SECTouchGetRetryTest, AReplyWithACorruptedStxIsAckedThenTheSameGetIsSentAgain) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+
+  EXPECT_EQ(this->panel_answers_with_corrupted_stx(LABEL_1_ID, "3"), concat(ack_frame(), get_frame(LABEL_1_ID)));
 
   this->panel_answers(data_frame(LABEL_1_ID, "3"));
   EXPECT_EQ(this->labels_, std::vector<std::string>{std::to_string(LABEL_1_ID) + "=3"});
@@ -495,6 +519,32 @@ TEST_F(SECTouchTaskEndTest, AMalformedGetEndsOnceAfterItsRetry) {
 
   this->panel_answers(data_frame_with_bad_crc(LABEL_1_ID, "3"));
   EXPECT_EQ(this->ends_, std::vector<std::string>{end_of("GET", LABEL_1_ID, TaskEnd::TASK_END_MALFORMED)});
+}
+
+TEST_F(SECTouchTaskEndTest, ASecondReplyWithACorruptedStxEndsItsGetAsMalformed) {
+  this->queue_label_reads({LABEL_1_ID, LABEL_2_ID});
+  this->send_next_task();
+  this->panel_answers_with_corrupted_stx(LABEL_1_ID, "3");
+
+  EXPECT_EQ(this->panel_answers_with_corrupted_stx(LABEL_1_ID, "3"), concat(ack_frame(), get_frame(LABEL_2_ID)));
+  EXPECT_EQ(this->ends_, std::vector<std::string>{end_of("GET", LABEL_1_ID, TaskEnd::TASK_END_MALFORMED)});
+}
+
+// Before the panel's ACK, a garbled ACK's ETX is no data frame: the GET still waits for the one that follows.
+TEST_F(SECTouchTaskEndTest, AnAckWithACorruptedStxLeavesItsGetOpen) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+
+  std::vector<uint8_t> garbled_ack = ack_frame();
+  garbled_ack[0] = 0x00;
+  this->uart_.tx.clear();
+  this->uart_.push_rx(garbled_ack);
+  this->hub_.loop_times(4);
+  EXPECT_TRUE(this->uart_.tx.empty());
+
+  this->uart_.push_rx(data_frame(LABEL_1_ID, "3"));
+  this->hub_.loop_times(2);
+  EXPECT_EQ(this->ends_, std::vector<std::string>{end_of("GET", LABEL_1_ID, TaskEnd::TASK_END_ANSWERED)});
 }
 
 // Scan mode clears the queue: every discarded task, the one in flight first, ends as a timeout.

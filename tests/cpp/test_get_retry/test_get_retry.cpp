@@ -26,6 +26,10 @@ TEST(ShouldRetryGet, AGetWhoseReplyMissedFieldsIsRetried) {
   EXPECT_TRUE(should_retry_get(GET, DataMessageCheck::DATA_MISSING_FIELDS, FIRST_TRY, POLLING));
 }
 
+TEST(ShouldRetryGet, AGetWhoseReplyLostItsStxIsRetried) {
+  EXPECT_TRUE(should_retry_get(GET, DataMessageCheck::DATA_STX_LOST, FIRST_TRY, POLLING));
+}
+
 // A second bad reply ends the task, so a noisy line can't loop.
 TEST(ShouldRetryGet, ARetriedGetIsNotRetriedAgain) {
   EXPECT_FALSE(should_retry_get(GET, DataMessageCheck::DATA_CRC_MISMATCH, ALREADY_RETRIED, POLLING));

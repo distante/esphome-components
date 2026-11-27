@@ -153,6 +153,12 @@ void SECTouchComponent::loop() {
   if (this->incoming_message.buffer_index == -1 && peakedData != STX) {
     ESP_LOGD(TAG, "[loop]  Discarding noise byte (or maybe a Heartbeat with %d?)", peakedData);
     this->read_byte(&peakedData);
+    if (peakedData == ETX && this->get_acked_) {
+      ESP_LOGW(TAG_UART, "  [loop] %s (task=%s property_id=%d). Task Failed",
+               data_message_check_reason(DataMessageCheck::DATA_STX_LOST),
+               EnumToString::TaskType(this->current_running_task_type), this->current_running_task_property_id_);
+      this->drop_data_message(DataMessageCheck::DATA_STX_LOST);
+    }
     return;
   }
 
@@ -621,6 +627,7 @@ Now, we need to extract the parts of the message. It can be either:
       // GET: ACK confirms the device received our request; the data response follows.
       // Keep task state so the queue-empty callback does not fire prematurely.
       this->incoming_message.reset();
+      this->get_acked_ = true;
     } else {
       // SET: ACK is the complete response — task is done.
       this->cleanup_after_task_complete(TaskEnd::TASK_END_ANSWERED);
@@ -747,6 +754,7 @@ std::unique_ptr<BaseTask> SECTouchComponent::take_in_flight_task_() {
   this->incoming_message.reset();
   this->current_running_task_type = TaskType::NONE;
   this->task_start_time_ = 0;
+  this->get_acked_ = false;
   return std::move(this->in_flight_task_);
 }
 

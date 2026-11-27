@@ -17,7 +17,7 @@ inline bool should_retry_get(bool is_get, DataMessageCheck dropped_reply, bool a
   }
   return dropped_reply == DataMessageCheck::DATA_MISSING_FIELDS ||
          dropped_reply == DataMessageCheck::DATA_CRC_MISMATCH ||
-         dropped_reply == DataMessageCheck::DATA_CRC_NOT_A_NUMBER;
+         dropped_reply == DataMessageCheck::DATA_CRC_NOT_A_NUMBER || dropped_reply == DataMessageCheck::DATA_STX_LOST;
 }
 
 }  // namespace sec_touch

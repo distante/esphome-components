@@ -180,7 +180,6 @@ class TimeProgramLevelSelect : public select::Select {
 class TimeProgramEnabledSwitch : public switch_::Switch {
  public:
   TimeProgramEnabledSwitch(TimeProgram *program, int switch_time);
-  /// Leaves the switch with no state, as before the first good mask.
   void clear_state();
 
  protected:

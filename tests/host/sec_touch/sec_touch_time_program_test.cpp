@@ -506,7 +506,6 @@ TEST_F(TimeProgramTest, AFailedSwitchWriteShowsTheLastGoodMask) {
   EXPECT_FALSE(this->enabled_.state);
 }
 
-// No state, as a select or a time shows after a failed read.
 TEST_F(TimeProgramTest, AFailedSwitchWriteBeforeAnyGoodMaskLeavesTheSwitchesWithoutState) {
   this->hub_.unqueueable_priority_gets.insert(MASK_ID);
 

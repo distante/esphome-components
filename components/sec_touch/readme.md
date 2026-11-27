@@ -816,8 +816,6 @@ The CRC is always checked when the field is there. A message whose CRC doesn't m
 
 The panels seen so far always send a CRC, so `false` (the default) is the safe choice. Leave it there unless your logs show the symptom below.
 
-A reply whose `[STX]` arrives garbled never forms a frame: each of its bytes reads as noise. After the panel's `ACK` of a GET, the `[ETX]` of that noise ends the reply: it is logged as `STX lost, the frame read as noise` and handled like a CRC mismatch above (`ACK`, then the GET once more), without waiting for the 2-second watchdog.
-
 Some firmware versions or configurations of the SEC-Touch appear to omit the CRC field, sending only `[STX]command_id[TAB]property_id[TAB]value[ETX]`. If you see repeated `Not enough TABs in message … missing: [value, crc]` errors in your logs but the parsed `command_id` and `property_id` look correct, enable this flag:
 
 ```yaml
@@ -980,6 +978,10 @@ Buffer: 
 ---
 
 :bulb: Sometimes we get an single `255` input value, we discard it as noise.
+
+---
+
+:bulb: A reply whose `[STX]` arrives garbled never forms a frame: each of its bytes reads as noise. After the panel's `ACK` of a GET, the `[ETX]` of that noise ends the reply: it is logged as `STX lost, the frame read as noise` and handled like a [CRC mismatch](#bulb-optional-crc-optional_crc) (`ACK`, then the GET once more), without waiting for the 2-second watchdog.
 
 ---
 

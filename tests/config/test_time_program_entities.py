@@ -11,6 +11,7 @@ from esphome.const import (
     CONF_DEVICE_ID,
     CONF_ENTITY_CATEGORY,
     CONF_SORTING_GROUP_ID,
+    CONF_SORTING_WEIGHT,
     CONF_WEB_SERVER,
     ENTITY_CATEGORY_CONFIG,
     ENTITY_CATEGORY_DIAGNOSTIC,
@@ -76,16 +77,21 @@ def test_every_entity_has_its_category_and_the_pairs_device() -> None:
 
 
 def test_every_entity_gets_the_pairs_web_server_unless_it_has_its_own() -> None:
-    groups = {
-        entry[sec_touch.CONF_FAN_NUMBER]: {
-            name: entity.get(CONF_WEB_SERVER, {}).get(CONF_SORTING_GROUP_ID)
-            for name, entity in entities_of(entry).items()
-        }
-        for entry in validated_entries(WEB_SERVER_FIXTURE)
+    entries = {entry[sec_touch.CONF_FAN_NUMBER]: entry for entry in validated_entries(WEB_SERVER_FIXTURE)}
+    blocks = {
+        fan_number: {name: entity.get(CONF_WEB_SERVER) for name, entity in entities_of(entry).items()}
+        for fan_number, entry in entries.items()
     }
-    pair_1 = {name: "group_1" for name in groups[1]}
-    # The fixture's refresh button sets its own web_server.
-    pair_1[sec_touch.CONF_REFRESH] = "group_settings"
+    expected = {
+        fan_number: {name: entry[CONF_WEB_SERVER] for name in blocks[fan_number]}
+        for fan_number, entry in entries.items()
+    }
+    # The fixture's refresh button sets its own web_server, which replaces the pair's whole block: no sorting_weight.
+    expected[1][sec_touch.CONF_REFRESH] = {CONF_SORTING_GROUP_ID: "group_settings"}
 
-    assert len(groups[1]) == len(sec_touch.OPTIONAL_ENTITY_KEYS) + 2 * len(FIELD_KINDS)
-    assert groups == {1: pair_1, 2: {name: "group_2" for name in groups[2]}}
+    assert len(blocks[1]) == len(sec_touch.OPTIONAL_ENTITY_KEYS) + len(entries[1][sec_touch.CONF_SWITCH_TIMES]) * len(
+        FIELD_KINDS
+    )
+    # Without a weight on the pair, a key-by-key merge would look the same as a replacement.
+    assert CONF_SORTING_WEIGHT in entries[1][CONF_WEB_SERVER]
+    assert blocks == expected

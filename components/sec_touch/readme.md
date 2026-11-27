@@ -317,8 +317,8 @@ sensor:
 ## Time program live state
 
 Optional entities under a pair's `time_programs:` entry ([spec](../../.specs/time-programs.md#live-state)). The
-`time_programs:` keys themselves, the field entities, `refresh` and `write_failed` are in the spec's
-[Configuration](../../.specs/time-programs.md#configuration), and `sec_touch.set_time_program` in its
+`time_programs:` keys themselves (`web_server` among them), the field entities, `refresh` and `write_failed` are in
+the spec's [Configuration](../../.specs/time-programs.md#configuration), and `sec_touch.set_time_program` in its
 [Bulk-set action](../../.specs/time-programs.md#bulk-set-action), until this readme takes them over
 ([#80](https://github.com/distante/esphome-components/issues/80)):
 
@@ -348,7 +348,6 @@ sec_touch:
 - **`next_change` shows Unknown** whenever the other three show `not running` or `none`: a timestamp can't hold a state word, so it has no value then.
 - **`next_change` precision:** rounded to the minute, but HA gets it as a float, so it can be off by up to ±64 s.
 - The fan entity isn't changed: in Automatik Zeit it still shows on, preset Automatic Time.
-- **Web page group:** a pair's `web_server:` (such as `sorting_group_id: group_1`, the fan's group) goes to every entity of the pair, these four too. An entry with its own `web_server:` keeps it ([spec](../../.specs/time-programs.md#configuration)).
 
 ## Logging
 

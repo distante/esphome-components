@@ -266,9 +266,12 @@ def _prepare_time_program(hub_config, entry):
         prefix = f"{pair_name} "
 
     # Keys an entity takes from the pair: in the field entities always, in an optional entity unless it sets its own.
-    inherited = {
-        key: entry[key] for key in (CONF_DEVICE_ID, CONF_WEB_SERVER) if key in entry
-    }
+    # A web_server that isn't a dictionary stays out, so the pair's schema reports it once, not each entity again.
+    inherited = {}
+    if CONF_DEVICE_ID in entry:
+        inherited[CONF_DEVICE_ID] = entry[CONF_DEVICE_ID]
+    if isinstance(entry.get(CONF_WEB_SERVER), dict):
+        inherited[CONF_WEB_SERVER] = entry[CONF_WEB_SERVER]
 
     def field(n, kind):
         return {
@@ -288,9 +291,10 @@ def _prepare_time_program(hub_config, entry):
     ]
     for key in OPTIONAL_ENTITY_KEYS:
         optional_entity = entry.get(key)
-        if not inherited or optional_entity is None:
+        # A missing entry stays missing; one that isn't a dictionary is the entity schema's to report.
+        if not inherited or not isinstance(optional_entity, dict):
             continue
-        entry[key] = {**inherited, **(optional_entity or {})}
+        entry[key] = {**inherited, **optional_entity}
     return entry
 
 

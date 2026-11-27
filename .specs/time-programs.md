@@ -79,7 +79,7 @@ sec_touch:
 | Not listed | No entities, no sub-device, no polling for that pair. |
 | `name` | The pair name ([where it shows](#sub-device)). Without it, the pair's `fan:` entry name; without a fan entry, `Fan pair N`. |
 | `switch_times` | Only listed switch times get the 3 field entities. A switch time enabled on the panel but not listed stays hidden in HA. 1–5, no duplicates. |
-| `web_server` | Optional. ESPHome's entity `web_server:` block (`sorting_group_id`, `sorting_weight`), added in [#145](https://github.com/distante/esphome-components/issues/145). sec_touch copies it into every entity of the pair before the entity schemas run, like `device_id` ([Sub-device](#sub-device)). An optional entity entry's own `web_server:` replaces the pair's whole block for that entity. On the v3 page, entities of equal weight sort by name, so a pair reads `Next change` … `Switch time 1 enabled`, `Switch time 1 level`, `Switch time 1 time`, … `Write failed`. |
+| `web_server` | Optional. ESPHome's entity `web_server:` block (e.g. `sorting_group_id`), added in [#145](https://github.com/distante/esphome-components/issues/145). sec_touch copies it into every entity of the pair before the entity schemas run, like `device_id` ([Sub-device](#sub-device)). An optional entity entry's own `web_server:` replaces the pair's whole block for that entity. Within a group, the v3 page sorts by `sorting_weight`, then by name. |
 | `next_change` | Needs a `time:` source; none is a config error. |
 | Live-state entries | Need this hub's `fan:` entry for that pair, which polls the pair's level ID; none is a config error. |
 | `time_programs_update_interval` | Positive time period. |

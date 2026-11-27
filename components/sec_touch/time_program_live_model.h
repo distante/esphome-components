@@ -67,6 +67,10 @@ constexpr const char *switch_time_name(int switch_time) {
 
 constexpr uint32_t MS_PER_DAY = static_cast<uint32_t>(SECONDS_PER_DAY) * MS_PER_S;
 
+/// How much later than the panel says a clock read can arrive. A read that would move the clock back by less, across
+/// an enabled switch time, is that lateness: it is ignored, so the change it crosses doesn't flip back and forward.
+constexpr uint32_t LATE_CLOCK_READ_MS = 2 * MS_PER_S;
+
 /// What the live-state entities show at one moment.
 struct LiveState {
   /// `switch time N` or a state word.
@@ -152,7 +156,18 @@ class LiveStateModel {
     this->pair_level_ = level;
     return true;
   }
-  bool take_clock(std::string_view raw, uint32_t now_ms) { return this->clock_.take(raw, now_ms); }
+  /// Takes a raw clock value read at `now_ms`. Returns false, and keeps the old anchor, for a value that isn't
+  /// `HH:MM:SS`. A good value that is a late read (LATE_CLOCK_READ_MS) across a change also keeps the old anchor.
+  bool take_clock(std::string_view raw, uint32_t now_ms) {
+    PanelClock read;
+    if (!read.take(raw, now_ms)) {
+      return false;
+    }
+    if (!this->is_late_read_across_a_change(read, now_ms)) {
+      this->clock_ = read;
+    }
+    return true;
+  }
 
   /// The state at `now_ms`, or nullopt while an input the state needs was never read well: the pair level always;
   /// while running, also the clock, the mask, and each enabled switch time's time and level.
@@ -235,6 +250,31 @@ class LiveStateModel {
   }
 
   bool is_enabled(int switch_time) const { return (this->mask_ & switch_time_bit(switch_time)) != 0; }
+
+  /// Whether `read` moves the clock back by less than LATE_CLOCK_READ_MS at `now_ms`, across an enabled switch time
+  /// that the clock has just passed.
+  bool is_late_read_across_a_change(const PanelClock &read, uint32_t now_ms) const {
+    if (!this->clock_.is_set() || this->mask_ == NEVER_READ) {
+      return false;
+    }
+    const uint32_t from = read.ms_of_day(now_ms);
+    const uint32_t back = (this->clock_.ms_of_day(now_ms) + MS_PER_DAY - from) % MS_PER_DAY;
+    if (back == 0 || back >= LATE_CLOCK_READ_MS) {
+      return false;
+    }
+    for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
+      const int32_t t = this->times_ms_[n - 1];
+      if (!this->is_enabled(n) || t == NEVER_READ) {
+        continue;
+      }
+      // The switch time lies in (from, the old clock]: the old clock has passed it, the read has not.
+      const uint32_t after_from = (static_cast<uint32_t>(t) + MS_PER_DAY - from) % MS_PER_DAY;
+      if (after_from > 0 && after_from <= back) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   /// The one enabled switch time at `at`, or 0 when two or more are tied there.
   int only_switch_time_at(int32_t at) const {

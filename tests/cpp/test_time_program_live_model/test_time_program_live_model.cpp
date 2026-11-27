@@ -8,6 +8,7 @@
 
 using esphome::sec_touch::AUTOMATIC_TIME_LEVEL;
 using esphome::sec_touch::format_enabled_mask;
+using esphome::sec_touch::LATE_CLOCK_READ_MS;
 using esphome::sec_touch::LEVEL_NAMES;
 using esphome::sec_touch::LevelName;
 using esphome::sec_touch::LIVE_STATE_CONFLICT;
@@ -325,6 +326,47 @@ TEST_F(LiveStateModelTest, TheClockAdvancesBetweenReads) {
   this->ready(bit(1) | bit(2), "11:00:00");
 
   expect_state(this->state(hours(2)), switch_time_name(2), running(2), running(1), hours(19));
+}
+
+// #139 item 2: a clock read arrives late, so it can pull the clock back across a change that just passed. A step back
+// under LATE_CLOCK_READ_MS across a change is ignored: the change doesn't flip back and forward again.
+TEST_F(LiveStateModelTest, ALateClockReadAcrossAChangeThatJustPassedIsIgnored) {
+  this->ready(bit(1) | bit(2) | bit(3), "11:59:59");
+  const uint32_t after = seconds(1) + 400;  // the clock shows 12:00:00.4: switch time 2 took effect
+  ASSERT_STREQ(this->state(after).in_effect, switch_time_name(2));
+
+  // 1.4 s back, across 12:00.
+  EXPECT_TRUE(this->model_.take_clock("11:59:59", READ_MS + after));
+
+  expect_state(this->state(after), switch_time_name(2), running(2), running(3), hours(6) - 400);
+}
+
+TEST_F(LiveStateModelTest, ALargerStepBackAcrossAChangeStillMovesTheClock) {
+  this->ready(bit(1) | bit(2) | bit(3), "11:59:59");
+  const uint32_t after = seconds(1) + 400;
+
+  // 3.4 s back, across 12:00: more than a late read.
+  static_assert(LATE_CLOCK_READ_MS < seconds(3) + 400);
+  EXPECT_TRUE(this->model_.take_clock("11:59:57", READ_MS + after));
+
+  EXPECT_STREQ(this->state(after).in_effect, switch_time_name(1));
+}
+
+TEST_F(LiveStateModelTest, ASmallStepBackWithNoChangeInBetweenMovesTheClock) {
+  this->ready(bit(1) | bit(2) | bit(3), "10:00:00");
+  const uint32_t after = seconds(1) + 400;
+
+  EXPECT_TRUE(this->model_.take_clock("10:00:00", READ_MS + after));
+
+  EXPECT_EQ(this->state(after).ms_to_next_change, hours(2));
+}
+
+TEST_F(LiveStateModelTest, AStepForwardAcrossAChangeMovesTheClock) {
+  this->ready(bit(1) | bit(2) | bit(3), "11:59:59");
+
+  EXPECT_TRUE(this->model_.take_clock("12:00:00", READ_MS + 500));
+
+  expect_state(this->state(500), switch_time_name(2), running(2), running(3), hours(6));
 }
 
 // Cases table: two enabled switch times tied at the time in effect.

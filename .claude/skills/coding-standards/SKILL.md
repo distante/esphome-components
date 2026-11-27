@@ -67,7 +67,7 @@ Data that outlives a version (browser storage, flash) is read later by code that
 
 ### Reuse existing definitions
 
-Before adding a constant, enum, type or helper, search `components/` and `tests/` for one that already names the concept, and use it. Each value has a single source of truth: code and tests reference its name, never a bare literal or a second definition. A composition (which arrays make up a set) and an algorithm (a parser) are definitions too: state each once. When the existing definition sits behind an ESPHome include that a pure header must not pull in, move it into a pure header that both sides include. Skills and docs for agents (`.claude/skills/`, `CLAUDE.md`) name a value's definition (a range, a count) rather than writing the value out.
+Before adding a constant, enum, type or helper, search `components/` and `tests/` for one that already names the concept, and use it. Each value has a single source of truth: code and tests reference its name, never a bare literal or a second definition. A composition (which arrays make up a set) and an algorithm (a parser) are definitions too: state each once. When the existing definition sits behind an ESPHome include that a pure header must not pull in, move it into a pure header that both sides include. Skills and docs for agents (`.claude/skills/`, `CLAUDE.md`, `.specs/`) name a value's definition (a range, a count) rather than writing the value out.
 
 This binds tests too: a test's expected values use the shared names (a cap, a separator, an ellipsis) where a generic testing skill would ask for an independent literal ([Precedence](#precedence)).
 

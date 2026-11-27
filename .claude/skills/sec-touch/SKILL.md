@@ -31,7 +31,7 @@ The SEC-Touch hardware and its UART protocol are fixed: command IDs, frame layou
 - Changes to UART parsing must keep the ACK handshake and GET/SET sequencing the readme describes.
 - Respect the update flows: fan levels are polled via recursive tasks, labels are refreshed only by manual update tasks (triggered by the program text update button), time-program IDs by the time-program poll (`add_time_program_poll_id`). An unpolled listener (`register_unpolled_string_listener`) hears answers another poll asks for and adds no GET.
 - Validate IDs before queueing tasks; task creation returns null for unknown IDs and must be handled.
-- Schema constraints are strict: fan_number takes `FAN_NUMBER_SCHEMA` (1 to `FAN_PAIR_COUNT`), and each platform's `CONFIG_SCHEMA` decides which keys are required; keep these aligned with ID arrays.
+- Schema constraints are strict: every per-pair schema takes fan_number from `FAN_PAIR_SCHEMA`, and each platform's `CONFIG_SCHEMA` decides which other keys are required.
 - If modifying fan behavior, keep the preset-to-speed mapping consistent with the readme's special level values, `NOT_CONNECTED_LEVEL` included.
 
 ## `components/sec_touch_sniffer/**`

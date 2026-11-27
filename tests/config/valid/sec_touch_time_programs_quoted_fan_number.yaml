@@ -1,4 +1,4 @@
-# A quoted fan_number on the fan still names the live state's pair. The wifi credentials are placeholders: the build
+# A quoted fan_number on the fan names the live state's pair. The wifi credentials are placeholders: the build
 # never connects.
 
 esphome:

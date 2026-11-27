@@ -348,6 +348,7 @@ sec_touch:
 - **`next_change` shows Unknown** whenever the other three show `not running` or `none`: a timestamp can't hold a state word, so it has no value then.
 - **`next_change` precision:** rounded to the minute, but HA gets it as a float, so it can be off by up to ±64 s.
 - The fan entity isn't changed: in Automatik Zeit it still shows on, preset Automatic Time.
+- **Web page group:** a pair's `web_server:` (such as `sorting_group_id: group_1`, the fan's group) goes to every entity of the pair, these four too. An entry with its own `web_server:` keeps it ([spec](../../.specs/time-programs.md#configuration)).
 
 ## Logging
 

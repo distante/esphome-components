@@ -84,9 +84,9 @@ Enforces [coding-standards](../coding-standards/SKILL.md)' single source (every 
 
 1. When the diff touches `.claude/skills/`, `CLAUDE.md` or `.specs/`, grep [coding-standards](../coding-standards/SKILL.md) and [sec-touch](../sec-touch/SKILL.md) for each added instruction.
 2. An instruction that is already a rule there becomes a link to it, never a second wording. Example: a review check that repeated coding-standards' "grep for the concept by names, synonyms and value" step.
-3. Apply [Reuse existing definitions](../coding-standards/SKILL.md#reuse-existing-definitions) to each value written out. Example: sec-touch's "fan_number is 1-6" while the range lives in `FAN_PAIR_COUNT`.
+3. Apply [Reuse existing definitions](../coding-standards/SKILL.md#reuse-existing-definitions) to each code value written out. Example: a range written out in sec-touch's fan_number bullet while it lives in `FAN_PAIR_COUNT`.
 
-Done when each added instruction has a grep behind it, each restatement is reported with its `file:line` and the rule it restates, and each written-out code value with its `file:line` and the definition to name.
+Done when each added instruction has a grep behind it, each restatement is reported with its `file:line` and the rule it restates, and each written-out code value is reported with its `file:line` and the definition to name.
 
 ## Stored state reads well in a later version
 

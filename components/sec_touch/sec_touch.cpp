@@ -155,7 +155,7 @@ void SECTouchComponent::loop() {
     this->read_byte(&peakedData);
     if (peakedData == ETX && this->get_acked_) {
       char context[384];
-      this->describe_dropped_message("", 0, "", context, sizeof(context));
+      this->describe_dropped_message("", 0, "bytes logged as noise above, ", context, sizeof(context));
       ESP_LOGW(TAG_UART, "  [loop] %s (%s). Task Failed", data_message_check_reason(DataMessageCheck::DATA_STX_LOST),
                context);
       this->drop_data_message(DataMessageCheck::DATA_STX_LOST);

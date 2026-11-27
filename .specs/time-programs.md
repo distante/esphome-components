@@ -175,7 +175,7 @@ flowchart LR
 | Level | The select's index, 0–9, as a decimal string. |
 | Enabled mask | Per pair, the hub keeps the requested bit changes (bits to set, bits to clear). When the write is due: GET the mask fresh, apply only those bits, SET. Only that GET's own answer is the fresh mask, not a poll's answer that arrives meanwhile. Bits of switch times outside `switch_times` stay as they are; a mask the [meaning rule](#known-property-catalogue) marks unexpected is never written over (Mask GET fails, below). Changes merge; per bit, the later request wins. |
 | Mask GET fails | The hub retries a GET only after a dropped reply (`get_retry.h`), not after a timeout or NAK. When the write's own fresh GET fails, can't be queued, or answers a mask the [meaning rule](#known-property-catalogue) marks unexpected: write nothing, fire `mask_unreadable`, log a warning, republish the switches from the last good mask (with none read yet, clear their states). A poll's GET of the mask that fails meanwhile doesn't count. |
-| Read-back | A `not_kept` is a read-back that differs from what was sent; seconds are ignored when comparing times. Live-state entities recompute from the read-back. |
+| Read-back | A `not_kept` is a read-back that differs from what was sent; seconds are ignored when comparing times. A read-back GET that can't be queued ends the write as `timeout`, unless the SET already failed. Live-state entities recompute from the read-back. |
 
 **`write_failed` event types** (an ESPHome event carries only its type; the log names the field, and in HA the entity that jumped back shows it):
 
@@ -264,7 +264,7 @@ Position *i* is switch time *i*. HA's `string[]`, `int[]` and `bool[]` pass stra
 | Overlap | A second call for the same pair while one runs → `busy`, nothing written. An entity write that replaces a bulk value shows up as `not_kept` in the bulk report. An entity SET still in flight when the call starts is not the call's: its failure isn't in the report. |
 | Deadline | None. HA waits 30 s for a response by default (aioesphomeapi); past it the writes still finish and the entities show the truth. The readme notes it. |
 | In an automation | Fire and forget: the action queues the writes and the next action runs at once. `on_success` / `on_error` fire later, with the call's arguments. A call that writes nothing (bad argument, `busy`) fires `on_error` at once. |
-| One failure per field | The report names each failed field once, with its first failure, in write order. A read-back GET that fails, can't be queued, or whose answer can't be compared, leaves the field unconfirmed: `timeout` (or `not_kept` when a newer SET of it was queued, or a scan took the answer). These two appear only in the report; `write_failed` fires as for an entity write. |
+| One failure per field | The report names each failed field once, with its first failure, in write order. A read-back GET that fails, can't be queued, or whose answer can't be compared, leaves the field unconfirmed: `timeout` (or `not_kept` when a newer SET of it was queued, or a scan took the answer). These appear only in the report, except a read-back GET that can't be queued: its `timeout` also fires `write_failed`, as for an entity write. |
 | Scan mode | The scan's dropped tasks end each pending field as in [Writing](#writing); the call ends with `on_error` naming them and frees the pair. |
 | Config time | Only the list shapes are checked (`times` strings, `levels` integers, `enabled` booleans). Counts and ranges are checked at run time for constants and lambdas alike. |
 

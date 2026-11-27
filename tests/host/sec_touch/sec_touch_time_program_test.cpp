@@ -451,6 +451,37 @@ TEST_F(TimeProgramTest, ASetAckedDuringAScanGetsItsReadBack) {
   EXPECT_EQ(this->panel_replies(ack_frame()), get_frame(LEVEL_ID));
 }
 
+// #139 item 6: a SET whose read-back GET can't be queued has nothing to compare, so it ends as a timeout.
+TEST_F(TimeProgramTest, ASetWhoseReadBackCantBeQueuedIsATimeout) {
+  this->hub_.unqueueable_priority_gets.insert(LEVEL_ID);
+  this->level_.make_call().set_index(4).perform();
+  ASSERT_EQ(this->send_next_task(), set_frame(LEVEL_ID, text(format_switch_time_level(4).data())));
+
+  this->panel_replies(ack_frame());
+  EXPECT_EQ(this->events_, std::vector<std::string>{event_name(WriteFailure::TIMEOUT)});
+
+  // The next poll's answer is no read-back of it: no second report.
+  this->program_.refresh();
+  this->send_next_task();
+  this->panel_answers_get(FIRST_TIME_ID, "08:00:00");
+  this->panel_answers_get(FIRST_LEVEL_ID, "2");
+  this->panel_answers_get(MASK_ID, mask_text(0));
+  this->panel_answers_get(TIME_ID, "08:00:00");
+  this->panel_answers_get(LEVEL_ID, "2");
+  EXPECT_EQ(this->events_, std::vector<std::string>{event_name(WriteFailure::TIMEOUT)});
+}
+
+// A SET that failed and whose read-back can't be queued is reported once.
+TEST_F(TimeProgramTest, ARefusedSetWhoseReadBackCantBeQueuedIsReportedOnce) {
+  this->hub_.unqueueable_priority_gets.insert(LEVEL_ID);
+  this->level_.make_call().set_index(4).perform();
+  this->send_next_task();
+
+  this->panel_replies(nak_frame());
+
+  EXPECT_EQ(this->events_, std::vector<std::string>{event_name(WriteFailure::REFUSED)});
+}
+
 // A switch write whose fresh mask GET can't be queued writes nothing and fires mask_unreadable.
 TEST_F(TimeProgramTest, AMaskGetThatCantBeQueuedFailsTheSwitchWrite) {
   this->hub_.unqueueable_priority_gets.insert(MASK_ID);

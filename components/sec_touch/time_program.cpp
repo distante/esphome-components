@@ -348,9 +348,13 @@ void TimeProgram::on_task_end_(const BaseTask &task, TaskEnd end) {
     }
     read_back->armed = true;
     const uint32_t read_back_ticket = this->hub_->add_priority_get_task(TaskTargetType::TIME_PROGRAM, task.property_id);
-    // No read-back GET, nothing to compare: the bulk write fails.
+    // No read-back GET, nothing to compare: the write ends as a timeout, reported unless the SET already was.
     if (read_back_ticket == 0) {
+      read_back->armed = false;
       this->bulk_.fail(*slot, WriteFailure::TIMEOUT);
+      if (!read_back->reported) {
+        this->report_(task.property_id, WriteFailure::TIMEOUT);
+      }
     }
     this->bulk_.set_ended(*slot, read_back_ticket != 0);
     return;

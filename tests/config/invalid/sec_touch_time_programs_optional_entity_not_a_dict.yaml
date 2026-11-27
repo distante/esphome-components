@@ -1,0 +1,30 @@
+# expect-error: expected a dictionary
+# An optional entity entry that is not a dictionary is left to the entity's schema, even when the pair has keys to copy.
+
+esphome:
+  name: tp-optional-not-a-dict
+
+packages:
+  sec_touch_devices: !include ../../../components/sec_touch/examples/time-program-devices.yaml
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+  time_programs:
+    - fan_number: 1
+      device_id: sec_touch_pair_1_time_program
+      refresh: "Refresh"

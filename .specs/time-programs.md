@@ -45,7 +45,7 @@ The enabled and time rules are new decode rules: the sniffer spec's [Known-prope
 
 ## Configuration
 
-Decided in [What do a fan pair's time-program entities look like in YAML and HA?](https://github.com/distante/esphome-components/issues/113), with the entries added by [How do time-program writes from HA work safely?](https://github.com/distante/esphome-components/issues/117) and [Should sec_touch compute which switch time is in effect, and how is it shown?](https://github.com/distante/esphome-components/issues/120).
+Decided in [What do a fan pair's time-program entities look like in YAML and HA?](https://github.com/distante/esphome-components/issues/113), with the entries added by [How do time-program writes from HA work safely?](https://github.com/distante/esphome-components/issues/117) and [Should sec_touch compute which switch time is in effect, and how is it shown?](https://github.com/distante/esphome-components/issues/120). The `web_server` key comes from [Time programs: a pair-level web_server sorting group for all its entities](https://github.com/distante/esphome-components/issues/145).
 
 Time programs are **opt-in per pair**, in a list under the hub:
 
@@ -56,6 +56,8 @@ sec_touch:
     - fan_number: 1               # required, 1–6, once per list
       name: "Kellerraum"          # optional
       switch_times: [1, 2]        # optional, default [1, 2, 3, 4, 5]
+      web_server:                 # optional, every entity of the pair
+        sorting_group_id: group_1
       refresh:                    # optional button
         name: "Refresh"
       write_failed:               # optional event entity
@@ -77,6 +79,9 @@ sec_touch:
 | Not listed | No entities, no sub-device, no polling for that pair. |
 | `name` | The pair name ([where it shows](#sub-device)). Without it, the pair's `fan:` entry name; without a fan entry, `Fan pair N`. |
 | `switch_times` | Only listed switch times get the 3 field entities. A switch time enabled on the panel but not listed stays hidden in HA. 1–5, no duplicates. |
+| `web_server` | Optional. ESPHome's entity `web_server:` block (e.g. `sorting_group_id`). sec_touch copies it into every entity of the pair before the entity schemas run, like `device_id` ([Sub-device](#sub-device)). |
+| `web_server` on an optional entity entry | Replaces the pair's whole block for that entity. |
+| Sort order | Within a group, the v3 page sorts by `sorting_weight` (default 50), then by name, case-insensitive. |
 | `next_change` | Needs a `time:` source; none is a config error. |
 | Live-state entries | Need this hub's `fan:` entry for that pair, which polls the pair's level ID; none is a config error. |
 | `time_programs_update_interval` | Positive time period. |
@@ -349,7 +354,7 @@ Ships in **v1.5.0** with the sniffer goals and experiments. The work for this se
 1. IDs 101–166 are defined as in [Known-property catalogue](#known-property-catalogue).
 2. Check queries and shows IDs 101–166; discover and write probes skip them. Each fan card shows the time-program table with meanings; level 10, mask `20` and time `24:00:00` show as `unexpected value x`.
 3. A pair not in `time_programs:` gets no entities and no polling. A listed pair gets 3 entities per listed switch time, named by the rules in [Configuration](#configuration), [Sub-device](#sub-device) and [Entities](#entities). A config the [Configuration](#configuration) table calls an error fails validation: a duplicate `fan_number`, a switch time outside 1–5 or listed twice, `next_change` without a time source, a `time_programs_update_interval` that isn't a positive time period. A config with the example package validates and compiles.
-4. A pair's `device_id` lands on every entity of that pair before entity validation, so a name repeated on two pairs' devices is valid and repeated on one device is an error. A `device_id` on an optional entity entry wins for that entity; the 15 field entities always follow the pair. Every entity has the `entity_category` of [Entities](#entities).
+4. A pair's `device_id` lands on every entity of that pair before entity validation, so a name repeated on two pairs' devices is valid and repeated on one device is an error. A `device_id` on an optional entity entry wins for that entity; the 15 field entities always follow the pair. The 15 field entities always get the pair's `web_server:`, and an optional entity entry's own `web_server:` replaces the pair's block for that entity. Every entity has the `entity_category` of [Entities](#entities).
 5. Time-program IDs are polled as in [Reading](#reading), and never on the fan or global-settings poll. A `refresh` press queues one poll of its pair and leaves the schedule as it was.
 6. An HA write follows [Writing](#writing): published at once, one queued SET per ID (a newer value replaces the queued one), after the SET ends one GET whose value is published. No SET is retried.
 7. A switch write GETs the mask, changes only the requested bits and SETs it. A failed or unexpected fresh mask GET writes nothing. `write_failed` fires each type of the [event table](#writing) in its case.

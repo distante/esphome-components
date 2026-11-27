@@ -1,0 +1,92 @@
+# Each pair in its own web page sorting group, as the pair's fan would be. Pair 1 has every optional entity, and its
+# refresh button sets its own web_server without the pair's sorting_weight, so the entity test can check that the
+# button's block replaces the pair's whole block and every other entity gets the pair's.
+# The wifi credentials are placeholders: the build never connects.
+
+esphome:
+  name: sec-touch-tp-web-server
+  devices:
+    - id: pair_1_device
+      name: "Kellerraum time program"
+      relation: child
+    - id: pair_2_device
+      name: "Küche time program"
+      relation: child
+
+esp32:
+  board: esp32dev
+
+logger:
+  # Compiles every ESP_LOG* call, so the compile test sees -Wformat warnings.
+  level: VERY_VERBOSE
+
+wifi:
+  ssid: "fixture"
+  password: "fixture-password"
+
+web_server:
+  version: 3
+  sorting_groups:
+    - id: group_1
+      name: "Kellerraum"
+    - id: group_2
+      name: "Küche"
+    - id: group_settings
+      name: "Settings"
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+time:
+  - platform: sntp
+    id: sntp_time
+
+sec_touch:
+  uart_id: sec_touch_uart
+  time_programs:
+    - fan_number: 1
+      device_id: pair_1_device
+      web_server:
+        sorting_group_id: group_1
+        sorting_weight: 10
+      switch_times: [1, 2]
+      refresh:
+        name: "Refresh"
+        web_server:
+          sorting_group_id: group_settings
+      write_failed:
+        name: "Write failed"
+      switch_time_in_effect:
+        name: "Switch time in effect"
+      running_level:
+        name: "Running level"
+      next_level:
+        name: "Next level"
+      next_change:
+        name: "Next change"
+    - fan_number: 2
+      device_id: pair_2_device
+      web_server:
+        sorting_group_id: group_2
+      switch_times: [1]
+
+fan:
+  - platform: sec_touch
+    fan_number: 1
+    name: "Kellerraum"
+    web_server:
+      sorting_group_id: group_1
+  - platform: sec_touch
+    fan_number: 2
+    name: "Küche"
+    web_server:
+      sorting_group_id: group_2

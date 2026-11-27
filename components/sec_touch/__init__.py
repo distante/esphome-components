@@ -26,11 +26,13 @@ from esphome.const import (
     CONF_TIME,
     CONF_TIME_ID,
     CONF_TIMES,
+    CONF_WEB_SERVER,
     DEVICE_CLASS_TIMESTAMP,
     ENTITY_CATEGORY_CONFIG,
     ENTITY_CATEGORY_DIAGNOSTIC,
 )
 from esphome.core import CORE
+from esphome.core.entity_helpers import WEBSERVER_SORTING_SCHEMA
 
 from .header_reader import HeaderReader
 
@@ -189,9 +191,9 @@ TIME_PROGRAM_SCHEMA = cv.Schema(
             device_class=DEVICE_CLASS_TIMESTAMP
         ).extend({cv.GenerateID(CONF_TIME_ID): cv.use_id(time.RealTimeClock)}),
     }
-)
+).extend(WEBSERVER_SORTING_SCHEMA)
 
-# The entries a pair can have besides its field entities; their own device_id wins over the pair's.
+# The entries a pair can have besides its field entities; their own device_id and web_server win over the pair's.
 OPTIONAL_ENTITY_KEYS = (CONF_REFRESH, CONF_WRITE_FAILED) + LIVE_STATE_KEYS
 
 
@@ -217,9 +219,9 @@ def _fan_entry_name(hub_config, fan_number):
 
 
 def _prepare_time_program(hub_config, entry):
-    """Builds a pair's field entities and gives each entity the pair's device_id, before any entity schema runs, so
-    ESPHome's per-device duplicate-name check sees the final names and devices (.specs/time-programs.md,
-    "Sub-device")."""
+    """Builds a pair's field entities and gives each entity the pair's device_id and web_server, before any entity
+    schema runs, so ESPHome's per-device duplicate-name check sees the final names and devices (.specs/time-programs.md,
+    "Sub-device"), and each entity's own schema validates its web_server block."""
     if not isinstance(entry, dict):
         raise cv.Invalid("expected a dictionary")
     if CONF_FIELD_ENTITIES in entry:
@@ -263,14 +265,21 @@ def _prepare_time_program(hub_config, entry):
         )
         prefix = f"{pair_name} "
 
+    # Keys an entity takes from the pair: in the field entities always, in an optional entity unless it sets its own.
+    # A web_server that isn't a dictionary stays out, so the pair's schema reports it once, not each entity again.
+    # A dictionary with a bad value is copied, so each entity reports it too.
+    inherited = {}
+    if CONF_DEVICE_ID in entry:
+        inherited[CONF_DEVICE_ID] = entry[CONF_DEVICE_ID]
+    if isinstance(entry.get(CONF_WEB_SERVER), dict):
+        inherited[CONF_WEB_SERVER] = entry[CONF_WEB_SERVER]
+
     def field(n, kind):
-        config = {
+        return {
             CONF_NAME: f"{prefix}Switch time {n} {kind}",
             CONF_ENTITY_CATEGORY: ENTITY_CATEGORY_CONFIG,
+            **inherited,
         }
-        if device_id is not None:
-            config[CONF_DEVICE_ID] = device_id
-        return config
 
     entry[CONF_FIELD_ENTITIES] = [
         {
@@ -283,11 +292,10 @@ def _prepare_time_program(hub_config, entry):
     ]
     for key in OPTIONAL_ENTITY_KEYS:
         optional_entity = entry.get(key)
-        if device_id is None or optional_entity is None:
+        # A missing entry stays missing; one that isn't a dictionary is the entity schema's to report.
+        if not inherited or not isinstance(optional_entity, dict):
             continue
-        optional_entity = dict(optional_entity or {})
-        optional_entity.setdefault(CONF_DEVICE_ID, device_id)
-        entry[key] = optional_entity
+        entry[key] = {**inherited, **optional_entity}
     return entry
 
 

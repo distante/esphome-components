@@ -20,6 +20,7 @@ using esphome::sec_touch::MS_PER_DAY;
 using esphome::sec_touch::MS_PER_HOUR;
 using esphome::sec_touch::MS_PER_MINUTE;
 using esphome::sec_touch::MS_PER_S;
+using esphome::sec_touch::next_change_iso;
 using esphome::sec_touch::next_change_timestamp;
 using esphome::sec_touch::PanelClock;
 using esphome::sec_touch::SECONDS_PER_MINUTE;
@@ -510,6 +511,25 @@ TEST(NextChangeTimestamp, IsNowPlusTheWaitRoundedToTheMinute) {
   EXPECT_EQ(next_change_timestamp(NOW_S, hours(2) + seconds(29) + 999), NOW_S + hours(2) / MS_PER_S);
   EXPECT_EQ(next_change_timestamp(NOW_S, hours(2) + seconds(30)), NOW_S + (hours(2) + minutes(1)) / MS_PER_S);
   EXPECT_EQ(next_change_timestamp(NOW_S + 10, hours(2)), NOW_S + hours(2) / MS_PER_S);
+}
+
+// ----- next_change_iso -----
+
+TEST(NextChangeIso, IsTheExactSecondInUtc) {
+  EXPECT_STREQ(next_change_iso(1795784400).text.data(), "2026-11-27T13:00:00Z");
+  EXPECT_STREQ(next_change_iso(1795784459).text.data(), "2026-11-27T13:00:59Z");
+}
+
+TEST(NextChangeIso, KeepsTheCalendarDate) {
+  EXPECT_STREQ(next_change_iso(0).text.data(), "1970-01-01T00:00:00Z");
+  EXPECT_STREQ(next_change_iso(951782400).text.data(), "2000-02-29T00:00:00Z");
+}
+
+TEST(NextChangeIso, IsEmptyForATimeNoCalendarHolds) { EXPECT_STREQ(next_change_iso(INT64_MAX).text.data(), ""); }
+
+TEST(NextChangeIso, IsEmptyForAYearThatDoesNotFitTheLayout) {
+  constexpr int64_t YEAR_10000_S = 253402300800;
+  EXPECT_STREQ(next_change_iso(YEAR_10000_S).text.data(), "");
 }
 
 }  // namespace

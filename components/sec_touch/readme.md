@@ -332,7 +332,7 @@ sec_touch:
         name: "Running level"
       next_level:              # text_sensor: a level name or a state word
         name: "Next level"
-      next_change:             # timestamp sensor, needs a time: source
+      next_change:             # timestamp text_sensor, needs a time: source
         name: "Next change"
 ```
 
@@ -346,7 +346,7 @@ sec_touch:
 - **Needs the pair's `fan:` entry**, which polls the pair's level. Without it the config fails.
 - **Polling:** with any live-state entity, the pair's whole block of 11 IDs is polled, whatever `switch_times` lists.
 - **`next_change` shows Unknown** whenever the other three show `not running` or `none`: a timestamp can't hold a state word, so it has no value then.
-- **`next_change` precision:** rounded to the minute, but HA gets it as a float, so it can be off by up to ±64 s.
+- **`next_change` precision:** rounded to the minute; HA gets it as an ISO 8601 UTC time (`2026-11-27T13:00:00Z`), with no float loss.
 - The fan entity isn't changed: in Automatik Zeit it still shows on, preset Automatic Time.
 
 ## Logging

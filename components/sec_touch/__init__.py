@@ -8,7 +8,6 @@ from esphome.components import (
     datetime,
     event,
     select as esphome_select,
-    sensor as esphome_sensor,
     switch as esphome_switch,
     text_sensor as esphome_text_sensor,
     time,
@@ -104,7 +103,6 @@ TimeProgramLiveState = sec_touch_ns.class_("TimeProgramLiveState", cg.Component)
 TIME_PROGRAM_DOMAINS = ["datetime", "select", "switch"]
 REFRESH_DOMAIN = "button"
 WRITE_FAILED_DOMAIN = "event"
-NEXT_CHANGE_DOMAIN = "sensor"
 
 
 # A config value read as ESPHome reads a list key: one entry becomes a list of it, None and {} an empty list. For the
@@ -122,7 +120,7 @@ def AUTO_LOAD(config):
         return (
             base
             + TIME_PROGRAM_DOMAINS
-            + [REFRESH_DOMAIN, WRITE_FAILED_DOMAIN, NEXT_CHANGE_DOMAIN]
+            + [REFRESH_DOMAIN, WRITE_FAILED_DOMAIN]
         )
     entries = _as_list(config.get(CONF_TIME_PROGRAMS))
     if not entries:
@@ -132,8 +130,6 @@ def AUTO_LOAD(config):
         loads.append(REFRESH_DOMAIN)
     if any(CONF_WRITE_FAILED in entry for entry in entries):
         loads.append(WRITE_FAILED_DOMAIN)
-    if any(CONF_NEXT_CHANGE in entry for entry in entries):
-        loads.append(NEXT_CHANGE_DOMAIN)
     return loads
 
 
@@ -187,7 +183,7 @@ TIME_PROGRAM_SCHEMA = cv.Schema(
             cv.Optional(key): esphome_text_sensor.text_sensor_schema()
             for key in LIVE_STATE_TEXT_KEYS
         },
-        cv.Optional(CONF_NEXT_CHANGE): esphome_sensor.sensor_schema(
+        cv.Optional(CONF_NEXT_CHANGE): esphome_text_sensor.text_sensor_schema(
             device_class=DEVICE_CLASS_TIMESTAMP
         ).extend({cv.GenerateID(CONF_TIME_ID): cv.use_id(time.RealTimeClock)}),
     }
@@ -498,7 +494,7 @@ async def _live_state_to_code(hub, entry):
         sens = await esphome_text_sensor.new_text_sensor(conf)
         cg.add(live_state.set_next_level(sens))
     if conf := entry.get(CONF_NEXT_CHANGE):
-        sens = await esphome_sensor.new_sensor(conf)
+        sens = await esphome_text_sensor.new_text_sensor(conf)
         time_source = await cg.get_variable(conf[CONF_TIME_ID])
         cg.add(live_state.set_next_change(sens, time_source))
 

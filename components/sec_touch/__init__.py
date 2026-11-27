@@ -71,7 +71,7 @@ LIVE_STATE_KEYS = LIVE_STATE_TEXT_KEYS + (CONF_NEXT_CHANGE,)
 # Generated before validation when a pair has a live-state entity, never written by the user.
 CONF_LIVE_STATE_ID = "live_state_id"
 
-# The total of fan pairs that the SEC-Touch shows in the screen
+# The fan pairs the panel's screen shows
 FAN_PAIR_COUNT = len(FAN_LEVEL_IDS)
 
 
@@ -202,11 +202,19 @@ def sec_touch_fans(fans):
     ]
 
 
+def _raw_fan_number(fan):
+    """A raw `fan:` entry's fan_number as its schema reads it (a quoted "1" is 1), or None when the schema rejects it."""
+    try:
+        return FAN_NUMBER_SCHEMA(fan.get(CONF_FAN_NUMBER))
+    except cv.Invalid:
+        return None
+
+
 def _fan_entries(hub_config, fan_number):
     """This hub's `fan:` entries for `fan_number`."""
     hub_id = hub_config.get(CONF_ID)
     for fan in sec_touch_fans((CORE.raw_config or {}).get("fan")):
-        if fan.get(CONF_FAN_NUMBER) != fan_number:
+        if _raw_fan_number(fan) != fan_number:
             continue
         if fan.get(CONF_SEC_TOUCH_ID) not in (None, hub_id):
             continue

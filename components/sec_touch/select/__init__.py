@@ -56,7 +56,7 @@ def _final_validate(config):
     if n not in fan_numbers_with_sec_touch:
         raise cv.Invalid(
             f"select.sec_touch {CONF_FAN_NUMBER}={n} requires a matching fan.sec_touch entry "
-            f"with {CONF_FAN_NUMBER}={n} and sec_touch_id={sec_touch_id}",
+            f"with {CONF_FAN_NUMBER}={n} and {CONF_SEC_TOUCH_ID}={sec_touch_id}",
             path=[CONF_FAN_NUMBER],
         )
     return config

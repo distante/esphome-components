@@ -146,7 +146,7 @@ Decided in [Should sec_touch compute which switch time is in effect, and how is 
 - **Which IDs:** the enabled ID and the time and level IDs of the listed switch times. With any live-state entity, the pair's **whole block** (11 IDs), whatever `switch_times` says.
 - **Panel clock:** with any live-state entity on any pair, ID 2 (clock) is polled on the global-settings poll, as for `clock_drift`. ID 1 (date) only with `clock_drift`; the hub polls it right before ID 2, whatever the registration order.
 - **First poll:** right after boot, like the global settings.
-- **`refresh` button:** one press queues the same GETs as one poll of that pair. The regular poll stays on its schedule.
+- **`refresh` button:** one press queues the same GETs as one poll of that pair, minus any ID whose GET is already queued. During a scan it queues nothing: the poll after the scan reads the pair. The regular poll stays on its schedule.
 - Results reach the entities through the hub's existing update listeners.
 
 ---

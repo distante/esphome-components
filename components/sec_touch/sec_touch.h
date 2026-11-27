@@ -191,6 +191,8 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   /// A new task ticket, never 0.
   uint32_t next_ticket_();
   bool has_time_program_polls() const;
+  /// Whether a task of `type` for `property_id` waits in the queue; the one in flight is not in it.
+  bool has_queued_task_(TaskType type, int property_id) const;
   void send_ack_message();
   void drop_data_message(DataMessageCheck check);
 

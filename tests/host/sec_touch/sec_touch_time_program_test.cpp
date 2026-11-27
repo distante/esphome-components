@@ -177,6 +177,23 @@ TEST_F(TimeProgramTest, RefreshQueuesOnePollAndKeepsTheSchedule) {
   EXPECT_EQ(this->hub_.last_time_programs_update_ms_, scheduled);
 }
 
+// #139 item 1: during a scan the sniffer takes every answer, so a refresh would only feed it.
+TEST_F(TimeProgramTest, ARefreshDuringAScanQueuesNothing) {
+  this->hub_.enter_scan_mode();
+
+  this->program_.refresh();
+
+  EXPECT_TRUE(this->hub_.data_task_queue.empty());
+}
+
+// #139 item 1: repeated presses don't stack GETs: an ID whose GET is already queued is skipped.
+TEST_F(TimeProgramTest, TwoRefreshesQueueEachIdOnce) {
+  this->program_.refresh();
+  this->program_.refresh();
+
+  EXPECT_EQ(this->drain(), one_poll());
+}
+
 // AC 6 and 8: published at once; written as HH:MM:00, the seconds dropped.
 TEST_F(TimeProgramTest, ATimeWriteIsPublishedAtOnceAndSentWithZeroSeconds) {
   this->time_.make_call().set_time(8, 30, 45).perform();

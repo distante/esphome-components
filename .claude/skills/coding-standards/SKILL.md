@@ -99,9 +99,14 @@ Every change lands with tests in one of five layers:
 
 ### Code comments
 
-A comment in `components/` or `tests/` says why: a reason, a constraint or a gotcha the code can't show.
+A comment in `components/` or `tests/` is allowed only for one of these:
 
-- **Why, not what.** The code, a name or the test name says what; a comment that repeats it goes.
+- **What the code can't say.** The code or the function's name doesn't explain what it does. A comment that repeats the code, a name or the test name goes.
+- **A hardware quirk.** How the panel, the UART or the ESP32 behaves (a reply comes about 1 s late, IDs 209–255 time out).
+- **Why a non-obvious decision.** The reason behind a choice a reader would question, such as a static buffer to keep memory low.
+
+Every allowed comment is also:
+
 - **Timeless.** It describes the code as it stands. History (issue and item numbers, "now", "no longer") lives in git and the PR. A spec criterion (`// AC 9:`) is a reference, not history.
 - **Once.** A rule is explained at its definition (the constant, the function); other places use its name.
 - **Counts that can't go stale.** Name the parts ("the headers below"), not their number ("six headers").

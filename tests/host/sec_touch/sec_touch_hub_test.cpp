@@ -106,7 +106,7 @@ class SECTouchGetRetryTest : public SECTouchHubTest {
 
   /// The panel answers the GET in flight with its ACK, then a data frame whose STX arrives garbled, so every byte of
   /// it reads as noise. Returns what the hub sent meanwhile.
-  std::vector<uint8_t> panel_answers_with_corrupted_stx(int property_id, const std::string &value) {
+  std::vector<uint8_t> panel_answers_with_lost_stx(int property_id, const std::string &value) {
     this->uart_.push_rx(ack_frame());
     return this->feed_noise(without_stx(data_frame(property_id, value)));
   }
@@ -310,11 +310,11 @@ TEST_F(SECTouchGetRetryTest, MalformedLabelReplyIsAckedThenTheSameGetIsSentAgain
 
 // After the panel's ACK, an ETX that ends only noise ended the data frame the GET waits for: it is dropped like any
 // malformed reply, at once rather than at the watchdog.
-TEST_F(SECTouchGetRetryTest, AReplyWithACorruptedStxIsAckedThenTheSameGetIsSentAgain) {
+TEST_F(SECTouchGetRetryTest, AReplyWithALostStxIsAckedThenTheSameGetIsSentAgain) {
   this->queue_label_reads({LABEL_1_ID});
   this->send_next_task();
 
-  EXPECT_EQ(this->panel_answers_with_corrupted_stx(LABEL_1_ID, "3"), concat(ack_frame(), get_frame(LABEL_1_ID)));
+  EXPECT_EQ(this->panel_answers_with_lost_stx(LABEL_1_ID, "3"), concat(ack_frame(), get_frame(LABEL_1_ID)));
 
   this->panel_answers(data_frame(LABEL_1_ID, "3"));
   EXPECT_EQ(this->labels_, std::vector<std::string>{std::to_string(LABEL_1_ID) + "=3"});
@@ -361,7 +361,7 @@ TEST_F(SECTouchGetRetryTest, ReplyWithALostStxDuringScanIsNotRetried) {
   this->hub_.add_discovery_get_task(UNANSWERED_PROPERTY_ID);
   this->send_next_task();
 
-  EXPECT_EQ(this->panel_answers_with_corrupted_stx(FAN_1_LEVEL_ID, "10"),
+  EXPECT_EQ(this->panel_answers_with_lost_stx(FAN_1_LEVEL_ID, "10"),
             concat(ack_frame(), get_frame(UNANSWERED_PROPERTY_ID)));
   EXPECT_EQ(this->hub_.get_last_scan_outcome(), ScanOutcome::SCAN_OUTCOME_TIMEOUT);
 }
@@ -537,17 +537,17 @@ TEST_F(SECTouchTaskEndTest, AMalformedGetEndsOnceAfterItsRetry) {
   EXPECT_EQ(this->ends_, std::vector<std::string>{end_of("GET", LABEL_1_ID, TaskEnd::TASK_END_MALFORMED)});
 }
 
-TEST_F(SECTouchTaskEndTest, ASecondReplyWithACorruptedStxEndsItsGetAsMalformed) {
+TEST_F(SECTouchTaskEndTest, ASecondReplyWithALostStxEndsItsGetAsMalformed) {
   this->queue_label_reads({LABEL_1_ID, LABEL_2_ID});
   this->send_next_task();
-  this->panel_answers_with_corrupted_stx(LABEL_1_ID, "3");
+  this->panel_answers_with_lost_stx(LABEL_1_ID, "3");
 
-  EXPECT_EQ(this->panel_answers_with_corrupted_stx(LABEL_1_ID, "3"), concat(ack_frame(), get_frame(LABEL_2_ID)));
+  EXPECT_EQ(this->panel_answers_with_lost_stx(LABEL_1_ID, "3"), concat(ack_frame(), get_frame(LABEL_2_ID)));
   EXPECT_EQ(this->ends_, std::vector<std::string>{end_of("GET", LABEL_1_ID, TaskEnd::TASK_END_MALFORMED)});
 }
 
 // Before the panel's ACK, a garbled ACK's ETX is no data frame: the GET still waits for the one that follows.
-TEST_F(SECTouchTaskEndTest, AnAckWithACorruptedStxLeavesItsGetOpen) {
+TEST_F(SECTouchTaskEndTest, AnAckWithALostStxLeavesItsGetOpen) {
   this->queue_label_reads({LABEL_1_ID});
   this->send_next_task();
 
@@ -556,6 +556,16 @@ TEST_F(SECTouchTaskEndTest, AnAckWithACorruptedStxLeavesItsGetOpen) {
   this->uart_.push_rx(data_frame(LABEL_1_ID, "3"));
   this->hub_.loop_times(2);
   EXPECT_EQ(this->ends_, std::vector<std::string>{end_of("GET", LABEL_1_ID, TaskEnd::TASK_END_ANSWERED)});
+}
+
+// Only a GET waits for a reply: a SET's garbled ACK stays noise, whatever the ETX that ends it.
+TEST_F(SECTouchTaskEndTest, AnAckWithALostStxLeavesItsSetOpen) {
+  this->hub_.add_set_task(SetDataTask::create(TaskTargetType::LEVEL, FAN_1_LEVEL_ID, "5"));
+  this->send_next_task();
+  ASSERT_EQ(this->hub_.current_running_task_type, TaskType::SET_DATA);
+
+  EXPECT_TRUE(this->feed_noise(without_stx(ack_frame())).empty());
+  EXPECT_EQ(this->hub_.current_running_task_type, TaskType::SET_DATA);
 }
 
 // Scan mode clears the queue: every discarded task, the one in flight first, ends as a timeout.

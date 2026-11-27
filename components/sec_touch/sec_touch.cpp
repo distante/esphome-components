@@ -154,9 +154,10 @@ void SECTouchComponent::loop() {
     ESP_LOGD(TAG, "[loop]  Discarding noise byte (or maybe a Heartbeat with %d?)", peakedData);
     this->read_byte(&peakedData);
     if (peakedData == ETX && this->get_acked_) {
-      ESP_LOGW(TAG_UART, "  [loop] %s (task=%s property_id=%d). Task Failed",
-               data_message_check_reason(DataMessageCheck::DATA_STX_LOST),
-               EnumToString::TaskType(this->current_running_task_type), this->current_running_task_property_id_);
+      char context[384];
+      this->describe_dropped_message("", 0, "", context, sizeof(context));
+      ESP_LOGW(TAG_UART, "  [loop] %s (%s). Task Failed", data_message_check_reason(DataMessageCheck::DATA_STX_LOST),
+               context);
       this->drop_data_message(DataMessageCheck::DATA_STX_LOST);
     }
     return;

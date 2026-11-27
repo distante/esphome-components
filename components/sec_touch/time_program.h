@@ -95,7 +95,7 @@ class TimeProgram {
     uint32_t set_ticket{0};
   };
 
-  /// Puts `id` on the pair's poll. The hub checks that it is one of the pair's IDs; its poll list keeps each ID once.
+  /// Puts `id` on the pair's poll; the hub drops a foreign or repeated ID.
   void watch_(int id);
   void on_value_(int id, const std::string &raw);
   void on_time_(int switch_time, const std::string &raw);

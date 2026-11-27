@@ -328,8 +328,6 @@ TEST_F(LiveStateModelTest, TheClockAdvancesBetweenReads) {
   expect_state(this->state(hours(2)), switch_time_name(2), running(2), running(1), hours(19));
 }
 
-// #139 item 2: a clock read arrives late, so it can pull the clock back across a change that just passed. A step back
-// under LATE_CLOCK_READ_MS across a change is ignored: the change doesn't flip back and forward again.
 TEST_F(LiveStateModelTest, ALateClockReadAcrossAChangeThatJustPassedIsIgnored) {
   this->ready(bit(1) | bit(2) | bit(3), "11:59:59");
   const uint32_t after = seconds(1) + 400;  // the clock shows 12:00:00.4: switch time 2 took effect
@@ -357,7 +355,7 @@ TEST_F(LiveStateModelTest, ALargerStepBackAcrossAChangeStillMovesTheClock) {
   this->ready(bit(1) | bit(2) | bit(3), "11:59:59");
   const uint32_t after = seconds(1) + 400;
 
-  // 3.4 s back, across 12:00: more than a late read.
+  // 3.4 s back, across 12:00.
   static_assert(LATE_CLOCK_READ_MS < seconds(3) + 400);
   EXPECT_TRUE(this->model_.take_clock("11:59:57", READ_MS + after));
 

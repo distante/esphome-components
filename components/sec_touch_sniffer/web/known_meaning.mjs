@@ -88,10 +88,7 @@ function enabledMaskName(catalogue, trimmed) {
 }
 
 const HH_MM_SS = /^([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
-/**
- * @returns {boolean} whether the trimmed raw is exactly HH:MM:SS, each part below its unit in the catalogue's
- *   timeUnits (HH below hoursPerDay, MM below minutesPerHour, SS below secondsPerMinute)
- */
+/** @returns {boolean} whether the trimmed raw is exactly HH:MM:SS, each part below its catalogue.timeUnits bound */
 function isSwitchTimeTime(catalogue, trimmed) {
   const match = HH_MM_SS.exec(trimmed);
   if (match === null) {

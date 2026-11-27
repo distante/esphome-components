@@ -32,7 +32,6 @@ TEST(MillisReached, AMomentAfterTheWrapIsNotReachedBeforeIt) {
   EXPECT_FALSE(millis_reached(BEFORE_WRAP_MS, BEFORE_WRAP_MS + ACROSS_WRAP_MS));
 }
 
-// Worked values: an hour is 3600 s, a day 86400 s.
 TEST(TimeUnits, AnHourAndADayInSeconds) {
   EXPECT_EQ(SECONDS_PER_HOUR, 3600);
   EXPECT_EQ(SECONDS_PER_DAY, 86400);

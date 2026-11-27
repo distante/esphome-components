@@ -1,7 +1,7 @@
 """Reads the constants and tables of this component's plain C++ headers, with regexes and no compiler.
 
 Two readers use it: this component's codegen (__init__.py takes SWITCH_TIME_COUNT from protocol_ids.h) and the
-sniffer's page bundle (../sec_touch_sniffer/page_bundle.py builds the page catalogue from six headers). Either way,
+sniffer's page bundle (../sec_touch_sniffer/page_bundle.py builds the page catalogue from them). Either way,
 the header stays each value's one source.
 
 Each declaration read from a header must keep one of these forms:

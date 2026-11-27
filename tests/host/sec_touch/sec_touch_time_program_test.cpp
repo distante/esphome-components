@@ -139,7 +139,7 @@ TEST_F(TimeProgramTest, APollThatRanBeforeTheMillisWrapIsDueOnlyAfterItsInterval
   EXPECT_TRUE(this->send_next_task().empty());
 }
 
-// #139 item 8: both switches watch the mask ID; the poll lists it once.
+// Both switches watch the mask ID.
 TEST_F(TimeProgramTest, AnIdWatchedTwiceIsPolledOnce) {
   const auto &poll = this->hub_.time_program_polls_[PAIR - 1];
 
@@ -184,7 +184,6 @@ TEST_F(TimeProgramTest, RefreshQueuesOnePollAndKeepsTheSchedule) {
   EXPECT_EQ(this->hub_.last_time_programs_update_ms_, scheduled);
 }
 
-// #139 item 1: during a scan the sniffer takes every answer, so a refresh would only feed it.
 TEST_F(TimeProgramTest, ARefreshDuringAScanQueuesNothing) {
   this->hub_.enter_scan_mode();
 
@@ -193,7 +192,6 @@ TEST_F(TimeProgramTest, ARefreshDuringAScanQueuesNothing) {
   EXPECT_TRUE(this->hub_.data_task_queue.empty());
 }
 
-// #139 item 1: repeated presses don't stack GETs: an ID whose GET is already queued is skipped.
 TEST_F(TimeProgramTest, TwoRefreshesQueueEachIdOnce) {
   this->program_.refresh();
   this->program_.refresh();
@@ -458,7 +456,6 @@ TEST_F(TimeProgramTest, ASetAckedDuringAScanGetsItsReadBack) {
   EXPECT_EQ(this->panel_replies(ack_frame()), get_frame(LEVEL_ID));
 }
 
-// #139 item 6: a SET whose read-back GET can't be queued has nothing to compare, so it ends as a timeout.
 TEST_F(TimeProgramTest, ASetWhoseReadBackCantBeQueuedIsATimeout) {
   this->hub_.unqueueable_priority_gets.insert(LEVEL_ID);
   this->level_.make_call().set_index(4).perform();
@@ -478,7 +475,6 @@ TEST_F(TimeProgramTest, ASetWhoseReadBackCantBeQueuedIsATimeout) {
   EXPECT_EQ(this->events_, std::vector<std::string>{event_name(WriteFailure::TIMEOUT)});
 }
 
-// A SET that failed and whose read-back can't be queued is reported once.
 TEST_F(TimeProgramTest, ARefusedSetWhoseReadBackCantBeQueuedIsReportedOnce) {
   this->hub_.unqueueable_priority_gets.insert(LEVEL_ID);
   this->level_.make_call().set_index(4).perform();
@@ -510,8 +506,7 @@ TEST_F(TimeProgramTest, AFailedSwitchWriteShowsTheLastGoodMask) {
   EXPECT_FALSE(this->enabled_.state);
 }
 
-// #139 item 5: with no good mask read yet there is nothing to show again, so the switches show no state, as a select
-// or a time does after a failed read.
+// No state, as a select or a time shows after a failed read.
 TEST_F(TimeProgramTest, AFailedSwitchWriteBeforeAnyGoodMaskLeavesTheSwitchesWithoutState) {
   this->hub_.unqueueable_priority_gets.insert(MASK_ID);
 

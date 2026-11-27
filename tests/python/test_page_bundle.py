@@ -109,7 +109,6 @@ def test_parses_the_switch_time_rules() -> None:
     assert catalogue.get("enabledMaskNames") == {"none": "none enabled", "separator": ", ", "suffix": " enabled"}
 
 
-# #139 item 3: the page checks a switch time's HH:MM:SS against these, from time_units.h.
 def test_parses_the_time_units() -> None:
     assert parse_catalogue().get("timeUnits") == {"hoursPerDay": 24, "minutesPerHour": 60, "secondsPerMinute": 60}
 

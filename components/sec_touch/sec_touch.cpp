@@ -395,13 +395,12 @@ void SECTouchComponent::add_time_program_tasks_to_queue(int pair) {
     ESP_LOGE(TAG, "Fan pair %d has no time program", pair);
     return;
   }
-  // The sniffer takes every answer during a scan; the poll after the scan reads the pair.
+  // The sniffer takes every answer during a scan.
   if (this->scan_mode_active_) {
     ESP_LOGD(TAG, "Scan mode active, fan pair %d's time program is read after the scan", pair);
     return;
   }
   for (int id : this->time_program_polls_[pair - 1]) {
-    // Repeated refreshes add no second GET of an ID.
     if (this->has_queued_task_(TaskType::GET_DATA, id)) {
       continue;
     }

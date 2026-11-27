@@ -280,7 +280,7 @@ void TimeProgram::fail_mask_write_(const char *why) {
     this->publish_switches_(static_cast<uint8_t>(this->last_good_mask_));
     return;
   }
-  // No good mask read yet: nothing to show again, so no switch shows the state it never wrote.
+  // No good mask yet: show no state rather than the unwritten one.
   for (TimeProgramEnabledSwitch *entity : this->switches_) {
     if (entity != nullptr) {
       entity->clear_state();
@@ -336,7 +336,7 @@ void TimeProgram::on_task_end_(const BaseTask &task, TaskEnd end) {
     }
     read_back->armed = true;
     const uint32_t read_back_ticket = this->hub_->add_priority_get_task(TaskTargetType::TIME_PROGRAM, task.property_id);
-    // No read-back GET, nothing to compare: the write ends as a timeout, reported unless the SET already was.
+    // No read-back, nothing to compare: a timeout, unless the SET already reported.
     if (read_back_ticket == 0) {
       read_back->armed = false;
       this->bulk_.fail(*slot, WriteFailure::TIMEOUT);

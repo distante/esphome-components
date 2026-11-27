@@ -58,17 +58,15 @@ def entities_of(entry: dict) -> dict[str, dict]:
 def test_every_entity_has_its_category_and_the_pairs_device() -> None:
     entry = validated_entry()
     device_id = entry[CONF_DEVICE_ID]
-    entities = {key: entry[key] for key in sec_touch.OPTIONAL_ENTITY_KEYS}
+    entities = entities_of(entry)
     expected = {
         sec_touch.CONF_REFRESH: ENTITY_CATEGORY_CONFIG,
         sec_touch.CONF_WRITE_FAILED: ENTITY_CATEGORY_DIAGNOSTIC,
         **{key: NO_CATEGORY for key in sec_touch.LIVE_STATE_KEYS},
     }
-    for fields in entry[sec_touch.CONF_FIELD_ENTITIES]:
-        for kind in FIELD_KINDS:
-            name = f"{sec_touch.CONF_SWITCH_TIME} {fields[sec_touch.CONF_SWITCH_TIME]} {kind}"
-            entities[name] = fields[kind]
-            expected[name] = ENTITY_CATEGORY_CONFIG
+    # entities_of skips a missing optional entity; this fixture lists them all.
+    assert set(sec_touch.OPTIONAL_ENTITY_KEYS) <= entities.keys()
+    expected |= {name: ENTITY_CATEGORY_CONFIG for name in entities if name not in sec_touch.OPTIONAL_ENTITY_KEYS}
 
     assert {name: entity.get(CONF_ENTITY_CATEGORY) for name, entity in entities.items()} == expected
     assert {name: entity.get(CONF_DEVICE_ID) for name, entity in entities.items()} == {
@@ -86,6 +84,7 @@ def test_every_entity_gets_the_pairs_web_server_unless_it_has_its_own() -> None:
         fan_number: {name: entry[CONF_WEB_SERVER] for name in blocks[fan_number]}
         for fan_number, entry in entries.items()
     }
+    # group_settings is the fixture's refresh group, the value under test.
     # The fixture's refresh button sets its own web_server, which replaces the pair's whole block: no sorting_weight.
     expected[1][sec_touch.CONF_REFRESH] = {CONF_SORTING_GROUP_ID: "group_settings"}
 

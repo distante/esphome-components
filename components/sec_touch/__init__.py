@@ -267,6 +267,7 @@ def _prepare_time_program(hub_config, entry):
 
     # Keys an entity takes from the pair: in the field entities always, in an optional entity unless it sets its own.
     # A web_server that isn't a dictionary stays out, so the pair's schema reports it once, not each entity again.
+    # A dictionary with a bad value is copied, so each entity reports it too.
     inherited = {}
     if CONF_DEVICE_ID in entry:
         inherited[CONF_DEVICE_ID] = entry[CONF_DEVICE_ID]

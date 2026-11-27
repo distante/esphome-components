@@ -84,8 +84,9 @@ Enforces [coding-standards](../coding-standards/SKILL.md)' single source: every 
 
 1. When the diff touches `.claude/skills/`, `CLAUDE.md` or `.specs/`, grep [coding-standards](../coding-standards/SKILL.md) and [sec-touch](../sec-touch/SKILL.md) for each added instruction.
 2. An instruction that is already a rule there becomes a link to it, never a second wording. Example: a review check that repeated coding-standards' "grep for the concept by names, synonyms and value" step.
+3. A value or bound that lives in code (a range, a count) is named by its definition, not written out. Example: sec-touch's "fan_number is 1-6" while the range lives in `FAN_PAIR_COUNT`.
 
-Done when each added instruction has a grep behind it, and each restatement is reported with its `file:line` and the rule it restates.
+Done when each added instruction has a grep behind it, each restatement is reported with its `file:line` and the rule it restates, and each written-out code value with its `file:line` and the definition to name.
 
 ## Stored state reads well in a later version
 

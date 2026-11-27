@@ -39,7 +39,8 @@ def _final_validate(config):
     fans = sec_touch_fans(fv.full_config.get().get("fan"))
     if [fan[CONF_FAN_NUMBER] for fan in fans].count(fan_number) > 1:
         raise cv.Invalid(
-            f"{CONF_FAN_NUMBER} {fan_number} is listed twice in fan", path=[CONF_FAN_NUMBER]
+            f"{CONF_FAN_NUMBER} {fan_number} is listed twice in fan",
+            path=[CONF_FAN_NUMBER],
         )
     return config
 

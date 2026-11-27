@@ -253,7 +253,7 @@ def _prepare_time_program(hub_config, entry):
         # Live state reads the pair's level ID, which only the pair's fan entry polls.
         if next(_fan_entries(hub_config, fan_number), None) is None:
             raise cv.Invalid(
-                f"{live_state[0]} needs this hub's sec_touch fan entry with fan_number {fan_number}",
+                f"{live_state[0]} needs this hub's sec_touch fan entry with {CONF_FAN_NUMBER} {fan_number}",
                 path=[live_state[0]],
             )
         # None declares an ID that ESPHome generates.
@@ -317,7 +317,7 @@ def _prepare_time_programs(hub_config):
         fan_number = entry[CONF_FAN_NUMBER]
         if fan_number in seen:
             raise cv.Invalid(
-                f"fan_number {fan_number} is listed twice in {CONF_TIME_PROGRAMS}",
+                f"{CONF_FAN_NUMBER} {fan_number} is listed twice in {CONF_TIME_PROGRAMS}",
                 path=[CONF_TIME_PROGRAMS, i, CONF_FAN_NUMBER],
             )
         seen.add(fan_number)
@@ -398,7 +398,7 @@ def _final_validate_set_time_program_calls(config):
             )
         if fan_number is not None and fan_number not in listed:
             raise cv.Invalid(
-                f"sec_touch.set_time_program: fan_number {fan_number} is not listed in sec_touch {CONF_TIME_PROGRAMS}"
+                f"sec_touch.set_time_program: {CONF_FAN_NUMBER} {fan_number} is not listed in sec_touch {CONF_TIME_PROGRAMS}"
             )
     return config
 

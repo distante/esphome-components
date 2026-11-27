@@ -173,6 +173,15 @@ test("a switch time's time out of range or not exactly HH:MM:SS is unexpected", 
   }
 });
 
+// #139 item 3: the bounds are the catalogue's time units, not the page's own.
+test("a switch time's time is checked against the catalogue's time units", () => {
+  const shortDay = { ...CATALOGUE, timeUnits: { hoursPerDay: 12, minutesPerHour: 30, secondsPerMinute: 20 } };
+  assert.deepEqual(knownMeaning(shortDay, TIME, "11:29:19"), named("11:29:19"));
+  for (const raw of ["12:00:00", "00:30:00", "00:00:20"]) {
+    assert.deepEqual(knownMeaning(shortDay, TIME, raw), unexpected(raw), raw);
+  }
+});
+
 test("a switch time is enabled when its bit, N-1, of the pair's enabled mask is set", () => {
   assert.deepEqual(switchTimeEnabled(CATALOGUE, "01", 1), named(SWITCH_TIME_ENABLED));
   assert.deepEqual(switchTimeEnabled(CATALOGUE, "01", 2), named(SWITCH_TIME_NOT_ENABLED));

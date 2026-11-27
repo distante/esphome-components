@@ -15,6 +15,7 @@ export const FIXTURE_CATALOGUE = {
   timeProgramLevelIds: [63, 64, 68, 69],
   switchTimeCount: 2,
   maxSwitchTimeLevel: 7,
+  timeUnits: { hoursPerDay: 24, minutesPerHour: 60, secondsPerMinute: 60 },
   enabledMaskNames: { none: "none enabled", separator: ", ", suffix: " enabled" },
   levelNames: { 0: "off", 3: "level 3", 7: "Burst", 255: "not connected" },
   labelNames: ["-", "Bad", "Küche"],

@@ -88,17 +88,18 @@ function enabledMaskName(catalogue, trimmed) {
 }
 
 const HH_MM_SS = /^([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
-const MAX_HOUR = 23;
-const MAX_MINUTE_OR_SECOND = 59;
-
-/** @returns {boolean} whether the trimmed raw is exactly HH:MM:SS, HH 00–23, MM and SS 00–59 */
-function isSwitchTimeTime(trimmed) {
+/**
+ * @returns {boolean} whether the trimmed raw is exactly HH:MM:SS, each part below its unit in the catalogue's
+ *   timeUnits (HH below hoursPerDay, MM below minutesPerHour, SS below secondsPerMinute)
+ */
+function isSwitchTimeTime(catalogue, trimmed) {
   const match = HH_MM_SS.exec(trimmed);
   if (match === null) {
     return false;
   }
   const [hour, minute, second] = match.slice(1).map(Number);
-  return hour <= MAX_HOUR && minute <= MAX_MINUTE_OR_SECOND && second <= MAX_MINUTE_OR_SECOND;
+  const units = catalogue.timeUnits;
+  return hour < units.hoursPerDay && minute < units.minutesPerHour && second < units.secondsPerMinute;
 }
 
 function nameOrUnexpected(name, trimmed) {
@@ -138,7 +139,7 @@ export function knownMeaning(catalogue, id, raw) {
     return nameOrUnexpected(enabledMaskName(catalogue, trimmed), trimmed);
   }
   if (catalogue.timeProgramTimeIds.includes(id)) {
-    return nameOrUnexpected(isSwitchTimeTime(trimmed) ? trimmed : undefined, trimmed);
+    return nameOrUnexpected(isSwitchTimeTime(catalogue, trimmed) ? trimmed : undefined, trimmed);
   }
   // Unreachable: isKnownId() lists exactly the IDs that have a branch above.
   return null;

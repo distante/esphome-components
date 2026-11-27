@@ -99,7 +99,7 @@ Done when each hit is reported with its `file:line`.
 
 Enforces [Code comments](../coding-standards/SKILL.md#code-comments).
 
-1. For every comment the diff adds or changes in `components/` and `tests/`, name the allowed kind it is, then check it against the rule's other bullets. A comment of no allowed kind is a hit. Example: #149 tagged seven tests `// #139 item N:` and explained the late clock read on its constant, two methods and a test.
+1. Read every comment the diff adds or changes in `components/` and `tests/` against the rule. Example: #149 tagged seven tests `// #139 item N:` and explained the late clock read on its constant, two methods and a test.
 
 Done when each hit is reported with its `file:line`, the bullet it breaks, and its trimmed text or "delete".
 

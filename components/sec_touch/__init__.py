@@ -50,12 +50,11 @@ CONF_SEC_TOUCH_ID = "sec_touch_id"
 CONF_INTER_TASK_DELAY = "inter_task_delay_ms"
 CONF_GLOBAL_SETTINGS_UPDATE_INTERVAL = "global_settings_update_interval"
 CONF_OPTIONAL_CRC = "optional_crc"
-# The total of fan pairs that the SEC-Touch shows in the screen
+CONF_FAN_NUMBER = "fan_number"
 
 # Time programs (.specs/time-programs.md, "Configuration").
 CONF_TIME_PROGRAMS = "time_programs"
 CONF_TIME_PROGRAMS_UPDATE_INTERVAL = "time_programs_update_interval"
-CONF_FAN_NUMBER = "fan_number"
 CONF_SWITCH_TIMES = "switch_times"
 CONF_WRITE_FAILED = "write_failed"
 # Generated from switch_times before validation, never written by the user: one item per listed switch time.
@@ -134,6 +133,7 @@ def AUTO_LOAD(config):
 
 
 FAN_NUMBER_SCHEMA = cv.int_range(min=1, max=FAN_PAIR_COUNT)
+FAN_PAIR_SCHEMA = cv.Schema({cv.Required(CONF_FAN_NUMBER): FAN_NUMBER_SCHEMA})
 
 
 def unique(what):
@@ -162,10 +162,9 @@ FIELD_ENTITIES_SCHEMA = cv.Schema(
     }
 )
 
-TIME_PROGRAM_SCHEMA = cv.Schema(
+TIME_PROGRAM_SCHEMA = FAN_PAIR_SCHEMA.extend(
     {
         cv.GenerateID(): cv.declare_id(TimeProgram),
-        cv.Required(CONF_FAN_NUMBER): FAN_NUMBER_SCHEMA,
         cv.Optional(CONF_NAME): cv.string,
         cv.Optional(CONF_DEVICE_ID): cv.sub_device_id,
         cv.Optional(
@@ -202,11 +201,19 @@ def sec_touch_fans(fans):
     ]
 
 
+def _raw_fan_number(fan):
+    """A raw `fan:` entry's fan_number as its schema reads it (a quoted "1" is 1), or None when the schema rejects it."""
+    try:
+        return FAN_NUMBER_SCHEMA(fan.get(CONF_FAN_NUMBER))
+    except cv.Invalid:
+        return None
+
+
 def _fan_entries(hub_config, fan_number):
     """This hub's `fan:` entries for `fan_number`."""
     hub_id = hub_config.get(CONF_ID)
     for fan in sec_touch_fans((CORE.raw_config or {}).get("fan")):
-        if fan.get(CONF_FAN_NUMBER) != fan_number:
+        if _raw_fan_number(fan) != fan_number:
             continue
         if fan.get(CONF_SEC_TOUCH_ID) not in (None, hub_id):
             continue
@@ -253,7 +260,7 @@ def _prepare_time_program(hub_config, entry):
         # Live state reads the pair's level ID, which only the pair's fan entry polls.
         if next(_fan_entries(hub_config, fan_number), None) is None:
             raise cv.Invalid(
-                f"{live_state[0]} needs this hub's sec_touch fan entry with fan_number {fan_number}",
+                f"{live_state[0]} needs this hub's sec_touch fan entry with {CONF_FAN_NUMBER} {fan_number}",
                 path=[live_state[0]],
             )
         # None declares an ID that ESPHome generates.
@@ -317,7 +324,7 @@ def _prepare_time_programs(hub_config):
         fan_number = entry[CONF_FAN_NUMBER]
         if fan_number in seen:
             raise cv.Invalid(
-                f"fan_number {fan_number} is listed twice in {CONF_TIME_PROGRAMS}",
+                f"{CONF_FAN_NUMBER} {fan_number} is listed twice in {CONF_TIME_PROGRAMS}",
                 path=[CONF_TIME_PROGRAMS, i, CONF_FAN_NUMBER],
             )
         seen.add(fan_number)
@@ -398,7 +405,7 @@ def _final_validate_set_time_program_calls(config):
             )
         if fan_number is not None and fan_number not in listed:
             raise cv.Invalid(
-                f"sec_touch.set_time_program: fan_number {fan_number} is not listed in sec_touch {CONF_TIME_PROGRAMS}"
+                f"sec_touch.set_time_program: {CONF_FAN_NUMBER} {fan_number} is not listed in sec_touch {CONF_TIME_PROGRAMS}"
             )
     return config
 

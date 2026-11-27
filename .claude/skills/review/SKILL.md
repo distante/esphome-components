@@ -33,6 +33,15 @@ Enforces [Tests](../coding-standards/SKILL.md#tests): a removal is a change, so 
 
 Done when every removed piece of state has its readers listed, and each reader the removal changes has a test.
 
+## A wider schema reaches every raw reader
+
+Enforces [Error handling](../coding-standards/SKILL.md#c-style): a value the schema accepts works everywhere the config is read.
+
+1. For each config key whose schema the diff lets accept more spellings (a quoted number, a float, a hex string), grep every reader of the unvalidated config (`CORE.raw_config`, a `full_config` read before that schema ran) for the key.
+2. Check that each reader compares the value as the schema reads it. Example: `fan_number` moved from `one_of(1, …)` to `int_range`, so a quoted `"1"` passed the fan, but `_fan_entries` compared the raw `"1"` with `1` and live state reported the pair's fan entry missing.
+
+Done when each widened key has its raw readers listed, and each reader that compares the raw spelling is reported with its `file:line`.
+
 ## Every task end reaches its listeners
 
 Enforces [Error handling](../coding-standards/SKILL.md#c-style): a task that ends any way but the usual one still leaves no state behind.
@@ -80,12 +89,13 @@ Done when each such value names its range and the type's step at that range, and
 
 ## No restated rules in skills and docs for agents
 
-Enforces [coding-standards](../coding-standards/SKILL.md)' single source: every rule lives there once.
+Enforces [coding-standards](../coding-standards/SKILL.md)' single source (every rule lives there once) and [Reuse existing definitions](../coding-standards/SKILL.md#reuse-existing-definitions).
 
 1. When the diff touches `.claude/skills/`, `CLAUDE.md` or `.specs/`, grep [coding-standards](../coding-standards/SKILL.md) and [sec-touch](../sec-touch/SKILL.md) for each added instruction.
 2. An instruction that is already a rule there becomes a link to it, never a second wording. Example: a review check that repeated coding-standards' "grep for the concept by names, synonyms and value" step.
+3. Apply [Reuse existing definitions](../coding-standards/SKILL.md#reuse-existing-definitions) to each code value written out. Example: a range written out in sec-touch's fan_number bullet while it lives in `FAN_PAIR_COUNT`.
 
-Done when each added instruction has a grep behind it, and each restatement is reported with its `file:line` and the rule it restates.
+Done when each added instruction has a grep behind it, each restatement is reported with its `file:line` and the rule it restates, and each written-out code value is reported with its `file:line` and the definition to name.
 
 ## Stored state reads well in a later version
 

@@ -1,0 +1,45 @@
+# A quoted fan_number on the fan names the live state's pair. The wifi credentials are placeholders: the build
+# never connects.
+
+esphome:
+  name: sec-touch-tp-quoted-fan
+
+esp32:
+  board: esp32dev
+
+logger:
+  # Compiles every ESP_LOG* call, so the compile test sees -Wformat warnings.
+  level: VERY_VERBOSE
+
+wifi:
+  ssid: "fixture"
+  password: "fixture-password"
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+time:
+  - platform: sntp
+    id: sntp_time
+
+sec_touch:
+  uart_id: sec_touch_uart
+  time_programs:
+    - fan_number: 1
+      switch_times: [1]
+      switch_time_in_effect:
+        name: "switch time in effect"
+
+fan:
+  - platform: sec_touch
+    fan_number: "1"
+    name: "Kellerraum"

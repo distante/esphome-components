@@ -1,0 +1,35 @@
+# expect-error: fan_number 1 is listed twice in fan
+# expect-error: sec_touch_fan_number_twice.yaml:30]
+
+esphome:
+  name: sec-touch-fan-number-twice
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+
+fan:
+  # The valid fan comes first so the error must land on a duplicate.
+  - platform: sec_touch
+    fan_number: 2
+    name: "Other"
+  - platform: sec_touch
+    fan_number: 1
+    name: "Kellerraum A"
+  - platform: sec_touch
+    fan_number: 1
+    name: "Kellerraum B"

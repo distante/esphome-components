@@ -7,6 +7,7 @@ from .. import (
     sec_touch_ns,
     SECTouchComponent,
     FAN_LEVEL_IDS,
+    sec_touch_fans,
 )
 
 DEPENDENCIES = ["sec_touch"]
@@ -44,14 +45,11 @@ CONFIG_SCHEMA = cv.All(
 
 
 def _final_validate(config):
-    full = fv.full_config.get()
-    fan_blocks = full.get("fan", []) or []
     sec_touch_id = config[CONF_SEC_TOUCH_ID]
     fan_numbers_with_sec_touch = {
         entry.get(FAN_NUMBER)
-        for entry in fan_blocks
-        if entry.get("platform") == "sec_touch"
-        and entry.get(CONF_SEC_TOUCH_ID) == sec_touch_id
+        for entry in sec_touch_fans(fv.full_config.get().get("fan"))
+        if entry.get(CONF_SEC_TOUCH_ID) == sec_touch_id
     }
     n = config[FAN_NUMBER]
     if n not in fan_numbers_with_sec_touch:

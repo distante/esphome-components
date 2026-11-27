@@ -1,6 +1,7 @@
 from esphome.components import fan
 import esphome.config_validation as cv
 import esphome.codegen as cg
+import esphome.final_validate as fv
 from esphome.const import CONF_OUTPUT_ID
 from .. import (
     CONF_SEC_TOUCH_ID,
@@ -8,6 +9,7 @@ from .. import (
     SECTouchComponent,
     FAN_LEVEL_IDS,
     FAN_LABEL_IDS,
+    sec_touch_fans,
 )
 
 DEPENDENCIES = ["sec_touch"]
@@ -29,6 +31,19 @@ CONFIG_SCHEMA = cv.All(
     )
     .extend(cv.COMPONENT_SCHEMA),
 )
+
+
+def _final_validate(config):
+    fan_number = config[FAN_NUMBER]
+    fans = sec_touch_fans(fv.full_config.get().get("fan"))
+    if [fan[FAN_NUMBER] for fan in fans].count(fan_number) > 1:
+        raise cv.Invalid(
+            f"{FAN_NUMBER} {fan_number} is listed twice in fan", path=[FAN_NUMBER]
+        )
+    return config
+
+
+FINAL_VALIDATE_SCHEMA = _final_validate
 
 
 async def to_code(config):

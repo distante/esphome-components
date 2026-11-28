@@ -229,7 +229,7 @@ void SecTouchFan::update_label_mode() {
     return;
   }
 
-  switch (decide_mode_text(this->device_level_, FanStatus{this->state, this->speed})) {
+  switch (this->mode_text()) {
     case ModeText::OFF:
       level_text_sensor->publish_state(MODE_TEXT_OFF);
       return;

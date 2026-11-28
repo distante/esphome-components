@@ -7,8 +7,6 @@ namespace sec_touch {
 
 const char *const SecTouchModeSelect::TAG = "sec_touch.mode_select";
 
-static const char *const OFF_OPTION = "Off";
-
 SecTouchModeSelect::SecTouchModeSelect(SECTouchComponent *parent, int level_id)
     : parent_(parent), level_id_(level_id) {}
 
@@ -29,15 +27,16 @@ void SecTouchModeSelect::sync_from_fan_() {
     return;
   }
 
-  if (this->fan_->state == 0) {
-    this->publish_state(OFF_OPTION);
-    return;
-  }
-
-  // NOT_CONNECTED_LEVEL is a sentinel, not a mode. Selects can only publish strings
-  // from their option list, so leave the previous value untouched.
-  if (this->fan_->speed == NOT_CONNECTED_LEVEL) {
-    return;
+  switch (this->fan_->mode_text()) {
+    case ModeText::OFF:
+      this->publish_state(MODE_TEXT_OFF);
+      return;
+    case ModeText::NOT_CONNECTED:
+      // NOT_CONNECTED_LEVEL is a sentinel, not a mode. Selects can only publish strings
+      // from their option list, so leave the previous value untouched.
+      return;
+    case ModeText::PRESET:
+      break;
   }
 
   auto preset = this->fan_->get_preset_mode();
@@ -54,7 +53,7 @@ void SecTouchModeSelect::control(const std::string &value) {
     return;
   }
 
-  if (value == OFF_OPTION) {
+  if (value == MODE_TEXT_OFF) {
     this->fan_->turn_off().perform();
     return;
   }

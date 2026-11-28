@@ -7,6 +7,7 @@
 #include "live_state_inputs.h"
 #include "esphome/components/sec_touch/fan/sec_touch_fan.h"
 #include "esphome/components/sec_touch/fan_level.h"
+#include "esphome/components/sec_touch/select/sec_touch_mode_select.h"
 #include "esphome/components/sec_touch/time_program_ids.h"
 #include "esphome/components/sec_touch/time_program_live_state.h"
 #include "esphome/core/hal.h"
@@ -119,6 +120,21 @@ TEST_F(FanFollowsTest, TheModeSensorNamesAutomaticTimeWhileTheProgramStopsTheFan
 
   this->panel_answers_pair_level(OFF_LEVEL);
   EXPECT_EQ(mode.get_state(), MODE_TEXT_OFF);
+}
+
+TEST_F(FanFollowsTest, TheModeSelectNamesAutomaticTimeWhileTheProgramStopsTheFan) {
+  this->hub_.register_fan(PAIR_LEVEL_ID, &this->fan_);
+  SecTouchModeSelect mode{&this->hub_, PAIR_LEVEL_ID};
+  mode.traits.set_options({MODE_TEXT_OFF, NORMAL_PRESET_NAME, AUTOMATIC_TIME_NAME});
+  mode.setup();
+  this->follow();
+
+  this->panel_answers_every_input(AUTOMATIC_TIME_LEVEL, OFF_LEVEL, OFF_LEVEL);
+  ASSERT_FALSE(this->fan_.state);
+  EXPECT_EQ(std::string(mode.current_option()), AUTOMATIC_TIME_NAME);
+
+  this->panel_answers_pair_level(OFF_LEVEL);
+  EXPECT_EQ(std::string(mode.current_option()), MODE_TEXT_OFF);
 }
 
 TEST_F(FanFollowsTest, RunningLevelOffShowsTheFanOffAtTheNextChange) {

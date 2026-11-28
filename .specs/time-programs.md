@@ -261,7 +261,7 @@ What a following fan shows while its pair's level ID reads `AUTOMATIC_TIME_LEVEL
 | Timing | The fan republishes when the live state recomputes (an input read, the next change), and only on a change. |
 | Mode change | The live state hears a level answer before the fan does. On every `not running` state the fan skips republishing and waits for its own level read, so leaving Automatik Zeit never flashes its display. |
 | Boot | The fan's level is read before the clock and the block. A following fan whose pair reads `AUTOMATIC_TIME_LEVEL` publishes nothing until its live state has a state, so a reboot never shows it on for those seconds. Only the first publish since boot waits: a state lost later shows as not following. |
-| Mode sensor | The pair's mode text sensor (`mode_text`) names the preset while the program stops the fan: `Automatic Time`, not `Off`. `Off` is for a pair whose level is `OFF_LEVEL`. |
+| Mode entities | The pair's mode text sensor (`mode_text`) and mode select (`mode_select`) name the preset while the program stops the fan: `Automatic Time`, not `Off`. `Off` is for a pair whose level is `OFF_LEVEL`. |
 
 A fan-only install goes from no block poll to the cost measured in the readme ([Fan in Automatik Zeit](../components/sec_touch/readme.md#fan-in-automatik-zeit)).
 

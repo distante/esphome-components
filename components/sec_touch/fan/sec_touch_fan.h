@@ -48,6 +48,8 @@ class SecTouchFan : public Component, public fan::Fan {
   void set_split_special_modes(bool v) { this->split_special_modes_ = v; }
   /// In Automatik Zeit, show the pair's running level (.specs/time-programs.md, "Live state").
   void follow_time_program(TimeProgramLiveState *live_state);
+  /// What the pair's mode entities show for the fan as it is shown now.
+  ModeText mode_text() const { return decide_mode_text(this->device_level_, FanStatus{this->state, this->speed}); }
 
   void setup() override { this->set_supported_preset_modes(FanModeEnum::getPresetModePointers()); }
   fan::FanTraits get_traits() override {

@@ -36,3 +36,7 @@ def test_a_following_fan_and_live_state_entities_share_one_live_state() -> None:
 
 def test_no_fan_follows_and_no_live_state_entity_builds_no_live_state() -> None:
     assert live_state_pairs("sec_touch_hub_only.yaml") == []
+
+
+def test_a_quoted_time_programs_fan_number_gives_its_opted_out_pair_a_live_state() -> None:
+    assert live_state_pairs("sec_touch_time_programs_quoted_fan_number.yaml") == [1, 2]

@@ -1,5 +1,6 @@
-# A quoted fan_number on the fan names the live state's pair. The wifi credentials are placeholders: the build
-# never connects.
+# A quoted fan_number on the fan names the live state's pair. A quoted fan_number in time_programs gives pair 2 a
+# live state for its entity although its fan opts out. The wifi credentials are placeholders: the build never
+# connects.
 
 esphome:
   name: sec-touch-tp-quoted-fan
@@ -38,8 +39,16 @@ sec_touch:
       switch_times: [1]
       switch_time_in_effect:
         name: "switch time in effect"
+    - fan_number: "2"
+      switch_times: [1]
+      running_level:
+        name: "running level"
 
 fan:
   - platform: sec_touch
     fan_number: "1"
     name: "Kellerraum"
+  - platform: sec_touch
+    fan_number: 2
+    name: "Bad"
+    follow_time_program: false

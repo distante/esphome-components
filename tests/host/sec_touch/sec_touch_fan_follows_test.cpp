@@ -18,6 +18,8 @@ namespace esphome::sec_touch::testing {
 namespace {
 
 const int LABEL_ID = FAN_LABEL_IDS[PAIR - 1];
+/// A normal level the tests feed in: a running level, the pair's level or a speed HA sets.
+constexpr int SOME_NORMAL_LEVEL = 3;
 
 /// What the fan showed at one publish.
 struct Shown {
@@ -80,13 +82,13 @@ class FanFollowsNormalLevelTest : public FanFollowsTest, public ::testing::WithP
 
 TEST_F(FanFollowsTest, RunningLevelOffShowsTheFanOffAtTheNextChange) {
   this->follow();
-  this->panel_answers_every_input(AUTOMATIC_TIME_LEVEL, 3, OFF_LEVEL);
-  this->expect_shown(true, 3, AUTOMATIC_TIME_NAME);
+  this->panel_answers_every_input(AUTOMATIC_TIME_LEVEL, SOME_NORMAL_LEVEL, OFF_LEVEL);
+  this->expect_shown(true, SOME_NORMAL_LEVEL, AUTOMATIC_TIME_NAME);
   const size_t publishes = this->shown_.size();
 
   this->reach_the_next_change();
 
-  this->expect_shown(false, 3, AUTOMATIC_TIME_NAME);
+  this->expect_shown(false, SOME_NORMAL_LEVEL, AUTOMATIC_TIME_NAME);
   EXPECT_EQ(this->shown_.size(), publishes + 1);
 }
 
@@ -106,7 +108,7 @@ INSTANTIATE_TEST_SUITE_P(NormalLevels, FanFollowsNormalLevelTest,
 
 TEST_F(FanFollowsTest, TheNextChangeToTheSameDisplayPublishesNothing) {
   this->follow();
-  this->panel_answers_every_input(AUTOMATIC_TIME_LEVEL, 3, 3);
+  this->panel_answers_every_input(AUTOMATIC_TIME_LEVEL, SOME_NORMAL_LEVEL, SOME_NORMAL_LEVEL);
   const size_t publishes = this->shown_.size();
 
   this->reach_the_next_change();
@@ -116,7 +118,7 @@ TEST_F(FanFollowsTest, TheNextChangeToTheSameDisplayPublishesNothing) {
 
 // follow_time_program: false.
 TEST_F(FanFollowsTest, AFanThatDoesNotFollowShowsAutomatikZeitAsOn) {
-  this->panel_answers_every_input(AUTOMATIC_TIME_LEVEL, 3, OFF_LEVEL);
+  this->panel_answers_every_input(AUTOMATIC_TIME_LEVEL, SOME_NORMAL_LEVEL, OFF_LEVEL);
   this->expect_shown(true, AUTOMATIC_TIME_LEVEL, AUTOMATIC_TIME_NAME);
   const size_t publishes = this->shown_.size();
 
@@ -134,17 +136,17 @@ TEST_F(FanFollowsTest, LeavingAutomatikZeitShowsOnlyTheNewLevel) {
   ASSERT_FALSE(this->fan_.state);
   this->shown_.clear();
 
-  this->panel_answers_pair_level(3);
+  this->panel_answers_pair_level(SOME_NORMAL_LEVEL);
 
   ASSERT_EQ(this->shown_.size(), 1u);
   EXPECT_TRUE(this->shown_[0].on);
-  EXPECT_EQ(this->shown_[0].speed, 3);
+  EXPECT_EQ(this->shown_[0].speed, SOME_NORMAL_LEVEL);
   EXPECT_EQ(this->shown_[0].preset, NORMAL_PRESET_NAME);
 }
 
 TEST_F(FanFollowsTest, EnteringAutomatikZeitShowsOnlyTheRunningLevel) {
   this->follow();
-  this->panel_answers_every_input(3, OFF_LEVEL, OFF_LEVEL);
+  this->panel_answers_every_input(SOME_NORMAL_LEVEL, OFF_LEVEL, OFF_LEVEL);
   ASSERT_TRUE(this->fan_.state);
   this->shown_.clear();
 
@@ -161,11 +163,11 @@ TEST_F(FanFollowsTest, AnOnWithASpeedWhileFollowingWritesThatLevel) {
   this->panel_answers_every_input(AUTOMATIC_TIME_LEVEL, OFF_LEVEL, OFF_LEVEL);
   ASSERT_FALSE(this->fan_.state);
 
-  this->fan_.make_call().set_state(true).set_speed(2).perform();
+  this->fan_.make_call().set_state(true).set_speed(SOME_NORMAL_LEVEL).perform();
   this->uart_.tx.clear();
   this->send_next_task();
 
-  EXPECT_EQ(this->uart_.tx, set_frame(PAIR_LEVEL_ID, "2"));
+  EXPECT_EQ(this->uart_.tx, set_frame(PAIR_LEVEL_ID, std::to_string(SOME_NORMAL_LEVEL)));
 }
 
 // The boot shows Automatik Zeit's level as the speed before the running level is known, and off keeps it.
@@ -191,13 +193,14 @@ TEST_F(FanFollowsTest, AClockAnswerWhileTheSetIsQueuedKeepsTheSpeedHaSet) {
   this->send_next_task();  // the clock GET is in flight
   this->shown_.clear();
 
-  this->fan_.make_call().set_state(true).set_speed(3).perform();
+  this->fan_.make_call().set_state(true).set_speed(SOME_NORMAL_LEVEL).perform();
   this->panel_answers_get(CLOCK_PROPERTY_ID, CLOCK);
 
-  this->expect_every_publish_on_at(3);
+  this->expect_every_publish_on_at(SOME_NORMAL_LEVEL);
 }
 
-// HA sets Automatik Zeit's level as the speed: the running level shows once the level ID reads it back.
+// HA sets Automatik Zeit's level as the speed, so the fan's level is Automatik Zeit's before the read-back: showing on
+// this answer would show the old running level instead of what HA set.
 TEST_F(FanFollowsTest, AClockAnswerWhileTheSetIsQueuedPublishesNothing) {
   this->follow();
   this->panel_answers_every_input(AUTOMATIC_TIME_LEVEL, OFF_LEVEL, OFF_LEVEL);
@@ -217,7 +220,7 @@ TEST_F(FanFollowsTest, AClockAnswerAfterTheSetWasAnsweredKeepsTheSpeedHaSet) {
   this->panel_answers_every_input(AUTOMATIC_TIME_LEVEL, OFF_LEVEL, OFF_LEVEL);
   ASSERT_FALSE(this->fan_.state);
   this->shown_.clear();
-  this->fan_.make_call().set_state(true).set_speed(3).perform();
+  this->fan_.make_call().set_state(true).set_speed(SOME_NORMAL_LEVEL).perform();
   this->send_next_task();  // the SET
   this->uart_.push_rx(ack_frame());
   this->hub_.loop_times(3);
@@ -226,7 +229,19 @@ TEST_F(FanFollowsTest, AClockAnswerAfterTheSetWasAnsweredKeepsTheSpeedHaSet) {
   this->send_next_task();
   this->panel_answers_get(CLOCK_PROPERTY_ID, CLOCK);
 
-  this->expect_every_publish_on_at(3);
+  this->expect_every_publish_on_at(SOME_NORMAL_LEVEL);
+}
+
+// A needed input never read well leaves the live state with no state: the fan drops the running level it showed.
+TEST_F(FanFollowsTest, AFanShownOffShowsAsNotFollowingWhenTheLiveStateHasNoState) {
+  constexpr int NEVER_READ = 3;
+  this->follow();
+  this->panel_answers_every_input_but(NEVER_READ, AUTOMATIC_TIME_LEVEL, OFF_LEVEL, OFF_LEVEL);
+  ASSERT_FALSE(this->fan_.state);
+
+  this->panel_answers_enabled_mask(ENABLED_SWITCH_TIMES | switch_time_bit(NEVER_READ));
+
+  this->expect_shown(true, AUTOMATIC_TIME_LEVEL, AUTOMATIC_TIME_NAME);
 }
 
 // One live state per pair, shared by the fan and the live-state entities: each ID is listened to and polled once.

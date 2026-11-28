@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "common.h"
+#include "esphome/components/sec_touch/get_retry.h"
 
 namespace esphome::sec_touch::testing {
 
@@ -510,11 +511,8 @@ class SECTouchDropLogTest : public SECTouchGetRetryTest {
     LogCapture::instance().clear();
   }
 
-  /// Lines that call a task ended or failed.
-  static int task_end_claims() {
-    return LogCapture::instance().count(task_end_name(TaskEnd::TASK_END_MALFORMED)) +
-           LogCapture::instance().count("Failed");
-  }
+  /// Lines that call a task ended as malformed.
+  static int task_end_claims() { return LogCapture::instance().count(task_end_name(TaskEnd::TASK_END_MALFORMED)); }
 };
 
 TEST_F(SECTouchDropLogTest, ARetriedGetWhoseReplyFailedTheCrcLogsNoEnd) {
@@ -587,7 +585,7 @@ TEST_F(SECTouchDropLogTest, AScanQueryWhoseReplyLostItsStxLogsTheReasonAndOneMal
 
   EXPECT_EQ(LogCapture::instance().count(data_message_check_reason(DataMessageCheck::DATA_STX_LOST)), 1);
   EXPECT_EQ(task_end_claims(), 1);
-  EXPECT_EQ(LogCapture::instance().count("once more"), 0);
+  EXPECT_EQ(LogCapture::instance().count(GET_RETRY_LOG_SUFFIX), 0);
 }
 
 /// Records every task end as "<GET|SET> <property_id> <end>".

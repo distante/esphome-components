@@ -728,7 +728,7 @@ void SECTouchComponent::drop_data_message(DataMessageCheck check) {
 
   if (task != nullptr &&
       should_retry_get(task->get_task_type() == TaskType::GET_DATA, check, task->retried, this->scan_mode_active_)) {
-    ESP_LOGI(TAG, "Sending the GET for property_id %d once more after dropping its reply", task->property_id);
+    ESP_LOGI(TAG, "Sending the GET for property_id %d %s", task->property_id, GET_RETRY_LOG_SUFFIX);
     task->retried = true;
     this->data_task_queue.push_front(std::move(task));
     return;

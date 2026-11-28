@@ -7,6 +7,9 @@
 namespace esphome {
 namespace sec_touch {
 
+/// How the hub's log line for a GET sent once more ends.
+constexpr const char *GET_RETRY_LOG_SUFFIX = "once more after dropping its reply";
+
 /// Whether the hub sends a GET once more after dropping its reply. `dropped_reply` is the check that dropped the reply
 /// to the GET in flight. A timeout or a frame too short for data never gets here. Only the checks listed below earn a
 /// retry, so a new check doesn't by default. One retry per task, none in scan mode: the sniffer retries scan queries

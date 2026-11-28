@@ -96,11 +96,11 @@ class SECTouchGetRetryTest : public SECTouchHubTest {
     return this->uart_.tx;
   }
 
-  /// loop() calls feed_noise adds after one per discarded byte: slack for the ACK and the next dispatch.
+  /// The hub discards one noise byte per loop(). These extra loop() calls give it time to send its ACK and dispatch
+  /// the next task.
   static constexpr int NOISE_SLACK_LOOPS = 3;
 
-  /// Feeds `bytes` to the hub, one loop() per discarded byte plus NOISE_SLACK_LOOPS. Returns what the hub sent
-  /// meanwhile.
+  /// Feeds `bytes` to the hub as noise. Returns what the hub sent meanwhile.
   std::vector<uint8_t> feed_noise(const std::vector<uint8_t> &bytes) {
     this->uart_.tx.clear();
     this->uart_.push_rx(bytes);

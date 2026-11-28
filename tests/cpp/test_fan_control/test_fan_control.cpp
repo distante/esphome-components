@@ -1,8 +1,11 @@
 #include <gtest/gtest.h>
 
+#include <tuple>
+
 #include "sec_touch/fan/fan_control.h"
 
 using esphome::sec_touch::AUTOMATIC_CO2_LEVEL;
+using esphome::sec_touch::AUTOMATIC_TIME_LEVEL;
 using esphome::sec_touch::BURST_LEVEL;
 using esphome::sec_touch::decide_fan_control;
 using esphome::sec_touch::FanCommand;
@@ -11,6 +14,7 @@ using esphome::sec_touch::FanStatus;
 using esphome::sec_touch::MAX_NORMAL_LEVEL;
 using esphome::sec_touch::MIN_NORMAL_LEVEL;
 using esphome::sec_touch::NORMAL_PRESET_LEVEL;
+using esphome::sec_touch::NOT_CONNECTED_LEVEL;
 using esphome::sec_touch::OFF_LEVEL;
 using esphome::sec_touch::SLEEP_LEVEL;
 
@@ -226,6 +230,23 @@ TEST(DecideFanControl, OnWithTheNormalPresetStartsAnOffFanAtLevelOne) {
   EXPECT_TRUE(result.on);
   EXPECT_EQ(result.speed, MIN_NORMAL_LEVEL);
 }
+
+/// An off fan whose stored speed is not a normal level, and whether the fan is split.
+class BareOnFromAnOutOfRangeSpeedTest : public ::testing::TestWithParam<std::tuple<int, bool>> {};
+
+TEST_P(BareOnFromAnOutOfRangeSpeedTest, OnWithoutASpeedStartsAtLevelOne) {
+  const auto [prior_speed, split] = GetParam();
+
+  FanControl result = decide_fan_control(FanCommand{true, {}, {}}, FanStatus{false, prior_speed}, split);
+
+  EXPECT_EQ(result.level, MIN_NORMAL_LEVEL);
+  EXPECT_TRUE(result.on);
+  EXPECT_EQ(result.speed, MIN_NORMAL_LEVEL);
+}
+
+INSTANTIATE_TEST_SUITE_P(OutOfRangeSpeeds, BareOnFromAnOutOfRangeSpeedTest,
+                         ::testing::Combine(::testing::Values(AUTOMATIC_TIME_LEVEL, NOT_CONNECTED_LEVEL),
+                                            ::testing::Values(NOT_SPLIT, SPLIT)));
 
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);

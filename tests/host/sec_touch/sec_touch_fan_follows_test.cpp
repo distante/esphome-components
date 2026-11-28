@@ -228,6 +228,19 @@ TEST_F(FanFollowsTest, AnOnWithASpeedWhileFollowingWritesThatLevel) {
   EXPECT_EQ(this->uart_.tx, set_frame(LEVEL_ID, "2"));
 }
 
+// The boot shows Automatik Zeit's level as the speed before the running level is known, and off keeps it.
+TEST_F(FanFollowsTest, ABareOnFromAutomatikZeitsSpeedWritesLevelOne) {
+  this->follow();
+  this->panel_answers_every_input(AUTOMATIC_TIME_LEVEL, OFF_LEVEL, OFF_LEVEL);
+  this->expect_shown(false, AUTOMATIC_TIME_LEVEL, AUTOMATIC_TIME_NAME);
+
+  this->fan_.turn_on().perform();
+  this->uart_.tx.clear();
+  this->send_next_task();
+
+  EXPECT_EQ(this->uart_.tx, set_frame(LEVEL_ID, std::to_string(MIN_NORMAL_LEVEL)));
+}
+
 // The pair's level ID still reads Automatik Zeit until the read-back after the SET: a clock answer before it shows
 // the speed HA set, not the old running level.
 TEST_F(FanFollowsTest, AClockAnswerWhileTheSetIsQueuedKeepsTheSpeedHaSet) {

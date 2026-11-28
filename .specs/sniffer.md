@@ -182,7 +182,7 @@ sec_touch_sniffer:
 **The old platform is a hard error.** `text_sensor.py` is reduced to `CONFIG_SCHEMA = cv.invalid(...)`, as ESPHome did for dallas and udp, with no warning release. The old form shipped in v1.4.0 only, and a warning period would keep the `TextSensor` base, `scan_switch` and the YAML range alive. One message covers the whole old platform (`scan_switch`, `scan_start`/`scan_end`, `web_page`, `name`, `time_id` alike):
 
 ```
-sec_touch_sniffer moved out of text_sensor in v1.5.0.
+sec_touch_sniffer moved out of text_sensor in v2.0.0.
 Replace the text_sensor entry with:
 
   sec_touch_sniffer:
@@ -489,9 +489,9 @@ Captured data lives in RAM and is lost on restart or flash. The page keeps a cop
 
 ## Docs and migration
 
-Ships as **v1.5.0** (minor: existing fans and HA entities are untouched; the hub gains the sniffer's tap and an unchecked SET). Time programs ship in the same release.
+Ships as **v2.0.0** (major: the sniffer's `text_sensor` platform is gone, and in Automatik Zeit the fan follows the running level ([Time programs](time-programs.md#docs-and-release)); the hub gains the sniffer's tap and an unchecked SET). Time programs ship in the same release.
 
-**Changelog (v1.5.0), sniffer** (the time-program lines are in [Time programs](time-programs.md#docs-and-release)):
+**Changelog (v2.0.0), sniffer** (the time-program lines are in [Time programs](time-programs.md#docs-and-release)):
 - **Breaking, YAML:** the `text_sensor` platform is gone and is a hard config error with a migration message. Use the top-level `sec_touch_sniffer:` block. `scan_switch`, `scan_start`/`scan_end` and `web_page` are removed; `web_server_base:` (or `web_server:`) is required.
 - **Scans start only from the page**, which picks the goal (discover or check) and the discover range.
 - **Discover skips every known property**, not only registered ones.

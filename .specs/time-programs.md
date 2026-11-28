@@ -76,7 +76,7 @@ sec_touch:
 | Key | Rule |
 |---|---|
 | `fan_number` | 1–6. A pair listed twice is a config error. Block 6 is handled like any pair. |
-| Not listed | No entities, no sub-device, no polling for that pair. |
+| Not listed | No entities and no sub-device for that pair. Its block is polled only with a live state ([Reading](#reading)). |
 | `name` | The pair name ([where it shows](#sub-device)). Without it, the pair's `fan:` entry name; without a fan entry, `Fan pair N`. |
 | `switch_times` | Only listed switch times get the 3 field entities. A switch time enabled on the panel but not listed stays hidden in HA. 1–5, no duplicates. |
 | `web_server` | Optional. ESPHome's entity `web_server:` block (e.g. `sorting_group_id`). sec_touch copies it into every entity of the pair before the entity schemas run, like `device_id` ([Sub-device](#sub-device)). |
@@ -142,7 +142,7 @@ Optional per pair: `refresh` (button), `write_failed` (event), and the [live-sta
 
 Decided in [Should sec_touch compute which switch time is in effect, and how is it shown?](https://github.com/distante/esphome-components/issues/120).
 
-- **Own poll:** every `time_programs_update_interval` (default 5 min), the hub queues GETs for each listed pair. It skips an ID whose GET is already queued, and queues none during a scan. This is separate from the 5 s fan poll and the 30 s global-settings poll.
+- **Own poll:** every `time_programs_update_interval` (default 5 min), the hub queues GETs for each listed pair and each pair with a live state. It skips an ID whose GET is already queued, and queues none during a scan. This is separate from the 5 s fan poll and the 30 s global-settings poll.
 - **Which IDs:** the enabled ID and the time and level IDs of the listed switch times. With a live state (a following [fan](#fan) or any live-state entity), the pair's **whole block** (11 IDs), whatever `switch_times` says, with or without a `time_programs:` entry, in every mode.
 - **Panel clock:** with a live state on any pair, ID 2 (clock) is polled on the global-settings poll, as for `clock_drift`. ID 1 (date) only with `clock_drift`; the hub polls it right before ID 2, whatever the registration order.
 - **First poll:** right after boot, like the global settings.
@@ -257,11 +257,11 @@ What a following fan shows while its pair's level ID reads `AUTOMATIC_TIME_LEVEL
 | Opt-out | `follow_time_program`: optional boolean on the fan entry, default `true`. `false` gives the display without this rule. |
 | One live state | The fan and the pair's live-state entities share one live state per pair, so they never disagree. It is built when the fan follows or any live-state entity exists, and registers its listeners and polls once ([Memory](#memory)). |
 | Polling | As [Reading](#reading) says for a live state: the whole block on the time-program poll, always, and ID 2 on the global-settings poll. |
-| HA commands | On, off and speed set the level ID as without following, which switches the pair to Normal and ends Automatik Zeit. A preset change works as without following. |
+| HA commands | On, off and speed set the level ID as not following, which switches the pair to Normal and ends Automatik Zeit. A preset change works as not following. An "on" without a speed from an off fan whose speed is not a normal level (Automatik Zeit's level, shown before its running level was known, or `NOT_CONNECTED_LEVEL`) starts at `MIN_NORMAL_LEVEL`, with or without `split_special_modes`. [sec_touch: split mode becomes the fan's default in v2.0.0](https://github.com/distante/esphome-components/issues/158) makes split mode the default. |
 | Timing | The fan republishes when the live state recomputes (an input read, the next change), and only on a change. |
 | Mode change | The live state hears a level answer before the fan does. While the live state says `not running` and the fan still reads `AUTOMATIC_TIME_LEVEL`, the fan waits for its own read, so leaving Automatik Zeit never flashes its display. |
 
-Cost measured on the maintainer's controller (5 pairs with a live state): 0.25 s per GET, so a 55-GET block poll takes about 14 s every 5 min. Fan levels aren't read during it, but SETs jump ahead of the reads (`add_set_task`), so commands aren't delayed. A fan-only install goes from no block poll to that cost.
+A fan-only install goes from no block poll to the cost measured in the readme ([Fan in Automatik Zeit](../components/sec_touch/readme.md#fan-in-automatik-zeit)).
 
 ---
 
@@ -345,9 +345,9 @@ The hub's queue paths (latest wins, read-back GET, mask GET-then-SET, `busy`) ge
 
 ## Docs and release
 
-Ships in **v1.5.0** with the sniffer goals and experiments. The work for this section is in [Docs, v1.5.0 changelog and device checks](https://github.com/distante/esphome-components/issues/80).
+Ships in **v2.0.0** with the sniffer goals and experiments. The work for this section is in [Docs, v2.0.0 changelog and device checks](https://github.com/distante/esphome-components/issues/80).
 
-**Changelog (v1.5.0), time programs:**
+**Changelog (v2.0.0), time programs:**
 - **Time programs in HA**, opt-in per pair under `sec_touch: time_programs:`: time, level and enabled per switch time, read and write.
 - **Live state:** switch time in effect, running level, next level and next change, computed from the program and the panel clock.
 - **Breaking, fan:** in Automatik Zeit a fan follows its pair's running level: off at level 0, on at that speed at 1–6. Fans in Automatik Zeit can now show off, so HA automations on fan state may fire. Every fan polls its pair's time-program block and the panel clock. `follow_time_program: false` on the fan keeps the old display.
@@ -358,10 +358,9 @@ Ships in **v1.5.0** with the sniffer goals and experiments. The work for this se
 - The `time_programs:` YAML and every key.
 - That live state is computed, and its model is an assumption.
 - That the fan follows the running level ([Fan](#fan)), the opt-out, and the polling cost for a fan-only install.
-- That the fan entity still shows on in Automatik Zeit.
 - The bulk-action copy block, the HA call, and HA's 30 s response timeout.
 - The measured RAM cost.
-- ID 2 is also polled with any live-state entity, ID 1 only with `clock_drift` and always right before ID 2 (readme "Panel Clock" and the `GLOBAL_SETTING_IDS` note).
+- ID 2 is also polled with a live state (a following fan or any live-state entity), ID 1 only with `clock_drift` and always right before ID 2 (readme "Panel Clock" and the `GLOBAL_SETTING_IDS` note).
 - The known-property list under "Sniffer page" and the "Known Ids" section gain the three time-program arrays.
 - "Not in `protocol_ids.h` yet: #85 decides" under Time programs: point at this spec's [catalogue](#known-property-catalogue).
 
@@ -372,7 +371,6 @@ Ships in **v1.5.0** with the sniffer goals and experiments. The work for this se
 ## Out of scope
 
 - Naming and saving profiles ("summer" / "winter"): HA or a future custom-cards repo keeps them ([What do a fan pair's time-program entities look like in YAML and HA?](https://github.com/distante/esphome-components/issues/113)).
-- The fan entity following the running level: [sec_touch: in Automatik Zeit the fan shows on even when the program runs level 0](https://github.com/distante/esphome-components/issues/124).
 - Known-property names and suspected meanings in the sniffer: [Sniffer: known properties carry a name and purpose](https://github.com/distante/esphome-components/issues/85) and [Sniffer: suspected meanings for unknown IDs, shown as hints](https://github.com/distante/esphome-components/issues/86).
 - An HA schedule helper as the interface.
 - JSON attributes over the native API.
@@ -383,7 +381,7 @@ Ships in **v1.5.0** with the sniffer goals and experiments. The work for this se
 
 1. IDs 101–166 are defined as in [Known-property catalogue](#known-property-catalogue).
 2. Check queries and shows IDs 101–166; discover and write probes skip them. Each fan card shows the time-program table with meanings; level 10, mask `20` and time `24:00:00` show as `unexpected value x`.
-3. A pair not in `time_programs:` gets no entities and no polling. A listed pair gets 3 entities per listed switch time, named by the rules in [Configuration](#configuration), [Sub-device](#sub-device) and [Entities](#entities). A config the [Configuration](#configuration) table calls an error fails validation: a duplicate `fan_number`, a switch time outside 1–5 or listed twice, `next_change` without a time source, a `time_programs_update_interval` that isn't a positive time period. A config with the example package validates and compiles.
+3. A pair not in `time_programs:` gets no entities, and its block is polled only with a live state (a following fan or a live-state entity). A listed pair gets 3 entities per listed switch time, named by the rules in [Configuration](#configuration), [Sub-device](#sub-device) and [Entities](#entities). A config the [Configuration](#configuration) table calls an error fails validation: a duplicate `fan_number`, a switch time outside 1–5 or listed twice, `next_change` without a time source, a `time_programs_update_interval` that isn't a positive time period. A config with the example package validates and compiles.
 4. A pair's `device_id` lands on every entity of that pair before entity validation, so a name repeated on two pairs' devices is valid and repeated on one device is an error. A `device_id` on an optional entity entry wins for that entity; the 15 field entities always follow the pair. The 15 field entities always get the pair's `web_server:`, and an optional entity entry's own `web_server:` replaces the pair's block for that entity. Every entity has the `entity_category` of [Entities](#entities).
 5. Time-program IDs are polled as in [Reading](#reading), and never on the fan or global-settings poll. A `refresh` press queues one poll of its pair and leaves the schedule as it was.
 6. An HA write follows [Writing](#writing): published at once, one queued SET per ID (a newer value replaces the queued one), after the SET ends one GET whose value is published. No SET is retried.

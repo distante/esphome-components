@@ -16,7 +16,7 @@ constexpr bool SCAN_MODE = true;
 
 }  // namespace
 
-// Every check that drops a data frame (issue #45) earns the GET one more send.
+// A dropped reply earns the GET one more send.
 TEST(ShouldRetryGet, AGetWhoseReplyFailedTheCrcIsRetried) {
   EXPECT_TRUE(should_retry_get(GET, DataMessageCheck::DATA_CRC_MISMATCH, FIRST_TRY, POLLING));
   EXPECT_TRUE(should_retry_get(GET, DataMessageCheck::DATA_CRC_NOT_A_NUMBER, FIRST_TRY, POLLING));
@@ -24,6 +24,10 @@ TEST(ShouldRetryGet, AGetWhoseReplyFailedTheCrcIsRetried) {
 
 TEST(ShouldRetryGet, AGetWhoseReplyMissedFieldsIsRetried) {
   EXPECT_TRUE(should_retry_get(GET, DataMessageCheck::DATA_MISSING_FIELDS, FIRST_TRY, POLLING));
+}
+
+TEST(ShouldRetryGet, AGetWhoseReplyLostItsStxIsRetried) {
+  EXPECT_TRUE(should_retry_get(GET, DataMessageCheck::DATA_STX_LOST, FIRST_TRY, POLLING));
 }
 
 // A second bad reply ends the task, so a noisy line can't loop.

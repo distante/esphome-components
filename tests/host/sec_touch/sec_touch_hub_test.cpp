@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "common.h"
+#include "esphome/components/sec_touch/get_retry.h"
 
 namespace esphome::sec_touch::testing {
 
@@ -93,6 +94,25 @@ class SECTouchGetRetryTest : public SECTouchHubTest {
     this->uart_.push_rx(data);
     this->hub_.loop_times(3);
     return this->uart_.tx;
+  }
+
+  /// The hub discards one noise byte per loop(). These extra loop() calls give it time to send its ACK and dispatch
+  /// the next task.
+  static constexpr int NOISE_SLACK_LOOPS = 3;
+
+  /// Feeds `bytes` to the hub as noise. Returns what the hub sent meanwhile.
+  std::vector<uint8_t> feed_noise(const std::vector<uint8_t> &bytes) {
+    this->uart_.tx.clear();
+    this->uart_.push_rx(bytes);
+    this->hub_.loop_times(static_cast<int>(bytes.size()) + NOISE_SLACK_LOOPS);
+    return this->uart_.tx;
+  }
+
+  /// The panel answers the GET in flight with its ACK, then a data frame whose STX arrives garbled, so every byte of
+  /// it reads as noise. Returns what the hub sent meanwhile.
+  std::vector<uint8_t> panel_answers_with_lost_stx(int property_id, const std::string &value) {
+    this->uart_.push_rx(ack_frame());
+    return this->feed_noise(without_stx(data_frame(property_id, value)));
   }
 
   std::vector<std::string> labels_;
@@ -292,6 +312,25 @@ TEST_F(SECTouchGetRetryTest, MalformedLabelReplyIsAckedThenTheSameGetIsSentAgain
   EXPECT_EQ(this->labels_, std::vector<std::string>{std::to_string(LABEL_1_ID) + "=3"});
 }
 
+TEST_F(SECTouchGetRetryTest, AReplyWithALostStxIsAckedThenTheSameGetIsSentAgain) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+
+  EXPECT_EQ(this->panel_answers_with_lost_stx(LABEL_1_ID, "3"), concat(ack_frame(), get_frame(LABEL_1_ID)));
+
+  this->panel_answers(data_frame(LABEL_1_ID, "3"));
+  EXPECT_EQ(this->labels_, std::vector<std::string>{std::to_string(LABEL_1_ID) + "=3"});
+}
+
+TEST_F(SECTouchGetRetryTest, AReplyWithALostStxAfterAFrameTooShortForDataIsAckedThenTheSameGetIsSentAgain) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+  this->uart_.push_rx(ack_frame());
+  this->uart_.push_rx(corrupted_ack());
+
+  EXPECT_EQ(this->feed_noise(without_stx(data_frame(LABEL_1_ID, "3"))), concat(ack_frame(), get_frame(LABEL_1_ID)));
+}
+
 // One retry per task, so a noisy line can't loop: the second bad reply ends the task and the next one goes out.
 TEST_F(SECTouchGetRetryTest, SecondMalformedReplyEndsTheTaskWithoutAThirdSend) {
   this->queue_label_reads({LABEL_1_ID, LABEL_2_ID});
@@ -326,6 +365,17 @@ TEST_F(SECTouchGetRetryTest, MalformedReplyDuringScanIsNotRetried) {
   EXPECT_EQ(this->hub_.get_last_scan_outcome(), ScanOutcome::SCAN_OUTCOME_TIMEOUT);
 }
 
+TEST_F(SECTouchGetRetryTest, ReplyWithALostStxDuringScanIsNotRetried) {
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
+  this->hub_.add_discovery_get_task(UNANSWERED_PROPERTY_ID);
+  this->send_next_task();
+
+  EXPECT_EQ(this->panel_answers_with_lost_stx(FAN_1_LEVEL_ID, "10"),
+            concat(ack_frame(), get_frame(UNANSWERED_PROPERTY_ID)));
+  EXPECT_EQ(this->hub_.get_last_scan_outcome(), ScanOutcome::SCAN_OUTCOME_TIMEOUT);
+}
+
 // The sniffer's stop can end scan mode while a scan query is still in flight. Its late reply belongs to the scan.
 TEST_F(SECTouchGetRetryTest, MalformedReplyAfterScanStoppedIsNotRetried) {
   this->hub_.enter_scan_mode();
@@ -334,6 +384,15 @@ TEST_F(SECTouchGetRetryTest, MalformedReplyAfterScanStoppedIsNotRetried) {
   this->hub_.exit_scan_mode();
 
   EXPECT_EQ(this->panel_answers(data_frame_with_bad_crc(FAN_1_LEVEL_ID, "10")), ack_frame());
+}
+
+TEST_F(SECTouchGetRetryTest, ReplyWithALostStxAfterScanStoppedIsNotRetried) {
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
+  this->send_next_task();
+  this->hub_.exit_scan_mode();
+
+  EXPECT_EQ(this->panel_answers_with_lost_stx(FAN_1_LEVEL_ID, "10"), ack_frame());
 }
 
 // Without a reply, the watchdog still ends the scan query, so polling goes on after the scan. Until then nothing
@@ -444,6 +503,91 @@ TEST_F(SECTouchGetRetryTest, TheDateIsPolledRightBeforeTheClockWhateverTheRegist
             concat(ack_frame(), get_frame(SUMMER_VENTILATION_PROPERTY_ID)));
 }
 
+/// Reads what the log says about a GET whose reply is dropped.
+class SECTouchDropLogTest : public SECTouchGetRetryTest {
+ protected:
+  void SetUp() override {
+    SECTouchGetRetryTest::SetUp();
+    LogCapture::instance().clear();
+  }
+
+  /// Lines that call a task ended as malformed.
+  static int task_end_claims() { return LogCapture::instance().count(task_end_name(TaskEnd::TASK_END_MALFORMED)); }
+};
+
+TEST_F(SECTouchDropLogTest, ARetriedGetWhoseReplyFailedTheCrcLogsNoEnd) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+
+  this->panel_answers(data_frame_with_bad_crc(LABEL_1_ID, "3"));
+
+  EXPECT_EQ(task_end_claims(), 0);
+}
+
+TEST_F(SECTouchDropLogTest, ARetriedGetWhoseReplyLostItsStxLogsNoEnd) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+
+  this->panel_answers_with_lost_stx(LABEL_1_ID, "3");
+
+  EXPECT_EQ(task_end_claims(), 0);
+}
+
+TEST_F(SECTouchDropLogTest, AGetGivingUpAfterTwoCrcFailuresLogsOneMalformedEnd) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+  this->panel_answers(data_frame_with_bad_crc(LABEL_1_ID, "3"));
+
+  this->panel_answers(data_frame_with_bad_crc(LABEL_1_ID, "3"));
+
+  EXPECT_EQ(task_end_claims(), 1);
+}
+
+TEST_F(SECTouchDropLogTest, AGetGivingUpAfterTwoLostStxRepliesLogsOneMalformedEnd) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+  this->panel_answers_with_lost_stx(LABEL_1_ID, "3");
+
+  this->panel_answers_with_lost_stx(LABEL_1_ID, "3");
+
+  EXPECT_EQ(task_end_claims(), 1);
+}
+
+// Leaving scan mode already ended the query as a timeout, so its late reply ends nothing.
+TEST_F(SECTouchDropLogTest, ALateBadReplyAfterScanStoppedLogsNoEnd) {
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
+  this->send_next_task();
+  this->hub_.exit_scan_mode();
+
+  this->panel_answers(data_frame_with_bad_crc(FAN_1_LEVEL_ID, "10"));
+
+  EXPECT_EQ(task_end_claims(), 0);
+}
+
+TEST_F(SECTouchDropLogTest, ALateReplyWithALostStxAfterScanStoppedLogsNoEnd) {
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
+  this->send_next_task();
+  this->hub_.exit_scan_mode();
+
+  this->panel_answers_with_lost_stx(FAN_1_LEVEL_ID, "10");
+
+  EXPECT_EQ(task_end_claims(), 0);
+}
+
+TEST_F(SECTouchDropLogTest, AScanQueryWhoseReplyLostItsStxLogsTheReasonAndOneMalformedEnd) {
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
+  this->send_next_task();
+
+  this->panel_answers_with_lost_stx(FAN_1_LEVEL_ID, "10");
+
+  EXPECT_EQ(LogCapture::instance().count(data_message_check_reason(DataMessageCheck::DATA_STX_LOST)), 1);
+  EXPECT_EQ(task_end_claims(), 1);
+  EXPECT_EQ(LogCapture::instance().count(GET_RETRY_LOG_SUFFIX), 0);
+}
+
 /// Records every task end as "<GET|SET> <property_id> <end>".
 class SECTouchTaskEndTest : public SECTouchGetRetryTest {
  protected:
@@ -495,6 +639,36 @@ TEST_F(SECTouchTaskEndTest, AMalformedGetEndsOnceAfterItsRetry) {
 
   this->panel_answers(data_frame_with_bad_crc(LABEL_1_ID, "3"));
   EXPECT_EQ(this->ends_, std::vector<std::string>{end_of("GET", LABEL_1_ID, TaskEnd::TASK_END_MALFORMED)});
+}
+
+TEST_F(SECTouchTaskEndTest, ASecondReplyWithALostStxEndsItsGetAsMalformed) {
+  this->queue_label_reads({LABEL_1_ID, LABEL_2_ID});
+  this->send_next_task();
+  this->panel_answers_with_lost_stx(LABEL_1_ID, "3");
+
+  EXPECT_EQ(this->panel_answers_with_lost_stx(LABEL_1_ID, "3"), concat(ack_frame(), get_frame(LABEL_2_ID)));
+  EXPECT_EQ(this->ends_, std::vector<std::string>{end_of("GET", LABEL_1_ID, TaskEnd::TASK_END_MALFORMED)});
+}
+
+TEST_F(SECTouchTaskEndTest, AnAckWithALostStxLeavesItsGetOpen) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+
+  EXPECT_TRUE(this->feed_noise(without_stx(ack_frame())).empty());
+
+  this->uart_.push_rx(data_frame(LABEL_1_ID, "3"));
+  this->hub_.loop_times(2);
+  EXPECT_EQ(this->ends_, std::vector<std::string>{end_of("GET", LABEL_1_ID, TaskEnd::TASK_END_ANSWERED)});
+}
+
+// Only a GET waits for a reply: a SET's garbled ACK stays noise, whatever the ETX that ends it.
+TEST_F(SECTouchTaskEndTest, AnAckWithALostStxLeavesItsSetOpen) {
+  this->hub_.add_set_task(SetDataTask::create(TaskTargetType::LEVEL, FAN_1_LEVEL_ID, "5"));
+  this->send_next_task();
+  ASSERT_EQ(this->hub_.current_running_task_type, TaskType::SET_DATA);
+
+  EXPECT_TRUE(this->feed_noise(without_stx(ack_frame())).empty());
+  EXPECT_EQ(this->hub_.current_running_task_type, TaskType::SET_DATA);
 }
 
 // Scan mode clears the queue: every discarded task, the one in flight first, ends as a timeout.

@@ -6,6 +6,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include "esphome/components/logger/logger.h"
 #include "esphome/components/uart/uart_component.h"
 #include "esphome/components/sec_touch/sec_touch.h"
 #include "esphome/components/sec_touch/time_program_codec.h"
@@ -156,5 +157,40 @@ inline std::vector<uint8_t> nak_frame() { return frame(std::string(1, static_cas
 
 /// The panel's ACK with one bit flipped (issue #50): `02 07 0A`, too short to be a data frame.
 inline std::vector<uint8_t> corrupted_ack() { return frame(std::string(1, static_cast<char>(ACK ^ 0x01))); }
+
+/// The reply's STX as the controller received it, garbled to 0x00, so every byte reads as noise.
+inline std::vector<uint8_t> without_stx(std::vector<uint8_t> f) {
+  f[0] = 0x00;
+  return f;
+}
+
+/// Every log line written since the last clear(). One instance for the whole run: the logger can't drop a callback,
+/// and the build has one slot for it (tests/host/sec_touch/__init__.py).
+class LogCapture {
+ public:
+  static LogCapture &instance() {
+    static LogCapture capture;
+    return capture;
+  }
+
+  void clear() { this->lines_.clear(); }
+
+  /// How many lines contain `text`.
+  int count(const std::string &text) const {
+    return static_cast<int>(std::count_if(this->lines_.begin(), this->lines_.end(), [&text](const std::string &line) {
+      return line.find(text) != std::string::npos;
+    }));
+  }
+
+ private:
+  LogCapture() {
+    logger::global_logger->add_log_callback(this,
+                                            [](void *self, uint8_t, const char *, const char *message, size_t len) {
+                                              static_cast<LogCapture *>(self)->lines_.emplace_back(message, len);
+                                            });
+  }
+
+  std::vector<std::string> lines_;
+};
 
 }  // namespace esphome::sec_touch::testing

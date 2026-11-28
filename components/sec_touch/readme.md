@@ -981,6 +981,16 @@ Buffer: 
 
 ---
 
+:bulb: A reply whose `[STX]` arrives garbled never forms a frame.
+
+- Each of its bytes reads as noise.
+- After the panel's `ACK` of a GET, the `[ETX]` of that noise ends the reply.
+- The log names it with the `DATA_STX_LOST` reason (`data_message.h`).
+- It is handled like a [CRC mismatch](#bulb-optional-crc-optional_crc): `ACK`, then the GET once more.
+- Nothing waits for the watchdog.
+
+---
+
 ### SET Request Message
 The structure of the SET Message is as follows  (special chars added manually):
 ```log

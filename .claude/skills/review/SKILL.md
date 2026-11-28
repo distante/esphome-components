@@ -122,6 +122,32 @@ Enforces [Code comments](../coding-standards/SKILL.md#code-comments).
 
 Done when each hit is reported with its `file:line`, the bullet it breaks, and its trimmed text or "delete".
 
+## A grown set leaves no stale list behind
+
+Enforces [Reuse existing definitions](../coding-standards/SKILL.md#reuse-existing-definitions) and the "Once" bullet of [Code comments](../coding-standards/SKILL.md#code-comments).
+
+1. For each value the diff adds to an enum, or case it adds to a rule (a check that earns a retry, an ID a filter skips), grep `components/` and `tests/` for comments that list or describe that set's members.
+2. A comment that lists the members restates their definitions: cut it to name the set, so the next addition can't make it stale. Example: adding `DATA_STX_LOST` left `should_retry_get`'s doc describing every dropped reply as "a data frame".
+
+Done when each grown set has its grep, and each listing comment is reported with its `file:line` and its trimmed text.
+
+## A new case of a rule has its siblings' edge-case tests
+
+Enforces [Tests](../coding-standards/SKILL.md#tests): every change lands with tests, and a new case is a change on every path its siblings take.
+
+1. For each case the diff adds to an existing rule (a drop reason, a check that earns a retry, a task end), grep `tests/` for the tests of the cases already there and list the edge cases they pin.
+2. For each edge case a sibling pins and the new case has no test for, report it. Example: `DATA_STX_LOST` joined the CRC-mismatch drop, but had no test for a late reply after a scan-mode drop, which `MalformedReplyAfterScanStoppedIsNotRetried` pins for CRC.
+
+Done when each new case lists its siblings' edge-case tests, and each one missing for the new case is reported with the sibling test it mirrors.
+
+## Every added log line is true for its case
+
+Enforces [Error handling](../coding-standards/SKILL.md#c-style): a log line reports what happened.
+
+1. For each log line the diff adds or changes, picture the case that prints it and read the line as printed. Every field must hold that case's value; a field a shared formatter fills with nothing (`len=0`, an empty dump) says something else happened. Example: the lost-STX warning printed `len=0 hex: ` through `describe_dropped_message` for a reply whose bytes were logged one by one as noise.
+
+Done when each added log line is written out as it prints, and each misleading field is reported with its `file:line`.
+
 ## Docs and PR text are short and visual
 
 Enforces [Docs and PR text](../coding-standards/SKILL.md#docs-and-pr-text) on the lines the diff adds or changes in every `.md`, plus the PR body and issue comments. Its bullets are the criteria.

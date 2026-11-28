@@ -153,6 +153,12 @@ void SECTouchComponent::loop() {
   if (this->incoming_message.buffer_index == -1 && peakedData != STX) {
     ESP_LOGD(TAG, "[loop]  Discarding noise byte (or maybe a Heartbeat with %d?)", peakedData);
     this->read_byte(&peakedData);
+    if (peakedData == ETX && this->get_acked_) {
+      ESP_LOGW(TAG_UART, "  [loop] %s (task=%s property_id=%d)",
+               data_message_check_reason(DataMessageCheck::DATA_STX_LOST),
+               EnumToString::TaskType(this->current_running_task_type), this->current_running_task_property_id_);
+      this->drop_data_message(DataMessageCheck::DATA_STX_LOST);
+    }
     return;
   }
 
@@ -621,6 +627,7 @@ Now, we need to extract the parts of the message. It can be either:
       // GET: ACK confirms the device received our request; the data response follows.
       // Keep task state so the queue-empty callback does not fire prematurely.
       this->incoming_message.reset();
+      this->get_acked_ = true;
     } else {
       // SET: ACK is the complete response — task is done.
       this->cleanup_after_task_complete(TaskEnd::TASK_END_ANSWERED);
@@ -680,14 +687,14 @@ where:
     this->describe_missing_fields(buf, tabs, details, sizeof(details));
     char context[384];
     this->describe_dropped_message(buf, len, details, context, sizeof(context));
-    ESP_LOGE(TAG_UART, "  [process_data] %s (%s). Task Failed", data_message_check_reason(check), context);
+    ESP_LOGE(TAG_UART, "  [process_data] %s (%s)", data_message_check_reason(check), context);
     this->drop_data_message(check);
     return;
   }
   if (check == DataMessageCheck::DATA_CRC_MISMATCH || check == DataMessageCheck::DATA_CRC_NOT_A_NUMBER) {
     char context[384];
     this->describe_dropped_message(buf, len, "", context, sizeof(context));
-    ESP_LOGW(TAG_UART, "  [process_data] %s (%s). Task Failed", data_message_check_reason(check), context);
+    ESP_LOGW(TAG_UART, "  [process_data] %s (%s)", data_message_check_reason(check), context);
     this->drop_data_message(check);
     return;
   }
@@ -712,29 +719,35 @@ where:
   this->send_ack_message();  // Send ACK back
 }
 
-// A dropped data frame is still ACKed. Without the ACK the panel ignores the next request until the
+// A dropped reply is still ACKed. Without the ACK the panel ignores the next request until the
 // watchdog fires, and it never resends a frame, so the ACK gives nothing up.
-// A GET whose reply this drops goes back to the front of the queue once, to be sent again after the ACK (issue #52).
+// A GET whose reply this drops goes back to the front of the queue once, to be sent again after the ACK.
 void SECTouchComponent::drop_data_message(DataMessageCheck check) {
   std::unique_ptr<BaseTask> task = this->finish_in_flight_task_(TaskEnd::TASK_END_MALFORMED);
   this->send_ack_message();
 
   if (task != nullptr &&
       should_retry_get(task->get_task_type() == TaskType::GET_DATA, check, task->retried, this->scan_mode_active_)) {
-    ESP_LOGI(TAG, "Sending the GET for property_id %d once more after dropping its reply", task->property_id);
+    ESP_LOGI(TAG, "Sending the GET for property_id %d %s", task->property_id, GET_RETRY_LOG_SUFFIX);
     task->retried = true;
     this->data_task_queue.push_front(std::move(task));
     return;
   }
+  if (task == nullptr) {
+    return;
+  }
+  log_task_end_(TaskEnd::TASK_END_MALFORMED);
   this->end_task_(std::move(task), TaskEnd::TASK_END_MALFORMED);
 }
 
 void SECTouchComponent::cleanup_after_task_complete(TaskEnd end) {
+  log_task_end_(end);
   this->end_task_(this->finish_in_flight_task_(end), end);
 }
 
+void SECTouchComponent::log_task_end_(TaskEnd end) { ESP_LOGD(TAG, "Task ended: %s", task_end_name(end)); }
+
 std::unique_ptr<BaseTask> SECTouchComponent::finish_in_flight_task_(TaskEnd end) {
-  ESP_LOGD(TAG, "Task ended: %s", task_end_name(end));
   std::unique_ptr<BaseTask> task = this->take_in_flight_task_();
   // A reply to a task already dropped (no task left) is no scan query's: it leaves the outcome alone too.
   this->scan_outcome_.record(end, this->scan_mode_active_,
@@ -747,6 +760,7 @@ std::unique_ptr<BaseTask> SECTouchComponent::take_in_flight_task_() {
   this->incoming_message.reset();
   this->current_running_task_type = TaskType::NONE;
   this->task_start_time_ = 0;
+  this->get_acked_ = false;
   return std::move(this->in_flight_task_);
 }
 

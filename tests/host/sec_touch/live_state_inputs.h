@@ -126,6 +126,22 @@ class LiveStateInputsTest : public ::testing::Test {
     this->panel_answers_get(time_program_enabled_id(PAIR), mask_text(enabled));
   }
 
+  /// Ends the task in flight unanswered, then sends every queued task, each left unanswered. Returns each request
+  /// sent, in order.
+  std::vector<std::vector<uint8_t>> drain() {
+    std::vector<std::vector<uint8_t>> sent;
+    this->hub_.age_task_past_watchdog();
+    std::vector<uint8_t> next = this->send_next_task();
+    while (!next.empty()) {
+      sent.push_back(next);
+      this->uart_.tx.clear();
+      this->hub_.age_task_past_watchdog();
+      this->hub_.loop_times(2);
+      next = this->uart_.tx;
+    }
+    return sent;
+  }
+
   FakeUART uart_;
   TestableSECTouch hub_;
 };

@@ -57,20 +57,6 @@ class LiveStateTest : public LiveStateInputsTest {
     this->next_change_.add_on_state_callback([this](const std::string &) { this->next_change_publishes_++; });
   }
 
-  /// Sends every queued task, each left unanswered. Returns each request, in order.
-  std::vector<std::vector<uint8_t>> drain() {
-    std::vector<std::vector<uint8_t>> sent;
-    std::vector<uint8_t> next = this->send_next_task();
-    while (!next.empty()) {
-      sent.push_back(next);
-      this->uart_.tx.clear();
-      this->hub_.age_task_past_watchdog();
-      this->hub_.loop_times(2);
-      next = this->uart_.tx;
-    }
-    return sent;
-  }
-
   FakeClock clock_;
   TestableLiveState live_{&this->hub_, PAIR};
   text_sensor::TextSensor in_effect_;

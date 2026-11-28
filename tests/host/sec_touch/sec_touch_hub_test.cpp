@@ -376,6 +376,15 @@ TEST_F(SECTouchGetRetryTest, MalformedReplyAfterScanStoppedIsNotRetried) {
   EXPECT_EQ(this->panel_answers(data_frame_with_bad_crc(FAN_1_LEVEL_ID, "10")), ack_frame());
 }
 
+TEST_F(SECTouchGetRetryTest, ReplyWithALostStxAfterScanStoppedIsNotRetried) {
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
+  this->send_next_task();
+  this->hub_.exit_scan_mode();
+
+  EXPECT_EQ(this->panel_answers_with_lost_stx(FAN_1_LEVEL_ID, "10"), ack_frame());
+}
+
 // Without a reply, the watchdog still ends the scan query, so polling goes on after the scan. Until then nothing
 // else goes out.
 TEST_F(SECTouchGetRetryTest, WatchdogEndsAScanQueryStillInFlightAfterScanStopped) {

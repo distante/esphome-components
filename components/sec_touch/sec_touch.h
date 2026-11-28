@@ -178,6 +178,7 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   int store_data_to_incoming_message(uint8_t data);
   /// The task in flight got its answer, or none: ends it with `end`.
   void cleanup_after_task_complete(TaskEnd end);
+  static void log_task_end_(TaskEnd end);
   /// Takes the task in flight off the line, records its outcome and starts the inter-task delay. Returns the task for
   /// the caller to end (end_task_) or send again.
   std::unique_ptr<BaseTask> finish_in_flight_task_(TaskEnd end);

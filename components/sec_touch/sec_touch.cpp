@@ -687,14 +687,14 @@ where:
     this->describe_missing_fields(buf, tabs, details, sizeof(details));
     char context[384];
     this->describe_dropped_message(buf, len, details, context, sizeof(context));
-    ESP_LOGE(TAG_UART, "  [process_data] %s (%s). Task Failed", data_message_check_reason(check), context);
+    ESP_LOGE(TAG_UART, "  [process_data] %s (%s)", data_message_check_reason(check), context);
     this->drop_data_message(check);
     return;
   }
   if (check == DataMessageCheck::DATA_CRC_MISMATCH || check == DataMessageCheck::DATA_CRC_NOT_A_NUMBER) {
     char context[384];
     this->describe_dropped_message(buf, len, "", context, sizeof(context));
-    ESP_LOGW(TAG_UART, "  [process_data] %s (%s). Task Failed", data_message_check_reason(check), context);
+    ESP_LOGW(TAG_UART, "  [process_data] %s (%s)", data_message_check_reason(check), context);
     this->drop_data_message(check);
     return;
   }
@@ -733,15 +733,20 @@ void SECTouchComponent::drop_data_message(DataMessageCheck check) {
     this->data_task_queue.push_front(std::move(task));
     return;
   }
+  if (task != nullptr) {
+    log_task_end_(TaskEnd::TASK_END_MALFORMED);
+  }
   this->end_task_(std::move(task), TaskEnd::TASK_END_MALFORMED);
 }
 
 void SECTouchComponent::cleanup_after_task_complete(TaskEnd end) {
+  log_task_end_(end);
   this->end_task_(this->finish_in_flight_task_(end), end);
 }
 
+void SECTouchComponent::log_task_end_(TaskEnd end) { ESP_LOGD(TAG, "Task ended: %s", task_end_name(end)); }
+
 std::unique_ptr<BaseTask> SECTouchComponent::finish_in_flight_task_(TaskEnd end) {
-  ESP_LOGD(TAG, "Task ended: %s", task_end_name(end));
   std::unique_ptr<BaseTask> task = this->take_in_flight_task_();
   // A reply to a task already dropped (no task left) is no scan query's: it leaves the outcome alone too.
   this->scan_outcome_.record(end, this->scan_mode_active_,

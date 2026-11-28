@@ -502,6 +502,71 @@ TEST_F(SECTouchGetRetryTest, TheDateIsPolledRightBeforeTheClockWhateverTheRegist
             concat(ack_frame(), get_frame(SUMMER_VENTILATION_PROPERTY_ID)));
 }
 
+/// Reads what the log says about a GET whose reply is dropped.
+class SECTouchDropLogTest : public SECTouchGetRetryTest {
+ protected:
+  void SetUp() override {
+    SECTouchGetRetryTest::SetUp();
+    LogCapture::instance().clear();
+  }
+
+  /// Lines that call a task ended or failed.
+  static int task_end_claims() {
+    return LogCapture::instance().count(task_end_name(TaskEnd::TASK_END_MALFORMED)) +
+           LogCapture::instance().count("Failed");
+  }
+};
+
+TEST_F(SECTouchDropLogTest, ARetriedGetWhoseReplyFailedTheCrcLogsNoEnd) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+
+  this->panel_answers(data_frame_with_bad_crc(LABEL_1_ID, "3"));
+
+  EXPECT_EQ(task_end_claims(), 0);
+}
+
+TEST_F(SECTouchDropLogTest, ARetriedGetWhoseReplyLostItsStxLogsNoEnd) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+
+  this->panel_answers_with_lost_stx(LABEL_1_ID, "3");
+
+  EXPECT_EQ(task_end_claims(), 0);
+}
+
+TEST_F(SECTouchDropLogTest, AGetGivingUpAfterTwoCrcFailuresLogsOneMalformedEnd) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+  this->panel_answers(data_frame_with_bad_crc(LABEL_1_ID, "3"));
+
+  this->panel_answers(data_frame_with_bad_crc(LABEL_1_ID, "3"));
+
+  EXPECT_EQ(task_end_claims(), 1);
+}
+
+TEST_F(SECTouchDropLogTest, AGetGivingUpAfterTwoLostStxRepliesLogsOneMalformedEnd) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+  this->panel_answers_with_lost_stx(LABEL_1_ID, "3");
+
+  this->panel_answers_with_lost_stx(LABEL_1_ID, "3");
+
+  EXPECT_EQ(task_end_claims(), 1);
+}
+
+// Leaving scan mode already ended the query as a timeout, so its late reply ends nothing.
+TEST_F(SECTouchDropLogTest, ALateBadReplyAfterScanStoppedLogsNoEnd) {
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
+  this->send_next_task();
+  this->hub_.exit_scan_mode();
+
+  this->panel_answers(data_frame_with_bad_crc(FAN_1_LEVEL_ID, "10"));
+
+  EXPECT_EQ(task_end_claims(), 0);
+}
+
 /// Records every task end as "<GET|SET> <property_id> <end>".
 class SECTouchTaskEndTest : public SECTouchGetRetryTest {
  protected:

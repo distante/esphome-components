@@ -2,7 +2,7 @@ import esphome.config_validation as cv
 
 # The v1.4.0 text sensor platform. Any entry fails with this message, whatever its keys.
 CONFIG_SCHEMA = cv.invalid(
-    """sec_touch_sniffer moved out of text_sensor in v1.5.0.
+    """sec_touch_sniffer moved out of text_sensor in v2.0.0.
 Replace the text_sensor entry with:
 
   sec_touch_sniffer:

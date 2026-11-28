@@ -981,7 +981,13 @@ Buffer: 
 
 ---
 
-:bulb: A reply whose `[STX]` arrives garbled never forms a frame: each of its bytes reads as noise. After the panel's `ACK` of a GET, the `[ETX]` of that noise ends the reply: it is logged as `STX lost, the frame read as noise` and handled like a [CRC mismatch](#bulb-optional-crc-optional_crc) (`ACK`, then the GET once more), without waiting for the watchdog.
+:bulb: A reply whose `[STX]` arrives garbled never forms a frame.
+
+- Each of its bytes reads as noise.
+- After the panel's `ACK` of a GET, the `[ETX]` of that noise ends the reply.
+- The log names it with the `DATA_STX_LOST` reason (`data_message.h`).
+- It is handled like a [CRC mismatch](#bulb-optional-crc-optional_crc): `ACK`, then the GET once more.
+- Nothing waits for the watchdog.
 
 ---
 

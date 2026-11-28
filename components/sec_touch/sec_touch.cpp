@@ -721,7 +721,7 @@ where:
 
 // A dropped reply is still ACKed. Without the ACK the panel ignores the next request until the
 // watchdog fires, and it never resends a frame, so the ACK gives nothing up.
-// A GET whose reply this drops goes back to the front of the queue once, to be sent again after the ACK (issue #52).
+// A GET whose reply this drops goes back to the front of the queue once, to be sent again after the ACK.
 void SECTouchComponent::drop_data_message(DataMessageCheck check) {
   std::unique_ptr<BaseTask> task = this->finish_in_flight_task_(TaskEnd::TASK_END_MALFORMED);
   this->send_ack_message();
@@ -733,9 +733,10 @@ void SECTouchComponent::drop_data_message(DataMessageCheck check) {
     this->data_task_queue.push_front(std::move(task));
     return;
   }
-  if (task != nullptr) {
-    log_task_end_(TaskEnd::TASK_END_MALFORMED);
+  if (task == nullptr) {
+    return;
   }
+  log_task_end_(TaskEnd::TASK_END_MALFORMED);
   this->end_task_(std::move(task), TaskEnd::TASK_END_MALFORMED);
 }
 

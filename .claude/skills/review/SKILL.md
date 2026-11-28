@@ -131,6 +131,15 @@ Enforces [Reuse existing definitions](../coding-standards/SKILL.md#reuse-existin
 
 Done when each grown set has its grep, and each listing comment is reported with its `file:line` and its trimmed text.
 
+## A new case of a rule has its siblings' edge-case tests
+
+Enforces [Tests](../coding-standards/SKILL.md#tests): every change lands with tests, and a new case is a change on every path its siblings take.
+
+1. For each case the diff adds to an existing rule (a drop reason, a check that earns a retry, a task end), grep `tests/` for the tests of the cases already there and list the edge cases they pin.
+2. For each edge case a sibling pins and the new case has no test for, report it. Example: `DATA_STX_LOST` joined the CRC-mismatch drop, but had no test for a late reply after a scan-mode drop, which `MalformedReplyAfterScanStoppedIsNotRetried` pins for CRC.
+
+Done when each new case lists its siblings' edge-case tests, and each one missing for the new case is reported with the sibling test it mirrors.
+
 ## Every added log line is true for its case
 
 Enforces [Error handling](../coding-standards/SKILL.md#c-style): a log line reports what happened.

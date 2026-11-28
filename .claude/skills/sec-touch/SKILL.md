@@ -11,6 +11,8 @@ SEC-Touch rules, on top of [coding-standards](../coding-standards/SKILL.md). The
 
 Reads are fine: GET `/sniffer/data`, the page, the logs, and discover scans (they only query).
 
+Save every captured device log in the current checkout's `.temp/device-logs/` (gitignored), named `<YYYY-MM-DD-HHMM>-<issue or branch>-<what it watches>.txt`. Example: `2026-11-28-0958-issue-51-lost-stx-before-fixes.txt`.
+
 ### Driving it over REST
 
 URLs come from ESPHome's `web_server` and the sniffer's paths (`sniffer_data.h`); look them up there. What they don't tell you:

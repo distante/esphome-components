@@ -9,8 +9,10 @@ using esphome::sec_touch::AUTOMATIC_CO2_LEVEL;
 using esphome::sec_touch::AUTOMATIC_HUMIDITY_LEVEL;
 using esphome::sec_touch::AUTOMATIC_TIME_LEVEL;
 using esphome::sec_touch::BURST_LEVEL;
+using esphome::sec_touch::decide_command_display;
 using esphome::sec_touch::decide_fan_display;
 using esphome::sec_touch::decide_mode_text;
+using esphome::sec_touch::FanControl;
 using esphome::sec_touch::FanStatus;
 using esphome::sec_touch::holds_first_display;
 using esphome::sec_touch::MAX_NORMAL_LEVEL;
@@ -163,6 +165,38 @@ constexpr bool FOLLOWING = true;
 constexpr bool SHOWN_BEFORE = true;
 constexpr bool HAS_LIVE_STATE = true;
 }  // namespace
+
+// ----- Right after a command from HA -----
+
+namespace {
+/// HA picks Automatic Time from an off fan: the command writes Automatik Zeit's level and shows the fan on.
+const FanControl PICK_AUTOMATIC_TIME{AUTOMATIC_TIME_LEVEL, /*on=*/true, AUTOMATIC_TIME_LEVEL,
+                                     /*reset_preset_to_normal=*/false};
+/// HA sets a normal level.
+const FanControl SET_LEVEL_4{ON_AT_4.speed, ON_AT_4.on, ON_AT_4.speed, /*reset_preset_to_normal=*/true};
+}  // namespace
+
+// The pair's level reads Automatik Zeit only once the SET is answered, and its running level comes with it.
+TEST_P(FanDisplay, PickingAutomatikZeitBeforeItsRunningLevelKeepsWhatTheFanShowed) {
+  expect_status(decide_command_display(PICK_AUTOMATIC_TIME, FOLLOWING, std::nullopt, OFF_AT_3, this->split()),
+                OFF_AT_3);
+}
+
+TEST_P(FanDisplay, PickingAutomatikZeitShowsAKnownRunningLevel) {
+  expect_status(decide_command_display(PICK_AUTOMATIC_TIME, FOLLOWING, OFF_LEVEL, ON_AT_4, this->split()),
+                FanStatus{false, ON_AT_4.speed});
+  expect_status(decide_command_display(PICK_AUTOMATIC_TIME, FOLLOWING, MAX_NORMAL_LEVEL, OFF_AT_3, this->split()),
+                FanStatus{true, MAX_NORMAL_LEVEL});
+}
+
+TEST_P(FanDisplay, PickingAutomatikZeitWithoutFollowingShowsTheCommand) {
+  expect_status(decide_command_display(PICK_AUTOMATIC_TIME, !FOLLOWING, OFF_LEVEL, OFF_AT_3, this->split()),
+                FanStatus{true, AUTOMATIC_TIME_LEVEL});
+}
+
+TEST_P(FanDisplay, ANormalLevelFromHaShowsTheCommand) {
+  expect_status(decide_command_display(SET_LEVEL_4, FOLLOWING, OFF_LEVEL, OFF_AT_3, this->split()), ON_AT_4);
+}
 
 TEST(HoldsFirstDisplay, AFollowingFanInAutomatikZeitWaitsForItsLiveState) {
   EXPECT_TRUE(holds_first_display(FOLLOWING, !SHOWN_BEFORE, AUTOMATIC_TIME_LEVEL, !HAS_LIVE_STATE));

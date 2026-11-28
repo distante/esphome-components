@@ -43,6 +43,20 @@ inline FanStatus decide_fan_display(int device_level, std::optional<int> running
   return FanStatus{true, is_normal_level(prior.speed) ? prior.speed : MIN_NORMAL_LEVEL};
 }
 
+/// What a fan shows right after HA's command `decision`, from `prior`, what it showed before. A following fan that HA
+/// puts in Automatik Zeit shows its running level, and keeps `prior` until it has one: showing the command would
+/// show the fan on until the SET's read-back brings the running level.
+inline FanStatus decide_command_display(const FanControl &decision, bool following, std::optional<int> running_level,
+                                        const FanStatus &prior, bool split_special_modes) {
+  if (!following || decision.level != AUTOMATIC_TIME_LEVEL) {
+    return FanStatus{decision.on, decision.speed};
+  }
+  if (!running_level.has_value()) {
+    return prior;
+  }
+  return decide_fan_display(AUTOMATIC_TIME_LEVEL, running_level, prior, split_special_modes);
+}
+
 /// What a fan's mode text sensor shows: these words, or the fan's preset.
 enum class ModeText : uint8_t { OFF, NOT_CONNECTED, PRESET };
 constexpr const char *MODE_TEXT_OFF = "Off";

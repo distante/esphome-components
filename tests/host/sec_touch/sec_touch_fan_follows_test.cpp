@@ -137,6 +137,30 @@ TEST_F(FanFollowsTest, TheModeSelectNamesAutomaticTimeWhileTheProgramStopsTheFan
   EXPECT_EQ(std::string(mode.current_option()), MODE_TEXT_OFF);
 }
 
+TEST_F(FanFollowsTest, PickingAutomaticTimeWhileTheProgramStopsTheFanNeverShowsItOn) {
+  this->hub_.register_fan(PAIR_LEVEL_ID, &this->fan_);
+  SecTouchModeSelect mode{&this->hub_, PAIR_LEVEL_ID};
+  mode.traits.set_options({MODE_TEXT_OFF, NORMAL_PRESET_NAME, AUTOMATIC_TIME_NAME});
+  mode.setup();
+  this->follow();
+  this->panel_answers_every_input(OFF_LEVEL, OFF_LEVEL, OFF_LEVEL);
+  ASSERT_FALSE(this->fan_.state);
+  this->shown_.clear();
+
+  mode.make_call().set_option(AUTOMATIC_TIME_NAME).perform();
+  this->send_next_task();  // the SET
+  this->uart_.push_rx(ack_frame());
+  this->hub_.loop_times(3);
+  this->panel_answers_pair_level(AUTOMATIC_TIME_LEVEL);
+
+  ASSERT_FALSE(this->shown_.empty());
+  for (const Shown &shown : this->shown_) {
+    EXPECT_FALSE(shown.on);
+  }
+  this->expect_shown(false, this->fan_.speed, AUTOMATIC_TIME_NAME);
+  EXPECT_EQ(std::string(mode.current_option()), AUTOMATIC_TIME_NAME);
+}
+
 TEST_F(FanFollowsTest, RunningLevelOffShowsTheFanOffAtTheNextChange) {
   this->follow();
   this->panel_answers_every_input(AUTOMATIC_TIME_LEVEL, SOME_NORMAL_LEVEL, OFF_LEVEL);

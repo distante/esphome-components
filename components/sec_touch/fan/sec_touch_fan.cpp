@@ -161,9 +161,12 @@ void SecTouchFan::control(const fan::FanCall &call) {
     command.preset_level = FanModeEnum::get_start_speed(preset_mode.value_or(FanModeEnum::FanMode::NORMAL));
   }
 
-  FanControl decision = decide_fan_control(command, FanStatus{this->state, this->speed}, this->split_special_modes_);
-  this->state = decision.on;
-  this->speed = decision.speed;
+  const FanStatus prior{this->state, this->speed};
+  FanControl decision = decide_fan_control(command, prior, this->split_special_modes_);
+  const FanStatus shown =
+      decide_command_display(decision, this->following_, this->running_level_, prior, this->split_special_modes_);
+  this->state = shown.on;
+  this->speed = shown.speed;
 
   this->device_level_ = decision.level;
 

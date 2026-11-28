@@ -321,6 +321,15 @@ TEST_F(SECTouchGetRetryTest, AReplyWithALostStxIsAckedThenTheSameGetIsSentAgain)
   EXPECT_EQ(this->labels_, std::vector<std::string>{std::to_string(LABEL_1_ID) + "=3"});
 }
 
+TEST_F(SECTouchGetRetryTest, AReplyWithALostStxAfterAFrameTooShortForDataIsAckedThenTheSameGetIsSentAgain) {
+  this->queue_label_reads({LABEL_1_ID});
+  this->send_next_task();
+  this->uart_.push_rx(ack_frame());
+  this->uart_.push_rx(corrupted_ack());
+
+  EXPECT_EQ(this->feed_noise(without_stx(data_frame(LABEL_1_ID, "3"))), concat(ack_frame(), get_frame(LABEL_1_ID)));
+}
+
 // One retry per task, so a noisy line can't loop: the second bad reply ends the task and the next one goes out.
 TEST_F(SECTouchGetRetryTest, SecondMalformedReplyEndsTheTaskWithoutAThirdSend) {
   this->queue_label_reads({LABEL_1_ID, LABEL_2_ID});

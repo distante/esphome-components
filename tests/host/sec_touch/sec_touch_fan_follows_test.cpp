@@ -80,6 +80,47 @@ class FanFollowsNormalLevelTest : public FanFollowsTest, public ::testing::WithP
 
 }  // namespace
 
+// After boot the fan's level answer comes before the clock and the block: a fan in Automatik Zeit waits for its
+// running level instead of showing on for those seconds.
+TEST_F(FanFollowsTest, ABootInAutomatikZeitShowsOnlyTheRunningLevel) {
+  this->follow();
+
+  this->panel_answers_every_input(AUTOMATIC_TIME_LEVEL, OFF_LEVEL, OFF_LEVEL);
+
+  ASSERT_EQ(this->shown_.size(), 1u);
+  EXPECT_FALSE(this->shown_[0].on);
+  EXPECT_EQ(this->shown_[0].preset, AUTOMATIC_TIME_NAME);
+}
+
+TEST_F(FanFollowsTest, ABootOutsideAutomatikZeitShowsTheLevelAtOnce) {
+  this->follow();
+
+  this->panel_answers_pair_level(SOME_NORMAL_LEVEL);
+
+  ASSERT_EQ(this->shown_.size(), 1u);
+  this->expect_shown(true, SOME_NORMAL_LEVEL, NORMAL_PRESET_NAME);
+}
+
+TEST_F(FanFollowsTest, ABootOfAFanThatDoesNotFollowShowsAutomatikZeitAtOnce) {
+  this->panel_answers_pair_level(AUTOMATIC_TIME_LEVEL);
+
+  ASSERT_EQ(this->shown_.size(), 1u);
+  EXPECT_TRUE(this->shown_[0].on);
+}
+
+TEST_F(FanFollowsTest, TheModeSensorNamesAutomaticTimeWhileTheProgramStopsTheFan) {
+  text_sensor::TextSensor mode;
+  this->hub_.register_text_sensor(PAIR_LEVEL_ID, &mode);
+  this->follow();
+
+  this->panel_answers_every_input(AUTOMATIC_TIME_LEVEL, OFF_LEVEL, OFF_LEVEL);
+  ASSERT_FALSE(this->fan_.state);
+  EXPECT_EQ(mode.get_state(), AUTOMATIC_TIME_NAME);
+
+  this->panel_answers_pair_level(OFF_LEVEL);
+  EXPECT_EQ(mode.get_state(), MODE_TEXT_OFF);
+}
+
 TEST_F(FanFollowsTest, RunningLevelOffShowsTheFanOffAtTheNextChange) {
   this->follow();
   this->panel_answers_every_input(AUTOMATIC_TIME_LEVEL, SOME_NORMAL_LEVEL, OFF_LEVEL);
@@ -170,10 +211,14 @@ TEST_F(FanFollowsTest, AnOnWithASpeedWhileFollowingWritesThatLevel) {
   EXPECT_EQ(this->uart_.tx, set_frame(PAIR_LEVEL_ID, std::to_string(SOME_NORMAL_LEVEL)));
 }
 
-// The boot shows Automatik Zeit's level as the speed before the running level is known, and off keeps it.
+// With no switch time enabled the fan shows Automatik Zeit's level as the speed, and the running level off keeps it.
 TEST_F(FanFollowsTest, ABareOnFromAutomatikZeitsSpeedWritesLevelOne) {
   this->follow();
   this->panel_answers_every_input(AUTOMATIC_TIME_LEVEL, OFF_LEVEL, OFF_LEVEL);
+  this->panel_answers_enabled_mask(0);
+  this->drain();
+  this->panel_answers_enabled_mask(ENABLED_SWITCH_TIMES);
+  this->drain();
   this->expect_shown(false, AUTOMATIC_TIME_LEVEL, AUTOMATIC_TIME_NAME);
 
   this->fan_.turn_on().perform();

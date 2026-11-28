@@ -13,7 +13,10 @@ const char *const SecTouchFan::TAG = "sec_touch.fan";
 
 SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
     : level_id(level_id), label_id(label_id), parent(parent) {
-  this->add_on_state_callback([this]() { this->update_label_mode(); });
+  this->add_on_state_callback([this]() {
+    this->shown_once_ = true;
+    this->update_label_mode();
+  });
 
   this->parent->register_recursive_update_listener(this->level_id, [this](int property_id, int real_speed_from_device) {
     // A newer SET task for this level is already queued — this echo is from a
@@ -60,11 +63,13 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
 }
 
 void SecTouchFan::follow_time_program(TimeProgramLiveState *live_state) {
+  this->following_ = true;
   live_state->set_state_listener([this](const std::optional<LiveState> &state) { this->on_live_state_(state); });
 }
 
 void SecTouchFan::on_live_state_(const std::optional<LiveState> &state) {
   this->running_level_ = state.has_value() ? state->running_level_value : std::nullopt;
+  this->has_live_state_ = state.has_value();
   if (!this->device_level_.has_value()) {
     return;
   }
@@ -83,6 +88,10 @@ void SecTouchFan::on_live_state_(const std::optional<LiveState> &state) {
 
 void SecTouchFan::show_device_level_() {
   const int level = *this->device_level_;
+  if (holds_first_display(this->following_, this->shown_once_, level, this->has_live_state_)) {
+    ESP_LOGD(TAG, "Fan with property_id %d waits for its pair's running level", this->level_id);
+    return;
+  }
   FanModeEnum::FanMode mode_from_hardware = SecTouchFan::calculate_mode_from_speed(level);
   std::string_view mode_from_hardware_str = FanModeEnum::to_string(mode_from_hardware);
 
@@ -220,18 +229,19 @@ void SecTouchFan::update_label_mode() {
     return;
   }
 
-  if (this->state == 0) {
-    level_text_sensor->publish_state("Off");
-    return;
-  }
-
-  if (this->speed == NOT_CONNECTED_LEVEL) {
-    level_text_sensor->publish_state("Not Connected");
-    return;
+  switch (decide_mode_text(this->device_level_, FanStatus{this->state, this->speed})) {
+    case ModeText::OFF:
+      level_text_sensor->publish_state(MODE_TEXT_OFF);
+      return;
+    case ModeText::NOT_CONNECTED:
+      level_text_sensor->publish_state(MODE_TEXT_NOT_CONNECTED);
+      return;
+    case ModeText::PRESET:
+      break;
   }
 
   if (!this->has_preset_mode()) {
-    level_text_sensor->publish_state("Unknown");
+    level_text_sensor->publish_state(MODE_TEXT_UNKNOWN);
     return;
   }
 

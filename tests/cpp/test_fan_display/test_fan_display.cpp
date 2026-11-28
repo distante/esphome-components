@@ -10,9 +10,12 @@ using esphome::sec_touch::AUTOMATIC_HUMIDITY_LEVEL;
 using esphome::sec_touch::AUTOMATIC_TIME_LEVEL;
 using esphome::sec_touch::BURST_LEVEL;
 using esphome::sec_touch::decide_fan_display;
+using esphome::sec_touch::decide_mode_text;
 using esphome::sec_touch::FanStatus;
+using esphome::sec_touch::holds_first_display;
 using esphome::sec_touch::MAX_NORMAL_LEVEL;
 using esphome::sec_touch::MIN_NORMAL_LEVEL;
+using esphome::sec_touch::ModeText;
 using esphome::sec_touch::NOT_CONNECTED_LEVEL;
 using esphome::sec_touch::OFF_LEVEL;
 using esphome::sec_touch::SLEEP_LEVEL;
@@ -128,6 +131,57 @@ TEST(FanDisplaySpecial, InSplitModeAnotherSpecialLevelKeepsANormalSlider) {
 TEST(FanDisplaySpecial, InSplitModeAnotherSpecialLevelMovesASliderOutsideTheNormalLevels) {
   const FanStatus not_connected{false, NOT_CONNECTED_LEVEL};
   expect_status(decide_fan_display(SLEEP_LEVEL, std::nullopt, not_connected, SPLIT), FanStatus{true, MIN_NORMAL_LEVEL});
+}
+
+// ----- Mode text -----
+
+TEST(ModeText, AFanTheProgramStopsNamesItsPreset) {
+  EXPECT_EQ(decide_mode_text(AUTOMATIC_TIME_LEVEL, OFF_AT_3), ModeText::PRESET);
+}
+
+TEST(ModeText, APairAtLevelOffIsOff) { EXPECT_EQ(decide_mode_text(OFF_LEVEL, OFF_AT_3), ModeText::OFF); }
+
+TEST(ModeText, AnOffFanBeforeAnyReadIsOff) { EXPECT_EQ(decide_mode_text(std::nullopt, OFF_AT_3), ModeText::OFF); }
+
+TEST(ModeText, ANotConnectedFanIsOff) {
+  EXPECT_EQ(decide_mode_text(NOT_CONNECTED_LEVEL, FanStatus{false, NOT_CONNECTED_LEVEL}), ModeText::OFF);
+}
+
+TEST(ModeText, ARunningFanNamesItsPreset) {
+  EXPECT_EQ(decide_mode_text(MAX_NORMAL_LEVEL, ON_AT_4), ModeText::PRESET);
+  EXPECT_EQ(decide_mode_text(AUTOMATIC_TIME_LEVEL, ON_AT_4), ModeText::PRESET);
+}
+
+TEST(ModeText, AnOnFanAtTheNotConnectedSpeedIsNotConnected) {
+  EXPECT_EQ(decide_mode_text(AUTOMATIC_TIME_LEVEL, FanStatus{true, NOT_CONNECTED_LEVEL}), ModeText::NOT_CONNECTED);
+}
+
+// ----- The first display after boot -----
+
+namespace {
+constexpr bool FOLLOWING = true;
+constexpr bool SHOWN_BEFORE = true;
+constexpr bool HAS_LIVE_STATE = true;
+}  // namespace
+
+TEST(HoldsFirstDisplay, AFollowingFanInAutomatikZeitWaitsForItsLiveState) {
+  EXPECT_TRUE(holds_first_display(FOLLOWING, !SHOWN_BEFORE, AUTOMATIC_TIME_LEVEL, !HAS_LIVE_STATE));
+}
+
+TEST(HoldsFirstDisplay, ShowsOnceTheLiveStateHasAState) {
+  EXPECT_FALSE(holds_first_display(FOLLOWING, !SHOWN_BEFORE, AUTOMATIC_TIME_LEVEL, HAS_LIVE_STATE));
+}
+
+TEST(HoldsFirstDisplay, OnlyTheFirstDisplayWaits) {
+  EXPECT_FALSE(holds_first_display(FOLLOWING, SHOWN_BEFORE, AUTOMATIC_TIME_LEVEL, !HAS_LIVE_STATE));
+}
+
+TEST(HoldsFirstDisplay, AFanThatDoesNotFollowNeverWaits) {
+  EXPECT_FALSE(holds_first_display(!FOLLOWING, !SHOWN_BEFORE, AUTOMATIC_TIME_LEVEL, !HAS_LIVE_STATE));
+}
+
+TEST(HoldsFirstDisplay, OutsideAutomatikZeitNothingWaits) {
+  EXPECT_FALSE(holds_first_display(FOLLOWING, !SHOWN_BEFORE, MAX_NORMAL_LEVEL, !HAS_LIVE_STATE));
 }
 
 int main(int argc, char **argv) {

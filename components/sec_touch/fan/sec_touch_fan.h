@@ -34,6 +34,11 @@ class SecTouchFan : public Component, public fan::Fan {
   std::optional<int> device_level_;
   /// The pair's running level while the fan follows it and the pair has one.
   std::optional<int> running_level_;
+  bool following_{false};
+  /// Whether the live state computed a state at its last recompute.
+  bool has_live_state_{false};
+  /// Whether the fan published since boot.
+  bool shown_once_{false};
 
  public:
   SecTouchFan(SECTouchComponent *parent, int level_id, int label_id);

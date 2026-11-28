@@ -43,5 +43,30 @@ inline FanStatus decide_fan_display(int device_level, std::optional<int> running
   return FanStatus{true, is_normal_level(prior.speed) ? prior.speed : MIN_NORMAL_LEVEL};
 }
 
+/// What a fan's mode text sensor shows: these words, or the fan's preset.
+enum class ModeText : uint8_t { OFF, NOT_CONNECTED, PRESET };
+constexpr const char *MODE_TEXT_OFF = "Off";
+constexpr const char *MODE_TEXT_NOT_CONNECTED = "Not Connected";
+/// A preset the fan doesn't have yet.
+constexpr const char *MODE_TEXT_UNKNOWN = "Unknown";
+
+/// The mode text for `shown`, what the fan shows for `device_level`, its pair's level (nullopt before a good read).
+/// A fan its time program stops still names its preset: the pair is in Automatik Zeit, not off.
+inline ModeText decide_mode_text(std::optional<int> device_level, const FanStatus &shown) {
+  if (!shown.on && device_level != AUTOMATIC_TIME_LEVEL) {
+    return ModeText::OFF;
+  }
+  if (shown.speed == NOT_CONNECTED_LEVEL) {
+    return ModeText::NOT_CONNECTED;
+  }
+  return ModeText::PRESET;
+}
+
+/// Whether a following fan holds its first display after boot: its pair is in Automatik Zeit and its live state has
+/// no state yet, so it would show Automatik Zeit's display without a running level and change it seconds later.
+inline bool holds_first_display(bool following, bool shown_before, int device_level, bool has_live_state) {
+  return following && !shown_before && device_level == AUTOMATIC_TIME_LEVEL && !has_live_state;
+}
+
 }  // namespace sec_touch
 }  // namespace esphome

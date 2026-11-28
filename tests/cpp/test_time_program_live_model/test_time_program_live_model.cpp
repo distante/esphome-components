@@ -427,7 +427,6 @@ TEST_F(LiveStateModelTest, SwitchTimeSecondsCount) {
   expect_state(this->state(), switch_time_name(1), running(1), running(2), seconds(20));
 }
 
-// The running level as a level value, for the fan that follows it: the level of the switch time in effect.
 TEST_F(LiveStateModelTest, TheRunningLevelValueIsTheLevelInEffect) {
   this->ready(bit(1) | bit(2), "13:00:00");
 
@@ -440,7 +439,6 @@ TEST_F(LiveStateModelTest, TheRunningLevelValueIsTheLevelOfYesterdaysLast) {
   EXPECT_EQ(this->state().running_level_value, LEVEL_OF[2]);
 }
 
-// A state word in the running level has no level value.
 TEST_F(LiveStateModelTest, NotRunningHasNoRunningLevelValue) {
   this->ready(bit(1) | bit(2), "13:00:00");
   this->pair_level(level_text(MAX_NORMAL_LEVEL));

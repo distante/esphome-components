@@ -27,8 +27,7 @@ TimeProgramLiveState::TimeProgramLiveState(SECTouchComponent *hub, int pair) : h
   for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
     watch(time_program_level_id(pair, n));
   }
-  // The pair's fan entry, which the config requires, polls its level ID; listen only. The hub hands this string
-  // listener each answer before the fan's own listener, so the fan finds the state of the level it reads.
+  // The pair's fan entry, which the config requires, polls its level ID; listen only.
   this->hub_->register_unpolled_string_listener(FAN_LEVEL_IDS[pair - 1],
                                                 [this](int, const std::string &raw) { this->on_pair_level_(raw); });
   // Only the panel clock: the panel date is clock_drift's.

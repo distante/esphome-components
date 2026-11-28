@@ -719,7 +719,7 @@ where:
   this->send_ack_message();  // Send ACK back
 }
 
-// A dropped data frame is still ACKed. Without the ACK the panel ignores the next request until the
+// A dropped reply is still ACKed. Without the ACK the panel ignores the next request until the
 // watchdog fires, and it never resends a frame, so the ACK gives nothing up.
 // A GET whose reply this drops goes back to the front of the queue once, to be sent again after the ACK (issue #52).
 void SECTouchComponent::drop_data_message(DataMessageCheck check) {

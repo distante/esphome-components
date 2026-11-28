@@ -16,7 +16,7 @@ constexpr bool SCAN_MODE = true;
 
 }  // namespace
 
-// Every check that drops a data frame (issue #45) earns the GET one more send.
+// Every DataMessageCheck that drops a reply earns the GET one more send.
 TEST(ShouldRetryGet, AGetWhoseReplyFailedTheCrcIsRetried) {
   EXPECT_TRUE(should_retry_get(GET, DataMessageCheck::DATA_CRC_MISMATCH, FIRST_TRY, POLLING));
   EXPECT_TRUE(should_retry_get(GET, DataMessageCheck::DATA_CRC_NOT_A_NUMBER, FIRST_TRY, POLLING));

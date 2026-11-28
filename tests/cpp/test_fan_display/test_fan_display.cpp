@@ -79,7 +79,6 @@ TEST_P(FanDisplay, ASpecialRunningLevelShowsAsWithoutFollowing) {
   }
 }
 
-// No running level: none, conflict, a needed input never read well, or a fan with follow_time_program: false.
 TEST_P(FanDisplay, NoRunningLevelShowsAsWithoutFollowing) {
   expect_status(decide_fan_display(AUTOMATIC_TIME_LEVEL, std::nullopt, OFF_AT_3, this->split()),
                 this->automatic_time_without_following());

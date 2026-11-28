@@ -350,7 +350,7 @@ Ships in **v2.0.0** with the sniffer goals and experiments. The work for this se
 **Changelog (v2.0.0), time programs:**
 - **Time programs in HA**, opt-in per pair under `sec_touch: time_programs:`: time, level and enabled per switch time, read and write.
 - **Live state:** switch time in effect, running level, next level and next change, computed from the program and the panel clock.
-- **Breaking, fan:** in Automatik Zeit a fan follows its pair's running level: off at level 0, on at that speed at 1–6. Fans in Automatik Zeit can now show off, so HA automations on fan state may fire. Every fan polls its pair's time-program block and the panel clock. `follow_time_program: false` on the fan keeps the old display.
+- **Breaking, fan:** in Automatik Zeit a fan follows its pair's running level: off at level 0, on at that speed at 1–6. Fans in Automatik Zeit can now show off, so HA automations on fan state may fire. Every following fan polls its pair's time-program block and the panel clock. `follow_time_program: false` on the fan keeps the old display.
 - **Breaking, fan:** an "on" without a speed from any off fan whose speed is not a normal level (a special level, or not connected) starts at level 1; before, it wrote that speed back, so an "on" after Burst or Sleep resumed that mode. Set a preset to resume one.
 - **`sec_touch.set_time_program`** sets a pair's whole program; the readme shows how to call it from HA.
 - **Sniffer:** IDs 101–166 are known properties: discover skips them, check shows them on each fan card.

@@ -234,12 +234,11 @@ TEST_F(FanFollowsTest, AClockAnswerAfterTheSetWasAnsweredKeepsTheSpeedHaSet) {
 
 // A needed input never read well leaves the live state with no state: the fan drops the running level it showed.
 TEST_F(FanFollowsTest, AFanShownOffShowsAsNotFollowingWhenTheLiveStateHasNoState) {
-  constexpr int NEVER_READ = 3;
   this->follow();
-  this->panel_answers_every_input_but(NEVER_READ, AUTOMATIC_TIME_LEVEL, OFF_LEVEL, OFF_LEVEL);
+  this->panel_answers_every_input_but(NEVER_READ_SWITCH_TIME, AUTOMATIC_TIME_LEVEL, OFF_LEVEL, OFF_LEVEL);
   ASSERT_FALSE(this->fan_.state);
 
-  this->panel_answers_enabled_mask(ENABLED_SWITCH_TIMES | switch_time_bit(NEVER_READ));
+  this->panel_answers_enabled_mask(ENABLED_SWITCH_TIMES | switch_time_bit(NEVER_READ_SWITCH_TIME));
 
   this->expect_shown(true, AUTOMATIC_TIME_LEVEL, AUTOMATIC_TIME_NAME);
 }

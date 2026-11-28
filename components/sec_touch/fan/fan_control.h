@@ -46,8 +46,7 @@ inline FanControl decide_fan_control(const FanCommand &command, const FanStatus 
 
   bool on = command.state.value_or(prior.on);
   bool turning_on_without_speed = command.state == true && !command.speed.has_value() && !prior.on;
-  // Only a normal level is a speed to resume: an off fan's speed may hold any other level, a special level
-  // (BURST_LEVEL..SLEEP_LEVEL) or NOT_CONNECTED_LEVEL, on every fan.
+  // Only a normal level is a speed to resume: an off fan's speed may hold any other level.
   if (turning_on_without_speed && !is_normal_level(speed)) {
     // TODO Use a configuration https://github.com/distante/esphome-components/issues/10
     speed = MIN_NORMAL_LEVEL;

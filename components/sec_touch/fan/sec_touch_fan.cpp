@@ -108,7 +108,7 @@ void SecTouchFan::show_device_level_() {
     return;
   }
 
-  char running_level[12] = "none";
+  char running_level[12] = "-";
   if (this->running_level_.has_value()) {
     snprintf(running_level, sizeof(running_level), "%d", *this->running_level_);
   }

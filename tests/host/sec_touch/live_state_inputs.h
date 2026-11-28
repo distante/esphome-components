@@ -20,6 +20,9 @@ inline const int PAIR_LEVEL_ID = FAN_LEVEL_IDS[PAIR - 1];
 
 /// Switch times 1 and 2 enabled. The others are off.
 constexpr uint8_t ENABLED_SWITCH_TIMES = switch_time_bit(1) | switch_time_bit(2);
+/// A switch time outside ENABLED_SWITCH_TIMES, for tests that answer its time with NOT_A_TIME and then enable it.
+constexpr int NEVER_READ_SWITCH_TIME = 3;
+static_assert((ENABLED_SWITCH_TIMES & switch_time_bit(NEVER_READ_SWITCH_TIME)) == 0);
 inline const std::string MASK = mask_text(ENABLED_SWITCH_TIMES);
 inline const char *const TIMES[SWITCH_TIME_COUNT] = {"08:00:00", "12:00:00", "18:00:00", "21:00:00", "23:00:00"};
 /// A second before switch time 2: switch time 1 is in effect, switch time 2 is the next change.

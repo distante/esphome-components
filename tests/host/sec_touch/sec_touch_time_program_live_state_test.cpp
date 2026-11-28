@@ -183,11 +183,10 @@ TEST_F(LiveStateTest, EnteringAutomatikZeitBeforeAnyClockReadClearsTheState) {
 
 // Spec "Live state", cases: enabling a switch time whose time never read well leaves a needed input unknown.
 TEST_F(LiveStateTest, EnablingASwitchTimeWhoseTimeNeverReadWellClearsTheState) {
-  constexpr int NEVER_READ = 3;
-  this->panel_answers_every_input_but(NEVER_READ);
+  this->panel_answers_every_input_but(NEVER_READ_SWITCH_TIME);
   ASSERT_EQ(this->in_effect_.get_state(), switch_time_name(1));
   ASSERT_TRUE(this->next_change_.has_state());
-  const uint8_t enabled = ENABLED_SWITCH_TIMES | switch_time_bit(NEVER_READ);
+  const uint8_t enabled = ENABLED_SWITCH_TIMES | switch_time_bit(NEVER_READ_SWITCH_TIME);
 
   // Read twice: the second read finds the state already cleared and publishes nothing.
   for (int read = 0; read < 2; read++) {

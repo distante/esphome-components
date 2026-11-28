@@ -108,7 +108,7 @@ constexpr uint32_t TEST_TIME_PROGRAMS_INTERVAL_MS = 240000;
 /// Re-exports the hub internals the tests steer. current_running_task_type shows whether a task is still open. The
 /// host platform's millis() is the real clock, so the last_*_ms_ members let a test age a poll's interval instead of
 /// sleeping, as age_task_past_watchdog() does for a task. data_task_queue and time_program_polls_ let a test check and
-/// bend the queue.
+/// bend the queue; the listener maps, what an entity registers.
 class TestableSECTouch : public SECTouchComponent {
  public:
   TestableSECTouch() {
@@ -121,6 +121,8 @@ class TestableSECTouch : public SECTouchComponent {
   using SECTouchComponent::time_program_polls_;
   using SECTouchComponent::last_global_settings_update_ms_;
   using SECTouchComponent::last_time_programs_update_ms_;
+  using SECTouchComponent::recursive_update_listeners;
+  using SECTouchComponent::string_update_listeners;
 
   /// IDs whose priority GET can't be queued: add_priority_get_task() returns 0 for them, as for an ID it doesn't
   /// accept.

@@ -79,6 +79,15 @@ Enforces [Error handling](../coding-standards/SKILL.md#c-style): a state that tu
 
 Done when each listed function has its caller traced, and each stale display is reported with its `file:line`.
 
+## Every publish of a derived display uses its source
+
+Enforces [Error handling](../coding-standards/SKILL.md#c-style): an entity shows the value the code computed, never a value it replaces a moment later.
+
+1. For each entity the diff makes show a value derived from another source (a fan shown from its pair's running level), list every path that publishes it: the source's listener, its own reads, HA commands, boot.
+2. For each path that publishes before the source has answered, check that it publishes what the source will say, or keeps what it showed. Example: a following fan's running level came from the SET's read-back, but picking Automatic Time from HA published the command's "on" at once, and the read-back turned it off a second later.
+
+Done when each derived entity has its publish paths listed, and each path that shows a value the source later replaces is reported with its `file:line`.
+
 ## A published number fits its type
 
 Enforces [Error handling](../coding-standards/SKILL.md#c-style): an entity shows the value the code computed.

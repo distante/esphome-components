@@ -100,6 +100,9 @@ void TimeProgramLiveState::recompute_() {
   auto state = this->model_.compute(now_ms);
   this->next_change_armed_ = false;
   this->next_change_waits_for_time_ = false;
+  if (this->state_listener_) {
+    this->state_listener_(state);
+  }
   if (!state.has_value()) {
     this->clear_entities_();
     return;

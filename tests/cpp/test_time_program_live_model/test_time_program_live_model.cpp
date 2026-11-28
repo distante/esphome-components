@@ -16,6 +16,7 @@ using esphome::sec_touch::LIVE_STATE_NONE;
 using esphome::sec_touch::LIVE_STATE_NOT_RUNNING;
 using esphome::sec_touch::LiveState;
 using esphome::sec_touch::LiveStateModel;
+using esphome::sec_touch::MAX_NORMAL_LEVEL;
 using esphome::sec_touch::MS_PER_DAY;
 using esphome::sec_touch::MS_PER_HOUR;
 using esphome::sec_touch::MS_PER_MINUTE;
@@ -424,6 +425,38 @@ TEST_F(LiveStateModelTest, SwitchTimeSecondsCount) {
   this->ready(bit(1) | bit(2), "12:00:10");
 
   expect_state(this->state(), switch_time_name(1), running(1), running(2), seconds(20));
+}
+
+TEST_F(LiveStateModelTest, TheRunningLevelValueIsTheLevelInEffect) {
+  this->ready(bit(1) | bit(2), "13:00:00");
+
+  EXPECT_EQ(this->state().running_level_value, LEVEL_OF[2]);
+}
+
+TEST_F(LiveStateModelTest, TheRunningLevelValueIsTheLevelOfYesterdaysLast) {
+  this->ready(bit(1) | bit(2), "07:00:00");
+
+  EXPECT_EQ(this->state().running_level_value, LEVEL_OF[2]);
+}
+
+TEST_F(LiveStateModelTest, NotRunningHasNoRunningLevelValue) {
+  this->ready(bit(1) | bit(2), "13:00:00");
+  this->pair_level(level_text(MAX_NORMAL_LEVEL));
+
+  EXPECT_EQ(this->state().running_level_value, std::nullopt);
+}
+
+TEST_F(LiveStateModelTest, NoneHasNoRunningLevelValue) {
+  this->ready(0, "13:00:00");
+
+  EXPECT_EQ(this->state().running_level_value, std::nullopt);
+}
+
+TEST_F(LiveStateModelTest, AConflictHasNoRunningLevelValue) {
+  this->time(4, "08:00:00");
+  this->ready(bit(1) | bit(4), "09:00:00");
+
+  EXPECT_EQ(this->state().running_level_value, std::nullopt);
 }
 
 // AC 9 and the cases table: a failed or unexpected input after a good read keeps its last good value.

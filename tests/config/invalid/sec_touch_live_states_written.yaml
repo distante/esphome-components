@@ -1,0 +1,30 @@
+# expect-error: live_states is generated
+# The hub builds its live states from the fans and the live-state entities; the user doesn't list them.
+
+esphome:
+  name: live-states-written
+
+esp32:
+  board: esp32dev
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+  live_states:
+    - fan_number: 1
+
+fan:
+  - platform: sec_touch
+    fan_number: 1
+    name: "Fan 1"

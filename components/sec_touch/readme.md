@@ -344,10 +344,41 @@ sec_touch:
 
 - **Computed, not read.** The panel never says which switch time it runs. sec_touch computes it from the program, the pair's level and the panel clock (ID 2, polled as [Global Settings](#global-settings) lists). The model is an assumption the panel can't confirm.
 - **Needs the pair's `fan:` entry**, which polls the pair's level. Without it the config fails.
-- **Polling:** with any live-state entity, the pair's whole block of 11 IDs is polled, whatever `switch_times` lists.
+- **Polling:** with any live-state entity or a [following fan](#fan-in-automatik-zeit), the pair's whole block of 11 IDs is polled, whatever `switch_times` lists.
 - **`next_change` shows Unknown** whenever the other three show `not running` or `none`: a timestamp can't hold a state word, so it has no value then.
 - **`next_change` precision:** rounded to the minute; HA gets it as an ISO 8601 UTC time (`2026-11-27T13:00:00Z`), with no float loss.
-- The fan entity isn't changed: in Automatik Zeit it still shows on, preset Automatic Time.
+- A following fan and these entities share one live state, so they never disagree: [Fan in Automatik Zeit](#fan-in-automatik-zeit).
+
+## Fan in Automatik Zeit
+
+While a pair runs Automatik Zeit (level 10), its fan entity follows the pair's running level: the level of the switch time in effect, from the same [live state](#time-program-live-state). Every sec_touch fan follows, with or without a `time_programs:` entry or a `time:` source.
+
+| Running level | Fan | Speed | Preset |
+|---|---|---|---|
+| 0 | off | unchanged | Automatic Time |
+| 1–6 | on | that level | Automatic Time |
+| 7–9 (Burst, Automatic Humidity, Automatic CO2) | on | as not following | Automatic Time |
+| `none`, `conflict`, or not known yet | on | as not following | Automatic Time |
+
+"As not following": speed 10, or with `split_special_modes` the slider stays (level 1 when it had none). Outside Automatik Zeit nothing changes.
+
+- **Computed, not read.** The running level is the live state's model, an assumption the panel can't confirm: the panel never says which level it runs.
+- **HA commands** work as not following: on, off or a speed sets the pair's level, which switches it to Normal and ends Automatik Zeit.
+- **"On" without a speed** from any off fan, following or not, whose speed is not 1–6 (a special level 7–11, or Not Connected) starts at level 1, with or without `split_special_modes`. [#158](https://github.com/distante/esphome-components/issues/158) makes split mode the default.
+- **Updates** when the live state recomputes: on each read of its inputs and at the next switch time. HA gets a new state only when it changes.
+- **Picking Automatic Time** from HA shows the running level at once, or keeps the fan as it was until the pair's level is read back (about a second), so it never shows on first and then off.
+- **After a reboot** in Automatik Zeit, the fan publishes nothing until its pair's program and the panel clock are read (seconds), so it never shows on first and then off.
+- **Mode entities** (`mode_text` sensor and `mode_select`) keep showing `Automatic Time` while the program stops the fan; `Off` means the pair's level is off.
+- **Polling cost:** a following fan polls its pair's whole time-program block (11 IDs) every `time_programs_update_interval` (default 5 min), in every mode, and the panel clock (ID 2) on the global-settings poll. A fan-only install had none of this before. Measured on the maintainer's controller with 5 pairs: 0.25 s per GET, so 55 GETs take about 14 s every 5 min. Fan levels aren't read during it, but fan commands go ahead of the queued reads, so they aren't delayed.
+- **Opt-out:** with `follow_time_program: false` the fan shows Automatik Zeit as not following (on, preset Automatic Time), and drops the polling following adds. A `time_programs:` entry still polls its own IDs, and live-state entities still poll the whole block and the panel clock.
+
+```yaml
+fan:
+  - platform: sec_touch
+    fan_number: 1
+    name: "Lüftung Büro"
+    follow_time_program: false   # optional, default true
+```
 
 ## Logging
 
@@ -471,7 +502,7 @@ Write only to an ID an experiment corroborated, and only values its captures saw
 
 ### Upgrading the sniffer from v1.4
 
-The sniffer moved out of `text_sensor` in v1.5.0: a `text_sensor: - platform: sec_touch_sniffer` entry is a config error. Replace it with:
+The sniffer moved out of `text_sensor` in v2.0.0: a `text_sensor: - platform: sec_touch_sniffer` entry is a config error. Replace it with:
 
 ```yaml
 sec_touch_sniffer:
@@ -879,7 +910,7 @@ Stored on `GLOBAL_SETTING_IDS` array as:
 | ID | Polled with |
 |----|-------------|
 | 1 (date) | `clock_drift`, always right before `2` |
-| 2 (clock) | `clock_drift` or a [time-program live-state](#time-program-live-state) entity |
+| 2 (clock) | `clock_drift`, a [time-program live-state](#time-program-live-state) entity, or a [following fan](#fan-in-automatik-zeit) |
 
 | ID | Description | ON value | OFF value |
 |----|-------------|----------|-----------|

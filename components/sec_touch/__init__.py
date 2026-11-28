@@ -37,6 +37,9 @@ from .header_reader import HeaderReader
 
 DEPENDENCIES = ["uart"]
 
+# The hub's config key and its platforms' `platform:` value.
+DOMAIN = "sec_touch"
+
 sec_touch_ns = cg.esphome_ns.namespace("sec_touch")
 SECTouchComponent = sec_touch_ns.class_(
     "SECTouchComponent", cg.PollingComponent, uart.UARTDevice
@@ -68,8 +71,10 @@ CONF_NEXT_LEVEL = "next_level"
 CONF_NEXT_CHANGE = "next_change"
 LIVE_STATE_TEXT_KEYS = (CONF_SWITCH_TIME_IN_EFFECT, CONF_RUNNING_LEVEL, CONF_NEXT_LEVEL)
 LIVE_STATE_KEYS = LIVE_STATE_TEXT_KEYS + (CONF_NEXT_CHANGE,)
-# Generated before validation when a pair has a live-state entity, never written by the user.
-CONF_LIVE_STATE_ID = "live_state_id"
+# On a sec_touch fan entry: in Automatik Zeit, show the pair's running level.
+CONF_FOLLOW_TIME_PROGRAM = "follow_time_program"
+# Generated before validation, never written by the user: _prepare_live_states.
+CONF_LIVE_STATES = "live_states"
 
 FAN_PAIR_COUNT = len(FAN_LEVEL_IDS)
 
@@ -177,7 +182,6 @@ TIME_PROGRAM_SCHEMA = FAN_PAIR_SCHEMA.extend(
             TimeProgramWriteFailedEvent, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
         ),
         cv.Required(CONF_FIELD_ENTITIES): cv.ensure_list(FIELD_ENTITIES_SCHEMA),
-        cv.Optional(CONF_LIVE_STATE_ID): cv.declare_id(TimeProgramLiveState),
         **{
             cv.Optional(key): esphome_text_sensor.text_sensor_schema()
             for key in LIVE_STATE_TEXT_KEYS
@@ -197,7 +201,7 @@ def sec_touch_fans(fans):
     return [
         fan
         for fan in _as_list(fans)
-        if isinstance(fan, dict) and fan.get("platform") == "sec_touch"
+        if isinstance(fan, dict) and fan.get("platform") == DOMAIN
     ]
 
 
@@ -239,8 +243,6 @@ def _prepare_time_program(hub_config, entry):
             f"{CONF_FIELD_ENTITIES} is generated from {CONF_SWITCH_TIMES}",
             path=[CONF_FIELD_ENTITIES],
         )
-    if CONF_LIVE_STATE_ID in entry:
-        raise cv.Invalid(f"{CONF_LIVE_STATE_ID} is generated", path=[CONF_LIVE_STATE_ID])
     try:
         fan_number = FAN_NUMBER_SCHEMA(entry.get(CONF_FAN_NUMBER))
     except cv.Invalid as err:
@@ -260,11 +262,9 @@ def _prepare_time_program(hub_config, entry):
         # Live state reads the pair's level ID, which only the pair's fan entry polls.
         if next(_fan_entries(hub_config, fan_number), None) is None:
             raise cv.Invalid(
-                f"{live_state[0]} needs this hub's sec_touch fan entry with {CONF_FAN_NUMBER} {fan_number}",
+                f"{live_state[0]} needs this hub's {DOMAIN} fan entry with {CONF_FAN_NUMBER} {fan_number}",
                 path=[live_state[0]],
             )
-        # None declares an ID that ESPHome generates.
-        entry[CONF_LIVE_STATE_ID] = None
     device_id = entry.get(CONF_DEVICE_ID)
     prefix = ""
     if device_id is None:
@@ -309,6 +309,38 @@ def _prepare_time_program(hub_config, entry):
     return entry
 
 
+def _follows(fan):
+    """Whether a raw `fan:` entry follows its pair's running level. A value its schema rejects counts as not
+    following: the fan's schema reports it."""
+    try:
+        return cv.boolean(fan.get(CONF_FOLLOW_TIME_PROGRAM, True))
+    except cv.Invalid:
+        return False
+
+
+def _prepare_live_states(hub_config):
+    """Lists the pairs that get a live state, shared by the pair's fan and its live-state entities: those whose fan
+    follows and those with a live-state entity."""
+    if not isinstance(hub_config, dict):
+        return hub_config
+    if CONF_LIVE_STATES in hub_config:
+        raise cv.Invalid(f"{CONF_LIVE_STATES} is generated", path=[CONF_LIVE_STATES])
+    # _prepare_time_programs checked each fan_number; a quoted one is still a string.
+    with_entity = {
+        FAN_NUMBER_SCHEMA(entry[CONF_FAN_NUMBER])
+        for entry in hub_config.get(CONF_TIME_PROGRAMS, [])
+        if any(key in entry for key in LIVE_STATE_KEYS)
+    }
+    pairs = [
+        fan_number
+        for fan_number in range(1, FAN_PAIR_COUNT + 1)
+        if fan_number in with_entity or any(_follows(fan) for fan in _fan_entries(hub_config, fan_number))
+    ]
+    if not pairs:
+        return hub_config
+    return {**hub_config, CONF_LIVE_STATES: [{CONF_FAN_NUMBER: fan_number} for fan_number in pairs]}
+
+
 def _prepare_time_programs(hub_config):
     if not isinstance(hub_config, dict) or CONF_TIME_PROGRAMS not in hub_config:
         return hub_config
@@ -345,12 +377,16 @@ CONFIG_SCHEMA = cv.Schema(
             cv.positive_not_null_time_period, cv.time_period_in_milliseconds_
         ),
         cv.Optional(CONF_TIME_PROGRAMS): cv.ensure_list(TIME_PROGRAM_SCHEMA),
+        cv.Optional(CONF_LIVE_STATES): cv.ensure_list(
+            FAN_PAIR_SCHEMA.extend({cv.GenerateID(): cv.declare_id(TimeProgramLiveState)})
+        ),
     }
 )
 
 
 CONFIG_SCHEMA = cv.All(
     _prepare_time_programs,
+    _prepare_live_states,
     CONFIG_SCHEMA.extend(uart.UART_DEVICE_SCHEMA)
     .extend(cv.COMPONENT_SCHEMA)
     .extend(cv.polling_component_schema("5s")),
@@ -401,18 +437,18 @@ def _final_validate_set_time_program_calls(config):
             continue
         if not listed:
             raise cv.Invalid(
-                f"sec_touch.set_time_program needs at least one entry in sec_touch {CONF_TIME_PROGRAMS}"
+                f"sec_touch.set_time_program needs at least one entry in {DOMAIN} {CONF_TIME_PROGRAMS}"
             )
         if fan_number is not None and fan_number not in listed:
             raise cv.Invalid(
-                f"sec_touch.set_time_program: {CONF_FAN_NUMBER} {fan_number} is not listed in sec_touch {CONF_TIME_PROGRAMS}"
+                f"sec_touch.set_time_program: {CONF_FAN_NUMBER} {fan_number} is not listed in {DOMAIN} {CONF_TIME_PROGRAMS}"
             )
     return config
 
 
 FINAL_VALIDATE_SCHEMA = cv.All(
     uart.final_validate_device_schema(
-        "sec_touch",
+        DOMAIN,
         require_tx=True,
         require_rx=True,
         # parity="NONE",
@@ -491,13 +527,20 @@ async def _time_program_to_code(hub, entry):
         # The event types come from C++ (WRITE_FAILURE_NAMES).
         failed = cg.new_Pvariable(write_failed[CONF_ID], program)
         await event.register_event(failed, write_failed, event_types=[])
-    if CONF_LIVE_STATE_ID in entry:
-        await _live_state_to_code(hub, entry)
+    if any(key in entry for key in LIVE_STATE_KEYS):
+        await _live_state_entities_to_code(entry)
 
 
-async def _live_state_to_code(hub, entry):
-    live_state = cg.new_Pvariable(entry[CONF_LIVE_STATE_ID], hub, entry[CONF_FAN_NUMBER])
-    await cg.register_component(live_state, {})
+def live_state_id(fan_number):
+    """The ID of pair `fan_number`'s live state, from the validated hub config."""
+    for entry in CORE.config[DOMAIN].get(CONF_LIVE_STATES, []):
+        if entry[CONF_FAN_NUMBER] == fan_number:
+            return entry[CONF_ID]
+    raise ValueError(f"fan pair {fan_number} has no live state")
+
+
+async def _live_state_entities_to_code(entry):
+    live_state = await cg.get_variable(live_state_id(entry[CONF_FAN_NUMBER]))
     if conf := entry.get(CONF_SWITCH_TIME_IN_EFFECT):
         sens = await esphome_text_sensor.new_text_sensor(conf)
         cg.add(live_state.set_switch_time_in_effect(sens))
@@ -529,5 +572,8 @@ async def to_code(config):
             config[CONF_TIME_PROGRAMS_UPDATE_INTERVAL]
         )
     )
+    for entry in config.get(CONF_LIVE_STATES, []):
+        live_state = cg.new_Pvariable(entry[CONF_ID], var, entry[CONF_FAN_NUMBER])
+        await cg.register_component(live_state, {})
     for entry in config.get(CONF_TIME_PROGRAMS, []):
         await _time_program_to_code(var, entry)

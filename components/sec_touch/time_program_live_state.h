@@ -7,6 +7,8 @@
 #include "esphome/core/defines.h"
 
 #include <cstdint>
+#include <functional>
+#include <optional>
 #include <string>
 
 #include "esphome/components/text_sensor/text_sensor.h"
@@ -22,7 +24,8 @@ namespace esphome {
 namespace sec_touch {
 
 /**
- * One fan pair's live state. Built only when the pair has a live-state entity. It puts the pair's whole block on the
+ * One fan pair's live state, shared by the pair's live-state entities and its fan when the fan follows the running
+ * level (which pairs get one: `_prepare_live_states` in __init__.py). It puts the pair's whole block on the
  * pair's poll and ID 2 (the panel clock) on the global-settings poll, recomputes on every input read and at the next
  * change, and publishes an entity only when its value changes.
  */
@@ -39,6 +42,11 @@ class TimeProgramLiveState : public Component {
     this->time_ = time;
   }
 #endif
+  /// Hands every state the model computes to `listener`, nullopt while a needed input was never read well. One per
+  /// pair: the pair's fan.
+  void set_state_listener(std::function<void(const std::optional<LiveState> &)> listener) {
+    this->state_listener_ = std::move(listener);
+  }
 
   void loop() override;
   void dump_config() override;
@@ -67,6 +75,7 @@ class TimeProgramLiveState : public Component {
   text_sensor::TextSensor *next_change_{nullptr};
   time::RealTimeClock *time_{nullptr};
 #endif
+  std::function<void(const std::optional<LiveState> &)> state_listener_;
 
   /// The one timeout: at the next change, recompute. millis() of the change, valid while `next_change_armed_`.
   uint32_t next_change_at_ms_{0};

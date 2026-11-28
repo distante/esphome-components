@@ -85,6 +85,8 @@ struct LiveState {
   const char *next_level;
   /// Milliseconds from now to the next change, or nullopt when there is none.
   std::optional<uint32_t> ms_to_next_change;
+  /// The running level as a level value, or nullopt when `running_level` is a state word.
+  std::optional<int> running_level_value;
 };
 
 /// The panel clock, read from ID 2 and advanced with the caller's millisecond clock between reads.
@@ -215,8 +217,11 @@ class LiveStateModel {
     // Not ms_forward: a next change at now is the only one left, so its next turn is a full day away, not 0.
     const uint32_t wait = next_at > now ? static_cast<uint32_t>(next_at - now)
                                         : static_cast<uint32_t>(next_at) + MS_PER_DAY - static_cast<uint32_t>(now);
-    return LiveState{in_effect > 0 ? switch_time_name(in_effect) : LIVE_STATE_CONFLICT, this->level_name_of(in_effect),
-                     this->level_name_of(next), wait};
+    if (in_effect == 0) {
+      return LiveState{LIVE_STATE_CONFLICT, LIVE_STATE_CONFLICT, this->level_name_of(next), wait, std::nullopt};
+    }
+    return LiveState{switch_time_name(in_effect), this->level_name_of(in_effect), this->level_name_of(next), wait,
+                     this->levels_[in_effect - 1]};
   }
 
  protected:

@@ -1,4 +1,4 @@
-# expect-error: sec_touch_sniffer moved out of text_sensor in v1.5.0.
+# expect-error: sec_touch_sniffer moved out of text_sensor in v2.0.0.
 
 # The v1.4.0 text sensor platform is gone: any entry fails with the migration message.
 

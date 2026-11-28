@@ -1,4 +1,8 @@
 #include "sec_touch_fan.h"
+
+#include <cstdio>
+#include <cstring>
+
 #include "../sec_touch.h"
 #include "../_definitions.h"
 
@@ -9,7 +13,10 @@ const char *const SecTouchFan::TAG = "sec_touch.fan";
 
 SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
     : level_id(level_id), label_id(label_id), parent(parent) {
-  this->add_on_state_callback([this]() { this->update_label_mode(); });
+  this->add_on_state_callback([this]() {
+    this->shown_once_ = true;
+    this->update_label_mode();
+  });
 
   this->parent->register_recursive_update_listener(this->level_id, [this](int property_id, int real_speed_from_device) {
     // A newer SET task for this level is already queued — this echo is from a
@@ -27,33 +34,8 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
     }
 
     ESP_LOGD(TAG, "New Real Speed from device for property_id %d (speed %d)", property_id, real_speed_from_device);
-
-    FanModeEnum::FanMode mode_from_hardware = SecTouchFan::calculate_mode_from_speed(real_speed_from_device);
-    std::string_view mode_from_hardware_str = FanModeEnum::to_string(mode_from_hardware);
-
-    bool needs_preset_publish = false;
-    auto current_preset = this->get_preset_mode();
-    if (current_preset.empty() || current_preset != mode_from_hardware_str.data()) {
-      ESP_LOGD(TAG, "Preset mode changed to %s", mode_from_hardware_str.data());
-      // set_preset_mode_ will validate and store a pointer into traits
-      this->set_preset_mode_(mode_from_hardware_str.data());
-      needs_preset_publish = true;
-    }
-
-    bool need_speed_publish = this->assign_new_speed_if_needed(real_speed_from_device);
-
-    if (!need_speed_publish && !needs_preset_publish) {
-      auto log_p = this->get_preset_mode();
-      ESP_LOGD(TAG, "No update needed for fan with property_id %d incoming_speed=%d (state %d) (speed %d)(preset %s)",
-               property_id, real_speed_from_device, this->state, this->speed,
-               log_p.empty() ? "Unknown" : log_p.c_str());
-      return;
-    }
-
-    ESP_LOGI(TAG, "Setting level value for fan with property_id %d to %d (state %d)", property_id,
-             real_speed_from_device, this->state);
-
-    this->publish_state();
+    this->device_level_ = real_speed_from_device;
+    this->show_device_level_();
   });
 
   this->parent->register_manual_update_listener(this->label_id, [this](int property_id, int new_value) {
@@ -80,63 +62,68 @@ SecTouchFan::SecTouchFan(SECTouchComponent *parent, int level_id, int label_id)
   });
 }
 
-bool SecTouchFan::assign_new_speed_if_needed(int real_speed_from_device) {
-  if (real_speed_from_device == OFF_LEVEL) {
-    if (this->state != 0) {
-      this->state = 0;
-      return true;
-    }
-    return false;
+void SecTouchFan::follow_time_program(TimeProgramLiveState *live_state) {
+  this->following_ = true;
+  live_state->set_state_listener([this](const std::optional<LiveState> &state) { this->on_live_state_(state); });
+}
+
+void SecTouchFan::on_live_state_(const std::optional<LiveState> &state) {
+  this->running_level_ = state.has_value() ? state->running_level_value : std::nullopt;
+  this->has_live_state_ = state.has_value();
+  if (!this->device_level_.has_value()) {
+    return;
+  }
+  // The pair's level ID still holds the level before the queued SET: showing now would undo what HA just set.
+  if (this->parent->has_pending_set_task_for(this->level_id)) {
+    return;
+  }
+  // The hub hands each answer of the level ID to the live state's string listener before this fan's recursive
+  // listener. Not running here means the live state read a level this fan's listener shows next; showing now would
+  // flash Automatik Zeit's display without a running level.
+  if (state.has_value() && std::strcmp(state->running_level, LIVE_STATE_NOT_RUNNING) == 0) {
+    return;
+  }
+  this->show_device_level_();
+}
+
+void SecTouchFan::show_device_level_() {
+  const int level = *this->device_level_;
+  if (holds_first_display(this->following_, this->shown_once_, level, this->has_live_state_)) {
+    ESP_LOGD(TAG, "Fan with property_id %d waits for its pair's running level", this->level_id);
+    return;
+  }
+  FanModeEnum::FanMode mode_from_hardware = SecTouchFan::calculate_mode_from_speed(level);
+  std::string_view mode_from_hardware_str = FanModeEnum::to_string(mode_from_hardware);
+
+  bool needs_preset_publish = false;
+  auto current_preset = this->get_preset_mode();
+  if (current_preset.empty() || current_preset != mode_from_hardware_str.data()) {
+    ESP_LOGD(TAG, "Preset mode changed to %s", mode_from_hardware_str.data());
+    // set_preset_mode_ will validate and store a pointer into traits
+    this->set_preset_mode_(mode_from_hardware_str.data());
+    needs_preset_publish = true;
   }
 
-  if (real_speed_from_device == NOT_CONNECTED_LEVEL) {
-    if (this->state != 0 || this->speed != NOT_CONNECTED_LEVEL) {
-      this->state = 0;
-      this->speed = NOT_CONNECTED_LEVEL;
-      return true;
-    }
-    return false;
+  const FanStatus shown =
+      decide_fan_display(level, this->running_level_, FanStatus{this->state, this->speed}, this->split_special_modes_);
+  const bool needs_status_publish = shown.on != this->state || shown.speed != this->speed;
+  this->state = shown.on;
+  this->speed = shown.speed;
+
+  if (!needs_status_publish && !needs_preset_publish) {
+    auto log_p = this->get_preset_mode();
+    ESP_LOGV(TAG, "No update needed for fan with property_id %d level=%d (state %d) (speed %d)(preset %s)",
+             this->level_id, level, this->state, this->speed, log_p.empty() ? "Unknown" : log_p.c_str());
+    return;
   }
 
-  if (real_speed_from_device <= MAX_NORMAL_LEVEL) {
-    if (this->state != 1 || this->speed != real_speed_from_device) {
-      this->state = 1;
-      this->speed = real_speed_from_device;
-      return true;
-    }
-
-    return false;
+  char running_level[12] = "-";
+  if (this->running_level_.has_value()) {
+    snprintf(running_level, sizeof(running_level), "%d", *this->running_level_);
   }
-
-  if (this->split_special_modes_) {
-    // Burst snaps the slider to its max for visual parity with the outbound control() path;
-    // other special modes leave speed untouched as they don't map to a single level.
-    bool changed = false;
-    if (this->state != 1) {
-      this->state = 1;
-      changed = true;
-    }
-    // Guarantee a normal slider value before publishing state=ON. Without this,
-    // the first update after boot (speed=0) or after the "not connected" path (speed=NOT_CONNECTED_LEVEL)
-    // would publish state=ON with a speed outside the advertised range.
-    bool burst = real_speed_from_device == BURST_LEVEL;
-    if (!is_normal_level(this->speed)) {
-      this->speed = burst ? MAX_NORMAL_LEVEL : MIN_NORMAL_LEVEL;
-      changed = true;
-    } else if (burst && this->speed != MAX_NORMAL_LEVEL) {
-      this->speed = MAX_NORMAL_LEVEL;
-      changed = true;
-    }
-    return changed;
-  }
-
-  if (this->state != 1 || this->speed != real_speed_from_device) {
-    this->state = 1;
-    this->speed = real_speed_from_device;
-    return true;
-  }
-
-  return false;
+  ESP_LOGI(TAG, "Showing fan with property_id %d at level %d, running level %s (state %d) (speed %d)", this->level_id,
+           level, running_level, this->state, this->speed);
+  this->publish_state();
 }
 
 void SecTouchFan::control(const fan::FanCall &call) {
@@ -174,9 +161,14 @@ void SecTouchFan::control(const fan::FanCall &call) {
     command.preset_level = FanModeEnum::get_start_speed(preset_mode.value_or(FanModeEnum::FanMode::NORMAL));
   }
 
-  FanControl decision = decide_fan_control(command, FanStatus{this->state, this->speed}, this->split_special_modes_);
-  this->state = decision.on;
-  this->speed = decision.speed;
+  const FanStatus prior{this->state, this->speed};
+  FanControl decision = decide_fan_control(command, prior, this->split_special_modes_);
+  const FanStatus shown =
+      decide_command_display(decision, this->following_, this->running_level_, prior, this->split_special_modes_);
+  this->state = shown.on;
+  this->speed = shown.speed;
+
+  this->device_level_ = decision.level;
 
   if (decision.level == OFF_LEVEL) {
     ESP_LOGI(TAG, "[State Update for %d] - Turning off", this->level_id);
@@ -240,18 +232,19 @@ void SecTouchFan::update_label_mode() {
     return;
   }
 
-  if (this->state == 0) {
-    level_text_sensor->publish_state("Off");
-    return;
-  }
-
-  if (this->speed == NOT_CONNECTED_LEVEL) {
-    level_text_sensor->publish_state("Not Connected");
-    return;
+  switch (this->mode_text()) {
+    case ModeText::OFF:
+      level_text_sensor->publish_state(MODE_TEXT_OFF);
+      return;
+    case ModeText::NOT_CONNECTED:
+      level_text_sensor->publish_state(MODE_TEXT_NOT_CONNECTED);
+      return;
+    case ModeText::PRESET:
+      break;
   }
 
   if (!this->has_preset_mode()) {
-    level_text_sensor->publish_state("Unknown");
+    level_text_sensor->publish_state(MODE_TEXT_UNKNOWN);
     return;
   }
 

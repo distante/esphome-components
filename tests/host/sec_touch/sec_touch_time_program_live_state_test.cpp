@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "common.h"
-#include "esphome/components/sec_touch/time_program_codec.h"
+#include "live_state_inputs.h"
 #include "esphome/components/sec_touch/time_program_ids.h"
 #include "esphome/components/sec_touch/time_program_live_model.h"
 #include "esphome/components/sec_touch/time_program_live_state.h"
@@ -19,53 +19,12 @@ namespace esphome::sec_touch::testing {
 
 namespace {
 
-constexpr int PAIR = 1;
-const int PAIR_LEVEL_ID = FAN_LEVEL_IDS[PAIR - 1];
-
 using known_property_detail::level_name;
 
 /// The pair's level ID in Automatik Zeit.
 const std::string RUNNING = std::to_string(AUTOMATIC_TIME_LEVEL);
-/// Switch times 1 and 2 enabled, at 08:00 and 12:00, levels 1 and 2. The others are off.
-const std::string MASK = std::string(format_enabled_mask(switch_time_bit(1) | switch_time_bit(2)).data());
-const char *const TIMES[SWITCH_TIME_COUNT] = {"08:00:00", "12:00:00", "18:00:00", "21:00:00", "23:00:00"};
-/// A second before switch time 2.
-const std::string CLOCK = "11:59:59";
-
 /// A whole minute since the epoch, the time source's now.
 constexpr time_t NOW_S = 1800000000;
-
-/// The pair's whole block, in the order the live state puts it on the poll: the mask, the times, the levels.
-std::vector<int> block_ids() {
-  std::vector<int> ids{time_program_enabled_id(PAIR)};
-  for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
-    ids.push_back(time_program_time_id(PAIR, n));
-  }
-  for (int n = 1; n <= SWITCH_TIME_COUNT; n++) {
-    ids.push_back(time_program_level_id(PAIR, n));
-  }
-  return ids;
-}
-
-/// What the panel holds for each ID the boot poll queues.
-std::string panel_value(int id, const std::string &pair_level) {
-  if (id == PAIR_LEVEL_ID) {
-    return pair_level;
-  }
-  if (id == CLOCK_PROPERTY_ID) {
-    return CLOCK;
-  }
-  auto slot = time_program_slot(id);
-  switch (slot->field) {
-    case TimeProgramField::ENABLED:
-      return MASK;
-    case TimeProgramField::TIME:
-      return TIMES[slot->switch_time - 1];
-    case TimeProgramField::LEVEL:
-      return std::to_string(slot->switch_time);
-  }
-  return "";
-}
 
 class FakeClock : public time::RealTimeClock {
  public:
@@ -81,13 +40,10 @@ class TestableLiveState : public TimeProgramLiveState {
 
 /// Pair PAIR with every live-state entity, its level ID polled as its fan entry would, driven through the real hub
 /// with a fake bus.
-class LiveStateTest : public ::testing::Test {
+class LiveStateTest : public LiveStateInputsTest {
  protected:
   void SetUp() override {
-    this->hub_.set_uart_parent(&this->uart_);
-    this->hub_.set_inter_task_delay(0);
-    this->hub_.last_time_programs_update_ms_ = millis();
-    this->hub_.last_global_settings_update_ms_ = millis();
+    LiveStateInputsTest::SetUp();
     // Stands in for the pair's fan entry, which a live-state entity requires.
     this->hub_.register_recursive_update_listener(PAIR_LEVEL_ID, [](int, int) {});
 
@@ -101,55 +57,6 @@ class LiveStateTest : public ::testing::Test {
     this->next_change_.add_on_state_callback([this](const std::string &) { this->next_change_publishes_++; });
   }
 
-  /// Sends the first queued task. Returns what went out.
-  std::vector<uint8_t> send_next_task() {
-    this->uart_.tx.clear();
-    this->hub_.loop();
-    return this->uart_.tx;
-  }
-
-  void panel_answers_get(int property_id, const std::string &value) {
-    this->uart_.push_rx(ack_frame());
-    this->uart_.push_rx(data_frame(property_id, value));
-    this->hub_.loop_times(3);
-  }
-
-  /// Sends every queued task, each left unanswered. Returns each request, in order.
-  std::vector<std::vector<uint8_t>> drain() {
-    std::vector<std::vector<uint8_t>> sent;
-    std::vector<uint8_t> next = this->send_next_task();
-    while (!next.empty()) {
-      sent.push_back(next);
-      this->uart_.tx.clear();
-      this->hub_.age_task_past_watchdog();
-      this->hub_.loop_times(2);
-      next = this->uart_.tx;
-    }
-    return sent;
-  }
-
-  /// The IDs one boot poll queues, in order: the fan's level ID, the panel clock, then the pair's block.
-  static std::vector<int> boot_poll_ids() {
-    std::vector<int> ids{PAIR_LEVEL_ID, CLOCK_PROPERTY_ID};
-    for (int id : block_ids()) {
-      ids.push_back(id);
-    }
-    return ids;
-  }
-
-  /// Queues every input once, as the boot poll does, and the panel answers each.
-  void panel_answers_every_input(const std::string &pair_level = RUNNING) {
-    this->hub_.add_recursive_tasks_to_get_queue();
-    this->hub_.add_global_setting_tasks_to_queue();
-    this->hub_.add_time_program_tasks_to_queue(PAIR);
-    for (int id : boot_poll_ids()) {
-      this->send_next_task();
-      this->panel_answers_get(id, panel_value(id, pair_level));
-    }
-  }
-
-  FakeUART uart_;
-  TestableSECTouch hub_;
   FakeClock clock_;
   TestableLiveState live_{&this->hub_, PAIR};
   text_sensor::TextSensor in_effect_;
@@ -199,7 +106,7 @@ TEST_F(LiveStateTest, NothingIsPublishedBeforeThePairLevelWasRead) {
   this->hub_.add_time_program_tasks_to_queue(PAIR);
   for (int id : block_ids()) {
     this->send_next_task();
-    this->panel_answers_get(id, panel_value(id, RUNNING));
+    this->panel_answers_get(id, panel_value(id));
   }
 
   EXPECT_FALSE(this->in_effect_.has_state());
@@ -210,8 +117,8 @@ TEST_F(LiveStateTest, PublishesOnceEveryInputWasRead) {
   this->panel_answers_every_input();
 
   EXPECT_EQ(this->in_effect_.get_state(), switch_time_name(1));
-  EXPECT_EQ(this->running_level_.get_state(), level_name(1));
-  EXPECT_EQ(this->next_level_.get_state(), level_name(2));
+  EXPECT_EQ(this->running_level_.get_state(), level_name(FIRST_LEVEL));
+  EXPECT_EQ(this->next_level_.get_state(), level_name(SECOND_LEVEL));
   // The next change is a second away: now, rounded to the minute.
   EXPECT_EQ(this->next_change_.get_state(), next_change_iso(NOW_S).text.data());
 }
@@ -247,7 +154,7 @@ TEST_F(LiveStateTest, EnteringAutomatikZeitBeforeAnyClockReadClearsTheState) {
   this->hub_.add_time_program_tasks_to_queue(PAIR);
   for (int id : block_ids()) {
     this->send_next_task();
-    this->panel_answers_get(id, panel_value(id, RUNNING));
+    this->panel_answers_get(id, panel_value(id));
   }
 
   this->hub_.add_recursive_tasks_to_get_queue();
@@ -262,24 +169,14 @@ TEST_F(LiveStateTest, EnteringAutomatikZeitBeforeAnyClockReadClearsTheState) {
 
 // Spec "Live state", cases: enabling a switch time whose time never read well leaves a needed input unknown.
 TEST_F(LiveStateTest, EnablingASwitchTimeWhoseTimeNeverReadWellClearsTheState) {
-  constexpr int NEVER_READ = 3;
-  const int never_read_time_id = time_program_time_id(PAIR, NEVER_READ);
-  this->hub_.add_recursive_tasks_to_get_queue();
-  this->hub_.add_global_setting_tasks_to_queue();
-  this->hub_.add_time_program_tasks_to_queue(PAIR);
-  for (int id : boot_poll_ids()) {
-    this->send_next_task();
-    this->panel_answers_get(id, id == never_read_time_id ? "not a time" : panel_value(id, RUNNING));
-  }
+  this->panel_answers_every_input_but(NEVER_READ_SWITCH_TIME);
   ASSERT_EQ(this->in_effect_.get_state(), switch_time_name(1));
   ASSERT_TRUE(this->next_change_.has_state());
-  const uint8_t enabled = switch_time_bit(1) | switch_time_bit(2) | switch_time_bit(NEVER_READ);
+  const uint8_t enabled = ENABLED_SWITCH_TIMES | switch_time_bit(NEVER_READ_SWITCH_TIME);
 
   // Read twice: the second read finds the state already cleared and publishes nothing.
   for (int read = 0; read < 2; read++) {
-    this->hub_.add_time_program_tasks_to_queue(PAIR);
-    this->send_next_task();  // the mask GET
-    this->panel_answers_get(time_program_enabled_id(PAIR), format_enabled_mask(enabled).data());
+    this->panel_answers_enabled_mask(enabled);
     this->drain();
   }
 
@@ -291,7 +188,7 @@ TEST_F(LiveStateTest, EnablingASwitchTimeWhoseTimeNeverReadWellClearsTheState) {
 }
 
 TEST_F(LiveStateTest, NotRunningOutsideAutomatikZeit) {
-  this->panel_answers_every_input(std::to_string(MAX_NORMAL_LEVEL));
+  this->panel_answers_every_input(MAX_NORMAL_LEVEL);
 
   EXPECT_EQ(this->in_effect_.get_state(), LIVE_STATE_NOT_RUNNING);
   EXPECT_EQ(this->running_level_.get_state(), LIVE_STATE_NOT_RUNNING);
@@ -317,12 +214,12 @@ TEST_F(LiveStateTest, TheNextChangeRecomputes) {
   this->panel_answers_every_input();
   ASSERT_EQ(this->in_effect_.get_state(), switch_time_name(1));
 
-  delay(MS_PER_S + 100);  // past the next change, a second after the clock read
+  delay(PAST_THE_NEXT_CHANGE_MS);
   this->live_.loop();
 
   EXPECT_EQ(this->in_effect_.get_state(), switch_time_name(2));
-  EXPECT_EQ(this->running_level_.get_state(), level_name(2));
-  EXPECT_EQ(this->next_level_.get_state(), level_name(1));
+  EXPECT_EQ(this->running_level_.get_state(), level_name(SECOND_LEVEL));
+  EXPECT_EQ(this->next_level_.get_state(), level_name(FIRST_LEVEL));
   EXPECT_EQ(this->in_effect_publishes_, 2);
 }
 

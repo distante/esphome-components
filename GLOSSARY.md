@@ -95,3 +95,7 @@ _Avoid_: Modus (panel word), mode (a pair's mode is Normal, Automatik Zeit and s
 **Switch time in effect**:
 The enabled switch time whose level the time program runs now: the latest one at or before the panel's time, counting from yesterday's last one before today's first.
 _Avoid_: Current switch time, active switch time
+
+**Running level**:
+The level a pair's time program runs now: the level of the switch time in effect. A pair has one only while it is in Automatik Zeit.
+_Avoid_: Current level, program level

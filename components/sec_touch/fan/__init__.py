@@ -5,6 +5,7 @@ import esphome.final_validate as fv
 from esphome.const import CONF_OUTPUT_ID
 from .. import (
     CONF_FAN_NUMBER,
+    CONF_FOLLOW_TIME_PROGRAM,
     CONF_SEC_TOUCH_ID,
     FAN_PAIR_SCHEMA,
     sec_touch_ns,
@@ -12,6 +13,7 @@ from .. import (
     FAN_LEVEL_IDS,
     FAN_LABEL_IDS,
     sec_touch_fans,
+    live_state_id,
 )
 
 DEPENDENCIES = ["sec_touch"]
@@ -27,6 +29,7 @@ CONFIG_SCHEMA = cv.All(
             cv.GenerateID(CONF_OUTPUT_ID): cv.declare_id(SecTouchFan),
             cv.GenerateID(CONF_SEC_TOUCH_ID): cv.use_id(SECTouchComponent),
             cv.Optional(CONF_SPLIT_SPECIAL_MODES, default=False): cv.boolean,
+            cv.Optional(CONF_FOLLOW_TIME_PROGRAM, default=True): cv.boolean,
         }
     )
     .extend(FAN_PAIR_SCHEMA)
@@ -57,5 +60,8 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_OUTPUT_ID], parent, level_id, label_id)
     cg.add(var.set_split_special_modes(config[CONF_SPLIT_SPECIAL_MODES]))
     cg.add(parent.register_fan(level_id, var))
+    if config[CONF_FOLLOW_TIME_PROGRAM]:
+        live_state = await cg.get_variable(live_state_id(fan_number))
+        cg.add(var.follow_time_program(live_state))
     await cg.register_component(var, config)
     await fan.register_fan(var, config)

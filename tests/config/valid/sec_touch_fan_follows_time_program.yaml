@@ -1,0 +1,40 @@
+# Fans without any time_programs: entry or time: source. Fans 1 and 2 follow their pair's running level, fan 3 opts
+# out. Each following pair gets one live state, which polls its block and the panel clock.
+
+esphome:
+  name: sec-touch-fan-follows
+
+esp32:
+  board: esp32dev
+
+logger:
+  # Compiles every ESP_LOG* call, so the compile test sees -Wformat warnings.
+  level: VERY_VERBOSE
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sec_touch]
+
+uart:
+  id: sec_touch_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 28800
+
+sec_touch:
+  uart_id: sec_touch_uart
+
+fan:
+  - platform: sec_touch
+    fan_number: 1
+    name: "Fan 1"
+  - platform: sec_touch
+    fan_number: 2
+    name: "Fan 2"
+    follow_time_program: true
+  - platform: sec_touch
+    fan_number: 3
+    name: "Fan 3"
+    follow_time_program: false

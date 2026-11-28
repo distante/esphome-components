@@ -143,8 +143,8 @@ Optional per pair: `refresh` (button), `write_failed` (event), and the [live-sta
 Decided in [Should sec_touch compute which switch time is in effect, and how is it shown?](https://github.com/distante/esphome-components/issues/120).
 
 - **Own poll:** every `time_programs_update_interval` (default 5 min), the hub queues GETs for each listed pair. It skips an ID whose GET is already queued, and queues none during a scan. This is separate from the 5 s fan poll and the 30 s global-settings poll.
-- **Which IDs:** the enabled ID and the time and level IDs of the listed switch times. With any live-state entity, the pair's **whole block** (11 IDs), whatever `switch_times` says.
-- **Panel clock:** with any live-state entity on any pair, ID 2 (clock) is polled on the global-settings poll, as for `clock_drift`. ID 1 (date) only with `clock_drift`; the hub polls it right before ID 2, whatever the registration order.
+- **Which IDs:** the enabled ID and the time and level IDs of the listed switch times. With a live state (a following [fan](#fan) or any live-state entity), the pair's **whole block** (11 IDs), whatever `switch_times` says, with or without a `time_programs:` entry, in every mode.
+- **Panel clock:** with a live state on any pair, ID 2 (clock) is polled on the global-settings poll, as for `clock_drift`. ID 1 (date) only with `clock_drift`; the hub polls it right before ID 2, whatever the registration order.
 - **First poll:** right after boot, like the global settings.
 - **`refresh` button:** one press queues the same GETs as one poll of that pair. During a scan it queues none; the poll after the scan reads the pair. The regular poll stays on its schedule.
 - Results reach the entities through the hub's existing update listeners.
@@ -235,7 +235,33 @@ The state words live in the live-state model's header ([Implementation notes](#i
 
 - **Recompute:** on every input read, plus one timeout set for the next change: a deadline the live state's `loop()` checks, so the scheduler allocates nothing. An entity publishes only when its value changes.
 - A GET answer for an input ID while a SET of that ID is queued is skipped, as the fan and the field entities skip it.
-- The HA fan entity isn't changed: in Automatik Zeit it still shows on, preset Automatic Time. Whether it should follow the running level is [sec_touch: in Automatik Zeit the fan shows on even when the program runs level 0](https://github.com/distante/esphome-components/issues/124).
+
+### Fan
+
+Decided in [sec_touch: in Automatik Zeit the HA fan follows the pair's running level](https://github.com/distante/esphome-components/issues/124).
+
+What a following fan shows while its pair's level ID reads `AUTOMATIC_TIME_LEVEL`. The display logic is a pure header ([Implementation notes](#implementation-notes)).
+
+| Running level (live model) | On/off | Speed | Preset |
+|---|---|---|---|
+| `OFF_LEVEL` (0) | off | unchanged | Automatic Time |
+| `is_normal_level` (1–6) | on | that level | Automatic Time |
+| Burst (7), Automatic Humidity (8), Automatic CO2 (9) | as not following | as not following | Automatic Time |
+| `none`, `conflict`, no state (a needed input never read well) | as not following | as not following | Automatic Time |
+
+"As not following" is the fan's display without this rule: on, at speed `AUTOMATIC_TIME_LEVEL`, or with `split_special_modes` a normal slider (kept, else `MIN_NORMAL_LEVEL`). Outside Automatik Zeit nothing changes.
+
+| Decision | Rule |
+|---|---|
+| Default | Every sec_touch `fan:` entry follows unless it sets `follow_time_program: false`, with or without a `time_programs:` entry or a `time:` source. |
+| Opt-out | `follow_time_program`: optional boolean on the fan entry, default `true`. `false` gives the display without this rule. |
+| One live state | The fan and the pair's live-state entities share one live state per pair, so they never disagree. It is built when the fan follows or any live-state entity exists, and registers its listeners and polls once ([Memory](#memory)). |
+| Polling | As [Reading](#reading) says for a live state: the whole block on the time-program poll, always, and ID 2 on the global-settings poll. |
+| HA commands | On, off and speed set the level ID as without following, which switches the pair to Normal and ends Automatik Zeit. A preset change works as without following. |
+| Timing | The fan republishes when the live state recomputes (an input read, the next change), and only on a change. |
+| Mode change | The live state hears a level answer before the fan does. While the live state says `not running` and the fan still reads `AUTOMATIC_TIME_LEVEL`, the fan waits for its own read, so leaving Automatik Zeit never flashes its display. |
+
+Cost measured on the maintainer's controller (5 pairs with a live state): 0.25 s per GET, so a 55-GET block poll takes about 14 s every 5 min. Fan levels aren't read during it, but SETs jump ahead of the reads (`add_set_task`), so commands aren't delayed. A fan-only install goes from no block poll to that cost.
 
 ---
 
@@ -290,7 +316,8 @@ The [readme copy block and HA call](https://github.com/distante/esphome-componen
 | Requested mask bits | static, 6 pairs × (set, clear) `uint8_t` | |
 | Panel clock anchor, live-state inputs and deadline | static: members of the live-state object, which codegen places statically | |
 | Bulk `error` text | `std::string`, built only when a bulk call fails | ESPHome's `api.respond` takes a `std::string` anyway ([Memory rule](../.claude/skills/coding-standards/SKILL.md#memory)). |
-| Listener registrations | the hub's listener maps (`std::multimap` entries holding `std::function`s) and its task-end listener list (one entry per pair) | One entry per registered ID: per pair 11 for the time program's block (every listed pair, for the bulk read-backs) and 12 for the live state (its block and level ID), plus ID 2 once per live-state pair. Allocated while the entities are built, never freed. |
+| Listener registrations | the hub's listener maps (`std::multimap` entries holding `std::function`s) and its task-end listener list (one entry per pair) | One entry per registered ID: per pair 11 for the time program's block (every listed pair, for the bulk read-backs) and 12 for the live state (its block and level ID), plus ID 2 once per pair with a live state. One live state per pair, whether a following fan, live-state entities or both need it. Allocated while the entities are built, never freed. |
+| The live state's state listener | one `std::function` member per live state, set by its following fan | It captures only the fan's `this`, which fits `std::function`'s own storage: no heap. |
 | Bulk action list arguments | `std::vector`, ESPHome's action argument type; the action keeps a copy of each running call's arguments (one static slot per pair) until it fires `on_success` / `on_error`. A constant list is kept once, from setup. A lambda gets the call's arguments by reference; its result lives only while the call is checked. | HA's `string[]`, `int[]` and `bool[]` arrive as vectors. |
 | Bulk write state | static, per pair: how each of the 11 writes ended; what each sent is in the per-field write path's read-back slot, which compares for both | |
 | Per-pair poll ID lists | static, 6 pairs × 11 IDs | |
@@ -309,6 +336,7 @@ Pure headers ([Tests](../.claude/skills/coding-standards/SKILL.md#tests)) hold t
 | Field codec | parse and format the time, the level and the enabled mask ([meaning rules](#known-property-catalogue)) |
 | Mask merge | pending set / clear bits, applying them to a fresh mask |
 | Live-state model | inputs → switch time in effect, running level, next change, next level, state words |
+| Fan display | the pair's level and running level → what a fan shows ([Fan](#fan)) |
 | Bulk validation | the argument checks and the `error` text |
 
 The hub's queue paths (latest wins, read-back GET, mask GET-then-SET, `busy`) get host component tests.
@@ -322,12 +350,14 @@ Ships in **v1.5.0** with the sniffer goals and experiments. The work for this se
 **Changelog (v1.5.0), time programs:**
 - **Time programs in HA**, opt-in per pair under `sec_touch: time_programs:`: time, level and enabled per switch time, read and write.
 - **Live state:** switch time in effect, running level, next level and next change, computed from the program and the panel clock.
+- **Breaking, fan:** in Automatik Zeit a fan follows its pair's running level: off at level 0, on at that speed at 1–6. Fans in Automatik Zeit can now show off, so HA automations on fan state may fire. Every fan polls its pair's time-program block and the panel clock. `follow_time_program: false` on the fan keeps the old display.
 - **`sec_touch.set_time_program`** sets a pair's whole program; the readme shows how to call it from HA.
 - **Sniffer:** IDs 101–166 are known properties: discover skips them, check shows them on each fan card.
 
 **Readme:**
 - The `time_programs:` YAML and every key.
 - That live state is computed, and its model is an assumption.
+- That the fan follows the running level ([Fan](#fan)), the opt-out, and the polling cost for a fan-only install.
 - That the fan entity still shows on in Automatik Zeit.
 - The bulk-action copy block, the HA call, and HA's 30 s response timeout.
 - The measured RAM cost.

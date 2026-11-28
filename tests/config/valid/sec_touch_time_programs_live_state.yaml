@@ -1,5 +1,6 @@
-# Every live-state entity on pair 1, one on its own device. The wifi credentials are placeholders: the build never
-# connects.
+# Every live-state entity on pair 1, one on its own device; pair 1's fan follows too, and both share one live state.
+# Pair 2's fan opts out of following; its running level still gets the pair's live state. The wifi credentials are
+# placeholders: the build never connects.
 
 esphome:
   name: sec-touch-tp-live-state
@@ -49,8 +50,16 @@ sec_touch:
         device_id: live_state_device
       next_change:
         name: "Kellerraum next change"
+    - fan_number: 2
+      switch_times: [1]
+      running_level:
+        name: "Bad running level"
 
 fan:
   - platform: sec_touch
     fan_number: 1
     name: "Kellerraum"
+  - platform: sec_touch
+    fan_number: 2
+    name: "Bad"
+    follow_time_program: false

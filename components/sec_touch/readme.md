@@ -344,10 +344,37 @@ sec_touch:
 
 - **Computed, not read.** The panel never says which switch time it runs. sec_touch computes it from the program, the pair's level and the panel clock (ID 2, polled as [Global Settings](#global-settings) lists). The model is an assumption the panel can't confirm.
 - **Needs the pair's `fan:` entry**, which polls the pair's level. Without it the config fails.
-- **Polling:** with any live-state entity, the pair's whole block of 11 IDs is polled, whatever `switch_times` lists.
+- **Polling:** with any live-state entity or a [following fan](#fan-in-automatik-zeit), the pair's whole block of 11 IDs is polled, whatever `switch_times` lists.
 - **`next_change` shows Unknown** whenever the other three show `not running` or `none`: a timestamp can't hold a state word, so it has no value then.
 - **`next_change` precision:** rounded to the minute; HA gets it as an ISO 8601 UTC time (`2026-11-27T13:00:00Z`), with no float loss.
-- The fan entity isn't changed: in Automatik Zeit it still shows on, preset Automatic Time.
+- The pair's fan and these entities share one live state, so they never disagree: [Fan in Automatik Zeit](#fan-in-automatik-zeit).
+
+## Fan in Automatik Zeit
+
+While a pair runs Automatik Zeit (level 10), its fan entity follows the pair's running level: the level of the switch time in effect, from the same [live state](#time-program-live-state). Every sec_touch fan follows, with or without a `time_programs:` entry or a `time:` source.
+
+| Running level | Fan | Speed | Preset |
+|---|---|---|---|
+| 0 | off | unchanged | Automatic Time |
+| 1–6 | on | that level | Automatic Time |
+| 7–9 (Burst, Automatic Humidity, Automatic CO2) | on | as without following | Automatic Time |
+| `none`, `conflict`, or not known yet | on | as without following | Automatic Time |
+
+"As without following": speed 10, or with `split_special_modes` the slider stays (level 1 when it had none). Outside Automatik Zeit nothing changes.
+
+- **Computed, not read.** The running level is the live state's model, an assumption the panel can't confirm: the panel never says which level it runs.
+- **HA commands** work as before: on, off or a speed sets the pair's level, which switches it to Normal and ends Automatik Zeit.
+- **Updates** when the live state recomputes: on each read of its inputs and at the next switch time. HA gets a new state only when it changes.
+- **Polling cost:** a following fan polls its pair's whole time-program block (11 IDs) every `time_programs_update_interval` (default 5 min), in every mode, and the panel clock (ID 2) on the global-settings poll. A fan-only install had none of this before. Measured with 5 pairs: 0.25 s per GET, so 55 GETs take about 14 s every 5 min. Fan levels aren't read during it, but fan commands go ahead of the queued reads.
+- **Opt-out:** `follow_time_program: false` keeps the old display (on, preset Automatic Time). A pair without live-state entities then polls neither its block nor, for this fan, the panel clock.
+
+```yaml
+fan:
+  - platform: sec_touch
+    fan_number: 1
+    name: "Lüftung Büro"
+    follow_time_program: false   # optional, default true
+```
 
 ## Logging
 
@@ -879,7 +906,7 @@ Stored on `GLOBAL_SETTING_IDS` array as:
 | ID | Polled with |
 |----|-------------|
 | 1 (date) | `clock_drift`, always right before `2` |
-| 2 (clock) | `clock_drift` or a [time-program live-state](#time-program-live-state) entity |
+| 2 (clock) | `clock_drift`, a [time-program live-state](#time-program-live-state) entity, or a [following fan](#fan-in-automatik-zeit) |
 
 | ID | Description | ON value | OFF value |
 |----|-------------|----------|-----------|

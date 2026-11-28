@@ -567,6 +567,29 @@ TEST_F(SECTouchDropLogTest, ALateBadReplyAfterScanStoppedLogsNoEnd) {
   EXPECT_EQ(task_end_claims(), 0);
 }
 
+TEST_F(SECTouchDropLogTest, ALateReplyWithALostStxAfterScanStoppedLogsNoEnd) {
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
+  this->send_next_task();
+  this->hub_.exit_scan_mode();
+
+  this->panel_answers_with_lost_stx(FAN_1_LEVEL_ID, "10");
+
+  EXPECT_EQ(task_end_claims(), 0);
+}
+
+TEST_F(SECTouchDropLogTest, AScanQueryWhoseReplyLostItsStxLogsTheReasonAndOneMalformedEnd) {
+  this->hub_.enter_scan_mode();
+  this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
+  this->send_next_task();
+
+  this->panel_answers_with_lost_stx(FAN_1_LEVEL_ID, "10");
+
+  EXPECT_EQ(LogCapture::instance().count(data_message_check_reason(DataMessageCheck::DATA_STX_LOST)), 1);
+  EXPECT_EQ(task_end_claims(), 1);
+  EXPECT_EQ(LogCapture::instance().count("once more"), 0);
+}
+
 /// Records every task end as "<GET|SET> <property_id> <end>".
 class SECTouchTaskEndTest : public SECTouchGetRetryTest {
  protected:

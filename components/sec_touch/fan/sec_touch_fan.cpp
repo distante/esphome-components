@@ -67,8 +67,13 @@ void SecTouchFan::on_live_state_(const std::optional<LiveState> &state) {
   if (!this->device_level_.has_value()) {
     return;
   }
-  // The model saw a level other than AUTOMATIC_TIME_LEVEL before this fan's own listener did: that listener shows it
-  // next. Showing now would flash Automatik Zeit's display without a running level.
+  // The pair's level ID still holds the level before the queued SET: showing now would undo what HA just set.
+  if (this->parent->has_pending_set_task_for(this->level_id)) {
+    return;
+  }
+  // The hub hands each answer of the level ID to the live state's string listener before this fan's recursive
+  // listener. Not running here means the live state read a level this fan's listener shows next; showing now would
+  // flash Automatik Zeit's display without a running level.
   if (state.has_value() && std::strcmp(state->running_level, LIVE_STATE_NOT_RUNNING) == 0) {
     return;
   }
@@ -97,7 +102,7 @@ void SecTouchFan::show_device_level_() {
 
   if (!needs_status_publish && !needs_preset_publish) {
     auto log_p = this->get_preset_mode();
-    ESP_LOGD(TAG, "No update needed for fan with property_id %d level=%d (state %d) (speed %d)(preset %s)",
+    ESP_LOGV(TAG, "No update needed for fan with property_id %d level=%d (state %d) (speed %d)(preset %s)",
              this->level_id, level, this->state, this->speed, log_p.empty() ? "Unknown" : log_p.c_str());
     return;
   }
@@ -145,6 +150,8 @@ void SecTouchFan::control(const fan::FanCall &call) {
   FanControl decision = decide_fan_control(command, FanStatus{this->state, this->speed}, this->split_special_modes_);
   this->state = decision.on;
   this->speed = decision.speed;
+
+  this->device_level_ = decision.level;
 
   if (decision.level == OFF_LEVEL) {
     ESP_LOGI(TAG, "[State Update for %d] - Turning off", this->level_id);

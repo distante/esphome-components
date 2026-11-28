@@ -116,6 +116,16 @@ class FanFollowsTest : public ::testing::Test {
     EXPECT_EQ(std::string(this->fan_.get_preset_mode().c_str()), preset);
   }
 
+  /// Every publish so far, and the fan now, show it on at `speed` in Normal.
+  void expect_every_publish_on_at(int speed) {
+    for (const Shown &shown : this->shown_) {
+      EXPECT_TRUE(shown.on);
+      EXPECT_EQ(shown.speed, speed);
+      EXPECT_EQ(shown.preset, NORMAL_PRESET_NAME);
+    }
+    this->expect_shown(true, speed, NORMAL_PRESET_NAME);
+  }
+
   FakeUART uart_;
   TestableSECTouch hub_;
   TimeProgramLiveState live_{&this->hub_, PAIR};
@@ -216,6 +226,54 @@ TEST_F(FanFollowsTest, AnOnWithASpeedWhileFollowingWritesThatLevel) {
   this->send_next_task();
 
   EXPECT_EQ(this->uart_.tx, set_frame(LEVEL_ID, "2"));
+}
+
+// The pair's level ID still reads Automatik Zeit until the read-back after the SET: a clock answer before it shows
+// the speed HA set, not the old running level.
+TEST_F(FanFollowsTest, AClockAnswerWhileTheSetIsQueuedKeepsTheSpeedHaSet) {
+  this->follow();
+  this->panel_answers_every_input(AUTOMATIC_TIME_LEVEL, OFF_LEVEL, OFF_LEVEL);
+  ASSERT_FALSE(this->fan_.state);
+  this->hub_.add_global_setting_tasks_to_queue();
+  this->send_next_task();  // the clock GET is in flight
+  this->shown_.clear();
+
+  this->fan_.make_call().set_state(true).set_speed(3).perform();
+  this->panel_answers_get(CLOCK_PROPERTY_ID, CLOCK);
+
+  this->expect_every_publish_on_at(3);
+}
+
+// HA sets Automatik Zeit's level as the speed: the running level shows once the level ID reads it back.
+TEST_F(FanFollowsTest, AClockAnswerWhileTheSetIsQueuedPublishesNothing) {
+  this->follow();
+  this->panel_answers_every_input(AUTOMATIC_TIME_LEVEL, OFF_LEVEL, OFF_LEVEL);
+  ASSERT_FALSE(this->fan_.state);
+  this->hub_.add_global_setting_tasks_to_queue();
+  this->send_next_task();  // the clock GET is in flight
+  this->fan_.make_call().set_state(true).set_speed(AUTOMATIC_TIME_LEVEL).perform();
+  const size_t publishes = this->shown_.size();
+
+  this->panel_answers_get(CLOCK_PROPERTY_ID, CLOCK);
+
+  EXPECT_EQ(this->shown_.size(), publishes);
+}
+
+TEST_F(FanFollowsTest, AClockAnswerAfterTheSetWasAnsweredKeepsTheSpeedHaSet) {
+  this->follow();
+  this->panel_answers_every_input(AUTOMATIC_TIME_LEVEL, OFF_LEVEL, OFF_LEVEL);
+  ASSERT_FALSE(this->fan_.state);
+  this->shown_.clear();
+  this->fan_.make_call().set_state(true).set_speed(3).perform();
+  this->send_next_task();  // the SET
+  this->uart_.push_rx(ack_frame());
+  this->hub_.loop_times(3);
+
+  this->hub_.add_global_setting_tasks_to_queue();
+  this->send_next_task();
+  this->panel_answers_get(CLOCK_PROPERTY_ID, CLOCK);
+
+  this->expect_every_publish_on_at(3);
 }
 
 // One live state per pair, shared by the fan and the live-state entities: each ID is listened to and polled once.

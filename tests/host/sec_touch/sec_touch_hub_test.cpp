@@ -308,8 +308,6 @@ TEST_F(SECTouchGetRetryTest, MalformedLabelReplyIsAckedThenTheSameGetIsSentAgain
   EXPECT_EQ(this->labels_, std::vector<std::string>{std::to_string(LABEL_1_ID) + "=3"});
 }
 
-// After the panel's ACK, an ETX that ends only noise ended the data frame the GET waits for: it is dropped like any
-// malformed reply, at once rather than at the watchdog.
 TEST_F(SECTouchGetRetryTest, AReplyWithALostStxIsAckedThenTheSameGetIsSentAgain) {
   this->queue_label_reads({LABEL_1_ID});
   this->send_next_task();
@@ -354,7 +352,6 @@ TEST_F(SECTouchGetRetryTest, MalformedReplyDuringScanIsNotRetried) {
   EXPECT_EQ(this->hub_.get_last_scan_outcome(), ScanOutcome::SCAN_OUTCOME_TIMEOUT);
 }
 
-// A scan query is never retried, whatever ended its reply.
 TEST_F(SECTouchGetRetryTest, ReplyWithALostStxDuringScanIsNotRetried) {
   this->hub_.enter_scan_mode();
   this->hub_.add_discovery_get_task(FAN_1_LEVEL_ID);
@@ -546,7 +543,6 @@ TEST_F(SECTouchTaskEndTest, ASecondReplyWithALostStxEndsItsGetAsMalformed) {
   EXPECT_EQ(this->ends_, std::vector<std::string>{end_of("GET", LABEL_1_ID, TaskEnd::TASK_END_MALFORMED)});
 }
 
-// Before the panel's ACK, a garbled ACK's ETX is no data frame: the GET still waits for the one that follows.
 TEST_F(SECTouchTaskEndTest, AnAckWithALostStxLeavesItsGetOpen) {
   this->queue_label_reads({LABEL_1_ID});
   this->send_next_task();

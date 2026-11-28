@@ -205,7 +205,7 @@ class SECTouchComponent : public PollingComponent, public uart::UARTDevice {
   uint32_t time_programs_update_interval_ms_ = 0;
   uint32_t last_time_programs_update_ms_ = 0;
   int current_running_task_property_id_ = -1;
-  /// The panel ACKed the GET in flight, so its data frame is next: an ETX after only noise ended that frame.
+  /// The panel ACKed the GET in flight (DATA_STX_LOST).
   bool get_acked_{false};
   ScanOutcomeTracker scan_outcome_;
   bool optional_crc_{false};

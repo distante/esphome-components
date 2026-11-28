@@ -2,9 +2,11 @@
 
 #include <tuple>
 
+#include "../common/fan_status.h"
 #include "sec_touch/fan/fan_control.h"
 
 using esphome::sec_touch::AUTOMATIC_CO2_LEVEL;
+using esphome::sec_touch::AUTOMATIC_HUMIDITY_LEVEL;
 using esphome::sec_touch::AUTOMATIC_TIME_LEVEL;
 using esphome::sec_touch::BURST_LEVEL;
 using esphome::sec_touch::decide_fan_control;
@@ -17,14 +19,10 @@ using esphome::sec_touch::NORMAL_PRESET_LEVEL;
 using esphome::sec_touch::NOT_CONNECTED_LEVEL;
 using esphome::sec_touch::OFF_LEVEL;
 using esphome::sec_touch::SLEEP_LEVEL;
-
-namespace {
-constexpr bool NOT_SPLIT = false;
-constexpr bool SPLIT = true;
-
-const FanStatus OFF_AT_3{/*on=*/false, /*speed=*/3};
-const FanStatus ON_AT_4{/*on=*/true, /*speed=*/4};
-}  // namespace
+using sec_touch_test::NOT_SPLIT;
+using sec_touch_test::OFF_AT_3;
+using sec_touch_test::ON_AT_4;
+using sec_touch_test::SPLIT;
 
 // Issue #54: Home Assistant sent "State: OFF Speed: 1" to an off fan and the panel turned it on.
 TEST(DecideFanControl, OffWithASpeedLeavesAnOffFanOff) {
@@ -245,7 +243,9 @@ TEST_P(BareOnFromAnOutOfRangeSpeedTest, OnWithoutASpeedStartsAtLevelOne) {
 }
 
 INSTANTIATE_TEST_SUITE_P(OutOfRangeSpeeds, BareOnFromAnOutOfRangeSpeedTest,
-                         ::testing::Combine(::testing::Values(AUTOMATIC_TIME_LEVEL, NOT_CONNECTED_LEVEL),
+                         ::testing::Combine(::testing::Values(BURST_LEVEL, AUTOMATIC_HUMIDITY_LEVEL,
+                                                              AUTOMATIC_CO2_LEVEL, AUTOMATIC_TIME_LEVEL, SLEEP_LEVEL,
+                                                              NOT_CONNECTED_LEVEL),
                                             ::testing::Values(NOT_SPLIT, SPLIT)));
 
 int main(int argc, char **argv) {

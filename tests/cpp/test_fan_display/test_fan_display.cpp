@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include "../common/fan_status.h"
 #include "sec_touch/fan/fan_display.h"
 
 using esphome::sec_touch::AUTOMATIC_CO2_LEVEL;
@@ -15,14 +16,13 @@ using esphome::sec_touch::MIN_NORMAL_LEVEL;
 using esphome::sec_touch::NOT_CONNECTED_LEVEL;
 using esphome::sec_touch::OFF_LEVEL;
 using esphome::sec_touch::SLEEP_LEVEL;
+using sec_touch_test::NOT_SPLIT;
+using sec_touch_test::OFF_AT_3;
+using sec_touch_test::ON_AT_4;
+using sec_touch_test::SPLIT;
 
 namespace {
 
-constexpr bool NOT_SPLIT = false;
-constexpr bool SPLIT = true;
-
-const FanStatus OFF_AT_3{/*on=*/false, /*speed=*/3};
-const FanStatus ON_AT_4{/*on=*/true, /*speed=*/4};
 /// Before the first publish ESPHome holds speed 0, outside the normal levels.
 const FanStatus BOOT{/*on=*/false, /*speed=*/0};
 
@@ -39,7 +39,7 @@ class FanDisplay : public ::testing::TestWithParam<bool> {
   /// What a fan shows in Automatik Zeit, from OFF_AT_3, when it doesn't follow the running level: on, with the
   /// slider kept in split mode and at the level itself without it.
   FanStatus automatic_time_without_following() const {
-    return this->split() ? FanStatus{true, 3} : FanStatus{true, AUTOMATIC_TIME_LEVEL};
+    return this->split() ? FanStatus{true, OFF_AT_3.speed} : FanStatus{true, AUTOMATIC_TIME_LEVEL};
   }
 };
 
@@ -51,7 +51,8 @@ INSTANTIATE_TEST_SUITE_P(SplitSpecialModes, FanDisplay, ::testing::Values(NOT_SP
 // ----- Automatik Zeit, following the running level (.specs/time-programs.md, "Live state") -----
 
 TEST_P(FanDisplay, RunningLevelOffShowsOffWithTheSpeedUnchanged) {
-  expect_status(decide_fan_display(AUTOMATIC_TIME_LEVEL, OFF_LEVEL, ON_AT_4, this->split()), FanStatus{false, 4});
+  expect_status(decide_fan_display(AUTOMATIC_TIME_LEVEL, OFF_LEVEL, ON_AT_4, this->split()),
+                FanStatus{false, ON_AT_4.speed});
 }
 
 TEST_P(FanDisplay, RunningLevelOffKeepsAnOffFanOff) {
@@ -92,11 +93,13 @@ TEST_P(FanDisplay, NoRunningLevelFromBootShowsANormalSliderInSplitMode) {
 // ----- Outside Automatik Zeit the running level is ignored -----
 
 TEST_P(FanDisplay, ANormalLevelIgnoresTheRunningLevel) {
-  expect_status(decide_fan_display(2, OFF_LEVEL, OFF_AT_3, this->split()), FanStatus{true, 2});
+  expect_status(decide_fan_display(MIN_NORMAL_LEVEL, OFF_LEVEL, OFF_AT_3, this->split()),
+                FanStatus{true, MIN_NORMAL_LEVEL});
 }
 
 TEST_P(FanDisplay, OffIgnoresTheRunningLevel) {
-  expect_status(decide_fan_display(OFF_LEVEL, MAX_NORMAL_LEVEL, ON_AT_4, this->split()), FanStatus{false, 4});
+  expect_status(decide_fan_display(OFF_LEVEL, MAX_NORMAL_LEVEL, ON_AT_4, this->split()),
+                FanStatus{false, ON_AT_4.speed});
 }
 
 TEST_P(FanDisplay, NotConnectedShowsOffAtItsLevel) {
@@ -120,7 +123,7 @@ TEST(FanDisplaySpecial, InSplitModeBurstPutsTheSliderAtMax) {
 }
 
 TEST(FanDisplaySpecial, InSplitModeAnotherSpecialLevelKeepsANormalSlider) {
-  expect_status(decide_fan_display(SLEEP_LEVEL, std::nullopt, ON_AT_4, SPLIT), FanStatus{true, 4});
+  expect_status(decide_fan_display(SLEEP_LEVEL, std::nullopt, ON_AT_4, SPLIT), FanStatus{true, ON_AT_4.speed});
 }
 
 TEST(FanDisplaySpecial, InSplitModeAnotherSpecialLevelMovesASliderOutsideTheNormalLevels) {

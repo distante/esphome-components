@@ -25,7 +25,7 @@ namespace sec_touch {
 
 /**
  * One fan pair's live state, shared by the pair's live-state entities and its fan when the fan follows the running
- * level. Built only when one of them exists. It puts the pair's whole block on the
+ * level (which pairs get one: `_prepare_live_states` in __init__.py). It puts the pair's whole block on the
  * pair's poll and ID 2 (the panel clock) on the global-settings poll, recomputes on every input read and at the next
  * change, and publishes an entity only when its value changes.
  */

@@ -27,10 +27,10 @@ class SecTouchFan : public Component, public fan::Fan {
   static FanModeEnum::FanMode calculate_mode_from_speed(int speed);
   void update_label_mode();
   void on_live_state_(const std::optional<LiveState> &state);
-  /// Shows the last level read, with the running level when the fan follows it; publishes only a change.
+  /// Shows `device_level_`, with the running level when the fan follows it; publishes only a change.
   void show_device_level_();
 
-  /// The pair's level as last read; nullopt until a good read.
+  /// The pair's level as last read, or the level HA last wrote until its read-back; nullopt until either.
   std::optional<int> device_level_;
   /// The pair's running level while the fan follows it and the pair has one.
   std::optional<int> running_level_;

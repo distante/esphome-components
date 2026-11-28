@@ -73,8 +73,7 @@ LIVE_STATE_TEXT_KEYS = (CONF_SWITCH_TIME_IN_EFFECT, CONF_RUNNING_LEVEL, CONF_NEX
 LIVE_STATE_KEYS = LIVE_STATE_TEXT_KEYS + (CONF_NEXT_CHANGE,)
 # On a sec_touch fan entry: in Automatik Zeit, show the pair's running level.
 CONF_FOLLOW_TIME_PROGRAM = "follow_time_program"
-# Generated before validation, never written by the user: one live state per pair whose fan follows or that has a
-# live-state entity, shared by both.
+# Generated before validation, never written by the user: _prepare_live_states.
 CONF_LIVE_STATES = "live_states"
 
 FAN_PAIR_COUNT = len(FAN_LEVEL_IDS)
@@ -263,7 +262,7 @@ def _prepare_time_program(hub_config, entry):
         # Live state reads the pair's level ID, which only the pair's fan entry polls.
         if next(_fan_entries(hub_config, fan_number), None) is None:
             raise cv.Invalid(
-                f"{live_state[0]} needs this hub's sec_touch fan entry with {CONF_FAN_NUMBER} {fan_number}",
+                f"{live_state[0]} needs this hub's {DOMAIN} fan entry with {CONF_FAN_NUMBER} {fan_number}",
                 path=[live_state[0]],
             )
     device_id = entry.get(CONF_DEVICE_ID)
@@ -320,7 +319,8 @@ def _follows(fan):
 
 
 def _prepare_live_states(hub_config):
-    """Lists the pairs that get a live state: those whose fan follows and those with a live-state entity."""
+    """Lists the pairs that get a live state, shared by the pair's fan and its live-state entities: those whose fan
+    follows and those with a live-state entity."""
     if not isinstance(hub_config, dict):
         return hub_config
     if CONF_LIVE_STATES in hub_config:
@@ -437,18 +437,18 @@ def _final_validate_set_time_program_calls(config):
             continue
         if not listed:
             raise cv.Invalid(
-                f"sec_touch.set_time_program needs at least one entry in sec_touch {CONF_TIME_PROGRAMS}"
+                f"sec_touch.set_time_program needs at least one entry in {DOMAIN} {CONF_TIME_PROGRAMS}"
             )
         if fan_number is not None and fan_number not in listed:
             raise cv.Invalid(
-                f"sec_touch.set_time_program: {CONF_FAN_NUMBER} {fan_number} is not listed in sec_touch {CONF_TIME_PROGRAMS}"
+                f"sec_touch.set_time_program: {CONF_FAN_NUMBER} {fan_number} is not listed in {DOMAIN} {CONF_TIME_PROGRAMS}"
             )
     return config
 
 
 FINAL_VALIDATE_SCHEMA = cv.All(
     uart.final_validate_device_schema(
-        "sec_touch",
+        DOMAIN,
         require_tx=True,
         require_rx=True,
         # parity="NONE",

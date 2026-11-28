@@ -1,5 +1,6 @@
 #include "sec_touch_fan.h"
 
+#include <cstdio>
 #include <cstring>
 
 #include "../sec_touch.h"
@@ -107,8 +108,12 @@ void SecTouchFan::show_device_level_() {
     return;
   }
 
-  ESP_LOGI(TAG, "Showing fan with property_id %d at level %d (state %d) (speed %d)", this->level_id, level, this->state,
-           this->speed);
+  char running_level[12] = "none";
+  if (this->running_level_.has_value()) {
+    snprintf(running_level, sizeof(running_level), "%d", *this->running_level_);
+  }
+  ESP_LOGI(TAG, "Showing fan with property_id %d at level %d, running level %s (state %d) (speed %d)", this->level_id,
+           level, running_level, this->state, this->speed);
   this->publish_state();
 }
 

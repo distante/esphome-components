@@ -244,9 +244,9 @@ What a following fan shows while its pair's level ID reads `AUTOMATIC_TIME_LEVEL
 
 | Running level (live model) | On/off | Speed | Preset |
 |---|---|---|---|
-| `OFF_LEVEL` (0) | off | unchanged | Automatic Time |
-| `is_normal_level` (1–6) | on | that level | Automatic Time |
-| Burst (7), Automatic Humidity (8), Automatic CO2 (9) | as not following | as not following | Automatic Time |
+| `OFF_LEVEL` | off | unchanged | Automatic Time |
+| `MIN_NORMAL_LEVEL`..`MAX_NORMAL_LEVEL` | on | that level | Automatic Time |
+| `BURST_LEVEL`, `AUTOMATIC_HUMIDITY_LEVEL`, `AUTOMATIC_CO2_LEVEL` | as not following | as not following | Automatic Time |
 | `none`, `conflict`, no state (a needed input never read well) | as not following | as not following | Automatic Time |
 
 "As not following" is the fan's display without this rule: on, at speed `AUTOMATIC_TIME_LEVEL`, or with `split_special_modes` a normal slider (kept, else `MIN_NORMAL_LEVEL`). Outside Automatik Zeit nothing changes.
@@ -257,9 +257,9 @@ What a following fan shows while its pair's level ID reads `AUTOMATIC_TIME_LEVEL
 | Opt-out | `follow_time_program`: optional boolean on the fan entry, default `true`. `false` gives the display without this rule. |
 | One live state | The fan and the pair's live-state entities share one live state per pair, so they never disagree. It is built when the fan follows or any live-state entity exists, and registers its listeners and polls once ([Memory](#memory)). |
 | Polling | As [Reading](#reading) says for a live state: the whole block on the time-program poll, always, and ID 2 on the global-settings poll. |
-| HA commands | On, off and speed set the level ID as not following, which switches the pair to Normal and ends Automatik Zeit. A preset change works as not following. An "on" without a speed from an off fan whose speed is not a normal level (Automatik Zeit's level, shown before its running level was known, or `NOT_CONNECTED_LEVEL`) starts at `MIN_NORMAL_LEVEL`, with or without `split_special_modes`. [sec_touch: split mode becomes the fan's default in v2.0.0](https://github.com/distante/esphome-components/issues/158) makes split mode the default. |
+| HA commands | On, off and speed set the level ID as not following, which switches the pair to Normal and ends Automatik Zeit. A preset change works as not following. An "on" without a speed from any off fan, following or not, whose speed is not a normal level (any special level, or `NOT_CONNECTED_LEVEL`) starts at `MIN_NORMAL_LEVEL`, with or without `split_special_modes`. [sec_touch: split mode becomes the fan's default in v2.0.0](https://github.com/distante/esphome-components/issues/158) makes split mode the default. |
 | Timing | The fan republishes when the live state recomputes (an input read, the next change), and only on a change. |
-| Mode change | The live state hears a level answer before the fan does. While the live state says `not running` and the fan still reads `AUTOMATIC_TIME_LEVEL`, the fan waits for its own read, so leaving Automatik Zeit never flashes its display. |
+| Mode change | The live state hears a level answer before the fan does. On every `not running` state the fan skips republishing and waits for its own level read, so leaving Automatik Zeit never flashes its display. |
 
 A fan-only install goes from no block poll to the cost measured in the readme ([Fan in Automatik Zeit](../components/sec_touch/readme.md#fan-in-automatik-zeit)).
 
@@ -351,6 +351,7 @@ Ships in **v2.0.0** with the sniffer goals and experiments. The work for this se
 - **Time programs in HA**, opt-in per pair under `sec_touch: time_programs:`: time, level and enabled per switch time, read and write.
 - **Live state:** switch time in effect, running level, next level and next change, computed from the program and the panel clock.
 - **Breaking, fan:** in Automatik Zeit a fan follows its pair's running level: off at level 0, on at that speed at 1–6. Fans in Automatik Zeit can now show off, so HA automations on fan state may fire. Every fan polls its pair's time-program block and the panel clock. `follow_time_program: false` on the fan keeps the old display.
+- **Fan:** an "on" without a speed from any off fan whose speed is not a normal level (a special level, or not connected) starts at level 1; before, it wrote that speed back.
 - **`sec_touch.set_time_program`** sets a pair's whole program; the readme shows how to call it from HA.
 - **Sniffer:** IDs 101–166 are known properties: discover skips them, check shows them on each fan card.
 
@@ -364,7 +365,7 @@ Ships in **v2.0.0** with the sniffer goals and experiments. The work for this se
 - The known-property list under "Sniffer page" and the "Known Ids" section gain the three time-program arrays.
 - "Not in `protocol_ids.h` yet: #85 decides" under Time programs: point at this spec's [catalogue](#known-property-catalogue).
 
-**Device check** (maintainer's controller): one heap check with 6 pairs × all switch times + every live-state entity + the sniffer, plus one write per field kind and one bulk call, each checked on the panel.
+**Device check** (maintainer's controller): one heap check with 6 pairs × all switch times + every live-state entity + 6 following fans (each pair's block and ID 2 polled) + the sniffer, plus one write per field kind and one bulk call, each checked on the panel. The heap after setup stays flat while the fans follow: the live state's state listener allocates nothing ([Memory](#memory)).
 
 ---
 
@@ -390,4 +391,4 @@ Ships in **v2.0.0** with the sniffer goals and experiments. The work for this se
 9. Live state follows the [model](#live-state) and every row of its cases table, and publishes only on change. Tests cover: exactly one enabled switch time, a failed or unexpected input before and after a good read, each needed input of the [Inputs](#live-state) table never read well (no state, at boot or after a value was shown) and an unneeded one (published), a switch time exactly at the panel time (in effect) and the next change strictly after it. `not running` appears whenever the program isn't [running](#live-state).
 10. `sec_touch.set_time_program` follows [Bulk-set action](#bulk-set-action): validates everything first, writes times, levels, then the mask, reports `invalid_argument`, `busy` or the failed-field list in `error`, and fires `on_success` only when every read-back matches.
 11. No heap use beyond the [Memory](#memory) table.
-12. The device check is recorded with the heap numbers, and the readme states them.
+12. The device check, with 6 following fans and their polling, is recorded with the heap numbers, and the readme states them. The heap shows no growth from the live state's state listener.

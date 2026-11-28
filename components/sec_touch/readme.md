@@ -347,7 +347,7 @@ sec_touch:
 - **Polling:** with any live-state entity or a [following fan](#fan-in-automatik-zeit), the pair's whole block of 11 IDs is polled, whatever `switch_times` lists.
 - **`next_change` shows Unknown** whenever the other three show `not running` or `none`: a timestamp can't hold a state word, so it has no value then.
 - **`next_change` precision:** rounded to the minute; HA gets it as an ISO 8601 UTC time (`2026-11-27T13:00:00Z`), with no float loss.
-- The pair's fan and these entities share one live state, so they never disagree: [Fan in Automatik Zeit](#fan-in-automatik-zeit).
+- A following fan and these entities share one live state, so they never disagree: [Fan in Automatik Zeit](#fan-in-automatik-zeit).
 
 ## Fan in Automatik Zeit
 
@@ -364,7 +364,7 @@ While a pair runs Automatik Zeit (level 10), its fan entity follows the pair's r
 
 - **Computed, not read.** The running level is the live state's model, an assumption the panel can't confirm: the panel never says which level it runs.
 - **HA commands** work as not following: on, off or a speed sets the pair's level, which switches it to Normal and ends Automatik Zeit.
-- **"On" without a speed** from an off fan whose speed is not 1–6 (10 kept from Automatik Zeit's display, or Not Connected) starts at level 1, with or without `split_special_modes`. [#158](https://github.com/distante/esphome-components/issues/158) makes split mode the default.
+- **"On" without a speed** from any off fan, following or not, whose speed is not 1–6 (a special level 7–11, or Not Connected) starts at level 1, with or without `split_special_modes`. [#158](https://github.com/distante/esphome-components/issues/158) makes split mode the default.
 - **Updates** when the live state recomputes: on each read of its inputs and at the next switch time. HA gets a new state only when it changes.
 - **Polling cost:** a following fan polls its pair's whole time-program block (11 IDs) every `time_programs_update_interval` (default 5 min), in every mode, and the panel clock (ID 2) on the global-settings poll. A fan-only install had none of this before. Measured on the maintainer's controller with 5 pairs: 0.25 s per GET, so 55 GETs take about 14 s every 5 min. Fan levels aren't read during it, but fan commands go ahead of the queued reads, so they aren't delayed.
 - **Opt-out:** with `follow_time_program: false` the fan shows Automatik Zeit as not following (on, preset Automatic Time), and drops the polling following adds. A `time_programs:` entry still polls its own IDs, and live-state entities still poll the whole block and the panel clock.
